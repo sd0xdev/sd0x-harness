@@ -156,6 +156,7 @@ sequenceDiagram
 |------|---------------|
 | Shebang | `#!/bin/sh` (POSIX) |
 | JSON parsing | `jq -r '.field // fallback'` |
+| Windows paths | Normalize `workspace.current_dir` (or `cwd`) with `gsub("\\\\"; "/")` before truncation, `git -C`, or `printf "%b"` |
 | Theme resolution | `CLAUDE_STATUSLINE_THEME` env var → `case` statement |
 | NO\_COLOR | `[ -n "${NO_COLOR:-}" ] && theme="none"` |
 | TrueColor format | `\033[38;2;R;G;Bm` (24-bit foreground) |
