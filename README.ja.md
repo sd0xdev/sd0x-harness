@@ -13,7 +13,7 @@ v4 は、テストで固定された閉じた Anchor セットの内側で Claud
 Claude Code ではフルコントロールプレーン。Codex CLI やその他の互換エージェントにはスキルのみを配布します。
 
 <!-- BEGIN:HERO-COUNT -->
-99 bundled · 99 public skills · 16 agents — Claude の context window のわずか ~4%
+100 bundled · 100 public skills · 16 agents — Claude の context window のわずか ~4%
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -45,8 +45,8 @@ $codex-setup init
 <!-- BEGIN:INSTALL-COVERAGE -->
 | 方法 | 対応ツール | カバー範囲 |
 |------|-----------|-----------|
-| プラグインインストール | Claude Code | フル（99 bundled skills、フック、ルール、auto-loop） |
-| `npx skills add` | Codex CLI、Cursor、Windsurf、Aider | スキルのみ（99 public skills） |
+| プラグインインストール | Claude Code | フル（100 bundled skills、フック、ルール、auto-loop） |
+| `npx skills add` | Codex CLI、Cursor、Windsurf、Aider | スキルのみ（100 public skills） |
 | `$codex-setup init` | Codex CLI | AGENTS.md カーネル + commit-msg フック（pre-push ゲートはオプトイン） |
 <!-- END:INSTALL-COVERAGE -->
 
@@ -133,7 +133,7 @@ sd0x-dev-flow は reference implementation です。以下の各行は、harness
 | 2 | **Digest-bound reminder state** | verdict はモデルが note し（`node scripts/review-state.js note <plane> <pass\|fail>`）、ツリーの digest に束縛される — 編集すると digest が変わるため、そのプレーンのリマインダーが再オープンする。ゲート sentinel（`✅ Ready` / `## Overall: ✅ PASS`）は動作レイヤーのシグナルのまま | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context recovery across compaction** | SessionStart(compact) 後に git ベースライン（ブランチ + 未コミットファイル）と未完了ゲートのリマインダーを再注入 | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
 | 4 | **Lifecycle interceptors** | 5 種類の hook event を 6 本のスクリプトへディスパッチ — 4 本の advisory リマインダーフック、1 本の自動フォーマッタ、1 本のブロックするセキュリティガード（SessionStart は追加で `scripts/namespace-hint.sh` を実行）: PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (6 scripts) + [`.claude/settings.json`](.claude/settings.json) |
-| 5 | **Capability-based tool gating** | Skill frontmatter の `allowed-tools` — 例: `/ask` には Edit/Write が無い | 99 個の公開 skill のうち 91 個が `allowed-tools` を宣言 |
+| 5 | **Capability-based tool gating** | Skill frontmatter の `allowed-tools` — 例: `/ask` には Edit/Write が無い | 100 個の公開 skill のうち 92 個が `allowed-tools` を宣言 |
 | 6 | **Defense-in-depth safety** | インストール済みの git レベルのガードはハードなまま — commit-msg-guard は常にインストールされ、`/dev/tty` 経由の pre-push-gate はオプトインした場合に有効です。編集時の pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガードであり、ワークフロー強制ではない — `jq` が必要で、jq が無いとガードは作動しない）、Stop hook はリマインドする — 不可逆な操作をゲートする層は牙を残し、レビュー層は設計として advisory になった | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex が Claude の書いたコードをレビュー。リポジトリを自力で調査し、結論を渡されて追認することはない | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | 証拠にもとづくストール規律：finding を 1 つも閉じないレビューラウンドが 3 回続くと — モデルがレビューレポートから数えます — 構造化されたストール分類と 1 回の限定的な調整を起動します。Tier ごとのラウンド予算（デフォルト 6 / 15 / 30、3〜50 でオーバーライド可）は暴走用のバックストップに退き、初回の上限到達でも同じ診断を行い、列挙された human exit を備える | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; 詳細は `skills/codex-code-review/references/loop-diagnostics.md`) |
@@ -312,7 +312,7 @@ flowchart TD
 <!-- BEGIN:WHATS-INCLUDED-COUNT -->
 | カテゴリ | 数 | 例 |
 |----------|-----|-----|
-| スキル | 99 public (99 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
+| スキル | 100 public (100 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | エージェント | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | フック | 6 | pre-edit-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
 | ルール | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
@@ -356,9 +356,9 @@ Claude の 200k context window のわずか ~4% — 96% はコードに使えま
 
 <!-- BEGIN:FULL-CATALOG -->
 <details>
-<summary>全 99 public skills</summary>
+<summary>全 100 public skills</summary>
 
-### 開発 (33)
+### 開発 (34)
 
 | Skill | Description |
 |-------|-------------|
@@ -376,6 +376,7 @@ Claude の 200k context window のわずか ~4% — 96% はコードに使えま
 | `/epic-merge` | スタックされた PR チェーンをエピックブランチへ順次スカッシュマージします。 |
 | `/feature-dev` | Feature development workflow. |
 | `/feature-verify` | Feature verification (READ-ONLY, P0-P5). |
+| `/gh-stack` | Native stacked pull requests through the github/gh-stack extension. |
 | `/git-investigate` | Git history investigation. |
 | `/git-profile` | Git identity and GPG signing profile manager. |
 | `/install-hooks` | Install plugin hooks into project .claude/ for persistent use without plugin loaded |

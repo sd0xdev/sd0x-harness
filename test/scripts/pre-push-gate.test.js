@@ -1435,7 +1435,7 @@ test('the push selector recognizes commands and only commands', () => {
     '| `git push --force` | Forbidden | Forbidden |',
     '# the Phase 2 assembly below runs `git push --force-with-lease`',
     '$ git push origin -- "+main"                      # no force flag anywhere on this line',
-    'This skill is one of two authorized paths for Claude to execute `git push`.',
+    'This skill is one of three authorized paths for Claude to execute `git push`.',
   ]) {
     assert.ok(!isPushCommand(prose), `prose must not be selected as a command: ${prose}`);
   }
@@ -1490,6 +1490,36 @@ test('the two authorized skills strip the variable this hook cannot', () => {
 // defense this test now measures. The dated
 // correction to the round-39 F1 record lives in
 // `docs/features/push-gate-optin/review-log-push-gate-optin.md`.
+test('the third authorized skill strips the same variables before its delegated push', () => {
+  // `/gh-stack` reaches `git push` through `gh stack` — plain for `link`, lease-forced for `push` and
+  // `submit` — so `isPushCommand` above
+  // cannot see it — the selector keys on a `git push` command shape. Left at two skills, this pin
+  // would read as "all authorized push callers are compliant" while the third shipped unchecked.
+  // What is asserted is the same property: the executed line strips the interpreter variables
+  // behind an absolute `/usr/bin/env`, and the skill refuses outright when one of them is set
+  // (`skills/gh-stack/SKILL.md` § Phase 0 Step 0a/0b) — clearing alone cannot survive a
+  // `$BASH_ENV` that redefines the prefix.
+  const text = readFileSync(resolve(repoRoot, 'skills/gh-stack/SKILL.md'), 'utf8');
+  // Join backslash continuations first: the executed command is written across two physical lines
+  // (prefix, then the subcommand), and a line-at-a-time selector finds neither half.
+  const mutating = text.replace(/\\\n\s*/g, ' ').split('\n').map((l) => l.trim())
+    .filter((l) => /\bgh stack (link|push|submit)\b/.test(l) && l.includes('/usr/bin/env'));
+  assert.equal(mutating.length, 2,
+    'skills/gh-stack/SKILL.md should carry exactly two executed gh stack commands (link, and a forcing '
+    + 'form); a change in the '
+    + 'count means the selector drifted or a command was added — check the new one, then update this number');
+  for (const line of mutating) {
+    assert.match(line, /^\/usr\/bin\/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH /,
+      `the delegated push must strip GIT_EXEC_PATH behind an absolute /usr/bin/env: ${line}`);
+    assert.match(line, /-u ALLOW_PUSH_PROTECTED -u ALLOW_FORCE_UNSHARED /,
+      `both hook bypass variables must be cleared on the executed line: ${line}`);
+  }
+  assert.match(text, /\[\[ -n "\$\{BASH_ENV\+set\}" \]\]/,
+    'the skill must refuse when BASH_ENV is set, not merely clear it downstream');
+  assert.match(text, /\[\[ -n "\$\{GIT_SSH_COMMAND\+set\}" \]\]/,
+    'transport variables are refused rather than cleared — clearing moves the destination');
+});
+
 test('a BASH_ENV that rewrites the positional parameters → the hook still sees git\'s two arguments', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'sd0x-argvforge-'));
   try {

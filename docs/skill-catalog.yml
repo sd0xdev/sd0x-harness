@@ -125,6 +125,11 @@ skills:
     featured: true
     use_when: "Creating GitHub pull requests, including stacked PR chains (--stack)"
     public: true
+  - command: /gh-stack
+    category: development
+    featured: false
+    use_when: "Native GitHub stacked PRs via the github/gh-stack extension"
+    public: true
   - command: /merge-prep
     category: development
     featured: false

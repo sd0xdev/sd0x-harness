@@ -181,7 +181,9 @@ redact_dest "$REMOTE"; REMOTE_SAFE=$REDACTED
 #
 # The measurements behind each of those — `$1` vs `$2` under a rewrite, one hook call per push URL,
 # why SHA-256 rather than `git hash-object`, what the receivepack check below does and does not
-# catch, and why the two authorized skills now spell `--receive-pack=git-receive-pack`: see
+# catch, and why two of the three authorized skills now spell `--receive-pack=git-receive-pack`
+# (`/gh-stack` cannot — the extension issues the push, so neither that flag nor
+# `SD0X_PUSH_DEST_DIGEST` is available to it): see
 # docs/features/push-gate-optin/4-implementation.md § 4.6.
 sha256_raw() {   # reads stdin, writes one line containing the hex digest; nonzero if unavailable
   if command -v sha256sum >/dev/null 2>&1; then sha256sum
@@ -252,7 +254,7 @@ if [ -n "${SD0X_PUSH_DEST_DIGEST:-}" ]; then
   # the time the config is read here. Measured 2026-08-22: a wrapper that runs
   # `git config --unset remote.origin.receivepack` and then execs `git-receive-pack <B>` left this
   # read seeing nothing, git reporting success against `<A>`, and every object in `<B>`. What closes
-  # that for the two authorized skills is not this read but their push line, which spells
+  # that for the two skills that push git directly is not this read but their push line, which spells
   # `--receive-pack=git-receive-pack` — a command-line value overrides the configured one (measured;
   # `-c remote.<name>.receivepack=` does NOT, git keeps the config value and says "more than one
   # receivepack given, using the first"). This read remains worth doing for the pushes those skills
@@ -442,7 +444,9 @@ fi
 # twice. That is the claim; "one push, one prompt" was the earlier wording and it was
 # false: a push carrying a protected fast-forward AND an unprotected rewrite fires this
 # prompt for the rewritten ref and then the protected one for the other, measured under a
-# pty. Neither authorized skill can produce such a push — both push one refspec — but a
+# pty. None of the three authorized skills can produce such a push — the two that push git
+# directly push one refspec each, and `/gh-stack` pushes only stack layers, none of which may be
+# a protected branch (`skills/gh-stack/SKILL.md` § Phase 2) — but a
 # manual push can, and a comment that overstates the property is how fd 3 and fd 4 came to
 # be justified by a scoping argument that did not hold.
 #

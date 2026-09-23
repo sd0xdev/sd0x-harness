@@ -1363,7 +1363,9 @@ const CANONICAL_ANCHOR_REGISTER =
   'operations** — no `git add` / `commit` / `push` / `stash` / `reset --hard` / `rebase` outside ' +
   'the enumerated approval workflows: `/push-ci` (push, including `--force-with-lease` when that ' +
   'flag is explicitly passed — never bare `--force`), `/smart-commit --execute` (add + commit), ' +
-  '`/epic-merge` (rebase --onto, force-with-lease, squash-merge) — each only after the explicit ' +
+  '`/epic-merge` (rebase --onto, force-with-lease, squash-merge), `/gh-stack` (native `gh ' +
+  'stack link` / `push` / `submit --auto`; `link` pushes with a plain `git push --atomic`, the ' +
+  'other two with a per-branch `git push --force-with-lease`) — each only after the explicit ' +
   'per-use user approval its skill defines — **or under user-authorized execution**: the user\'s ' +
   'own message in the conversation explicitly authorizes one execution and names the operation, ' +
   'and Claude then executes it as named rather than citing this anchor to refuse (2026-09-05, ' +

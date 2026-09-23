@@ -1,7 +1,7 @@
 ---
 name: create-pr
 description: "Create or update GitHub PR with gh CLI. Auto-extracts ticket ID from branch name, generates title/summary from commits. Auto-detects existing PR and switches to update mode. Supports --stack for stacked PR chains (per-layer PRs with chained bases; never executes push/rebase). Default: --dry-run (show command, don't execute). Use when: user asks to open/create/update a PR, says /create-pr, wants a stacked PR chain, wants to refresh PR description after new commits, or says 'update pr', 'update PR title', 'refresh PR body'."
-allowed-tools: Bash(git:*), Bash(gh:*), Bash(mktemp:*), Bash(rm:*), Bash(bash:*), Read, Write, Grep, Glob, AskUserQuestion
+allowed-tools: Bash(git:*), Bash(gh:*), Bash(mktemp:*), Bash(rm:*), Bash(bash:*), Read, Write, Grep, Glob, AskUserQuestion, Skill
 ---
 
 # Create PR
@@ -23,7 +23,7 @@ allowed-tools: Bash(git:*), Bash(gh:*), Bash(mktemp:*), Bash(rm:*), Bash(bash:*)
 
 ### 0. Mode Dispatch (first, before anything else)
 
-**When `--stack` is present**: read `references/stack-mode.md` and run Phases A–D from there. Skip generic Steps 1, 5, 6 and 7 entirely — Phase A must run `git fetch --prune origin` and classify sync state *before* any PR planning, so the generic `ls-remote` / local `base..head` path must not run first. What is reused, per layer, exactly as Phase C directs:
+**When `--stack` is present**: read `references/stack-mode.md` and run Phases A, B, D0, then either the native delegation (D1) or Phase C — never both. Skip generic Steps 1, 5, 6 and 7 entirely — Phase A must run `git fetch --prune origin` and classify sync state *before* any PR planning, so the generic `ls-remote` / local `base..head` path must not run first. What is reused, per layer, exactly as Phase C directs:
 
 | Reused | Skipped |
 |--------|---------|
@@ -448,14 +448,14 @@ When user specifies multiple branch pairs (e.g. "A → main, B → A"), create t
 
 `--stack <branch...>` (bottom layer first) turns a linear branch chain into one PR per layer, each based on the layer below. Full detail — phase tables, chain model, shell-safety contract, native `gh stack` comparison — lives in `references/stack-mode.md`; what follows is the contract this skill will not deviate from.
 
-**Never executes `git push`, `git rebase`, or any `gh stack` subcommand.** Under `--execute` only `gh pr create` / `gh pr edit` run, which is this skill's existing authorization (Step 5a, Steps 6-7). Branch pushes go to `/push-ci` or are emitted for the user to run; `gh stack` commands are printed, never invoked.
+**Never executes `git push`, `git rebase`, or any `gh stack` subcommand.** Under `--execute` only `gh pr create` / `gh pr edit` run, which is this skill's existing authorization (Step 5a, Steps 6-7). Branch pushes go to `/push-ci`; the native stacked path goes to `/gh-stack` (Anchor Register #4's fourth workflow), which re-asks for its own install and per-use approvals — **delegating is not executing, and no gate is inherited across the call**. Everything else is printed for the user to run.
 
 | Phase | Does |
 |-------|------|
 | A. Sync classification | `git fetch --prune origin`, then classify each layer by local/remote OID: `IN_SYNC` / `LOCAL_AHEAD` / `ABSENT` / `REMOTE_AHEAD` / `DIVERGED` / `NO_SUCH_BRANCH`. Every failure in the fence exits explicitly (`\|\| exit`), so a failed fetch cannot be followed by probes reading stale refs — `set -e` would not do it, because a caller that tests the fence's status disables errexit inside it — in every POSIX shell; each ref probe accepts exit 1 and exits on anything else, because absence is an expected answer, and the probes' output is delimited by `local:` / `remote:` / `end:` markers — without them a missing ref prints nothing and `ABSENT` reads identically to remote-only, whose disposition is the opposite. Runs **first** — later phases read remote refs, so a missing `origin/<head>` must surface here |
 | B. Chain validation | Real ancestry — **every layer on its own base, bottom layer included** (`git merge-base --is-ancestor origin/<base> origin/<head>`) plus each adjacent pair; non-empty layer; existing-PR policy via `gh pr list --head <head> --state all --limit 100` (default is open-only, and the default page is 30 — both flags are mandatory); layer-count rules |
 | C. Per-layer create/edit | Bottom to top; existing PR → update (Step 5a), absent → create. Steps 2-4 + 4b per layer; Step 7b per layer under `--execute`. Execute mode is **one guarded block per layer**, not one `&&` chain — an upper body carries the lower PR's number, which does not exist until the lower layer has run |
-| D. Environment detection | Two independent conditions, and **both** must hold before any native sequence is printed: the `github/gh-stack` extension is installed **and** native stacks are confirmed rolled out for this repo. Installed but rollout unconfirmed is the conservative case — say so and take the non-native path, exactly as if the extension were absent |
+| D. Environment detection and native routing — **D0 runs before Phase C** | D0: `gh extension list`, matched on the `github/gh-stack` identity. D1: `--update` → **Phase C always** (the native path has no text-refresh form; delegating would answer a description refresh with a push that refreshes no text). Otherwise present **and not excluded by § Phase D's routing table** (which sends a chain with any remote-only layer to Phase C, because `/gh-stack` Phase 2 aborts on a branch with no local ref) → **skip Phase C** and delegate the validated chain, carrying this run's mode — dry-run sends the read-only `/gh-stack --base '<resolved target branch>' <layer>…` (the base travels in both modes, or the preview describes a different chain), `--execute` sends `/gh-stack --link --open --base '<resolved target branch>' <layer>…` (`--link` because it is the form that takes operands; `--open` because the native path otherwise drafts while Phase C does not; `--base` because dropping it chains layer 1 onto the repository default rather than the branch Phases A/B validated against); absent → under `--execute` offer the install (that skill's own AskUserQuestion), in dry-run offer nothing and report it — a preview leaves no software on disk; unreadable, declined or failed → Phase C. After a native attempt, the exit and `/gh-stack`'s Phase 4 verification decide together: exit `0` with `confirmed` and every approved PR change read back is done, while a read-back that differs is partial and **stops**; a non-zero exit with `confirmed` **stops** (the approved command failed against an existing Stack); a non-zero exit with `confirmed absent` falls to Phase C **after re-running Phase B's existing-PR query**, since the pre-native snapshot does not know which layers the attempt already published; `unverifiable` **stops** without Phase C, because a Stack GitHub did not confirm may still exist. A repository without Stacks never reaches execution: `/gh-stack`'s availability probe stops it first, which is a Phase 2 STOP and falls back from there. Phase C and the native path are alternatives, never a sequence — running both would double-mutate every layer. Native yields a GitHub Stack object (per-layer diff view, linked merges), Multi-PR mode yields chained bases only — the report says which happened, never treating them as equivalent |
 
 | Sync state | dry-run | `--execute` |
 |------------|---------|-------------|
@@ -472,7 +472,7 @@ When user specifies multiple branch pairs (e.g. "A → main, B → A"), create t
 | **Dependency marker** | `#<N>` whenever the lower PR number is known (including in dry-run), a `` `branch` `` marker only when that PR is absent, upgraded to `#<N>` on `--stack --update`. Never emit an unresolved placeholder |
 | **Fail-fast, not atomic** | Layers are independent mutations, so partial success is a real outcome. On failure, stop before the next layer and report every layer as succeeded / failed / pending; re-running detects created layers in Phase B and routes them to update mode |
 | **Shell safety** | Single-quote rendering for every dynamic value (double quotes do not suppress `$( )`), `--` as option terminator, and the body never enters shell syntax at all — no heredoc in any form; it is written to a file out of band and passed via `--body-file` |
-| **Rejections** | Non-linear chain, layer with no unique commits, PR that is CLOSED / MERGED / base-mismatched / multiply matched, single-layer chain (use plain `/create-pr`), explicit-but-empty chain, and auto-detection with no authoritative source (existing PR base relations or native stack metadata). A dirty working tree only warns — all content derives from fetched remote refs |
+| **Rejections** | Non-linear chain, layer with no unique commits, PR that is CLOSED / MERGED / base-mismatched / multiply matched, single-layer chain (use plain `/create-pr`), explicit-but-empty chain, and auto-detection with no authoritative source (existing PR base relations — a tracked native stack is not a source here, § Phase B). A dirty working tree only warns — all content derives from fetched remote refs |
 
 ## Edge Cases
 
@@ -501,9 +501,10 @@ When user specifies multiple branch pairs (e.g. "A → main, B → A"), create t
 
 ### Stacked mode (`--stack`)
 
-- [ ] No `git push`, `git rebase`, or `gh stack` subcommand executed
+- [ ] No `git push`, `git rebase`, or `gh stack` subcommand executed here — the native path was delegated to `/gh-stack`, which ran its own gates
+- [ ] Phase D reported which path produced the result — native Stack object, or chained-base Multi-PR — **and each layer's readiness** (the native path drafts unless `--open` was delegated)
 - [ ] Phase A ran first: `git fetch --prune origin` + per-layer sync classification; `ABSENT` stopped before PR planning
 - [ ] Phase B validated real ancestry and queried PRs with `--state all`
-- [ ] Dependency markers resolved (`#N` when known, branch marker only when absent)
+- [ ] *(Multi-PR path)* Dependency markers resolved (`#N` when known, branch marker only when absent) — the native path has no markers of its own: `gh stack link` chains the PRs and GitHub renders the stack
 - [ ] Failure reported per layer (succeeded / failed / pending); re-run created no duplicates
-- [ ] Displayed commands single-quote rendered; no heredoc anywhere, body passed via `--body-file`
+- [ ] *(Multi-PR path)* Displayed commands single-quote rendered; no heredoc anywhere, body passed via `--body-file` — on the native path the extension authors the bodies and no `--body-file` is used

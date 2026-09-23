@@ -4,13 +4,14 @@ Detail reference for `/create-pr --stack`. Design source: `docs/features/create-
 
 ## Authorization Boundary ⚠️
 
-This mode **never executes `git push`, `git rebase`, or any `gh stack` subcommand.** Only `gh pr create` / `gh pr edit` run under `--execute`, which is the skill's pre-existing authorization (Step 5a, Steps 6-7). Everything that mutates branches is either delegated to `/push-ci` or emitted as a command for the user to run.
+This mode **never executes `git push`, `git rebase`, or any `gh stack` subcommand.** Only `gh pr create` / `gh pr edit` run under `--execute`, which is the skill's pre-existing authorization (Step 5a, Steps 6-7). Everything that mutates branches is delegated — to `/push-ci` for a branch push, to `/gh-stack` for the native path (§ Phase D) — or emitted as a command for the user to run. **Delegation is not execution**: the called skill re-asks for its own approval, so no gate is inherited across the call and this skill gains no authorization from making it.
 
 | Operation | Executor | Authorization |
 |-----------|----------|---------------|
 | `gh pr create` / `gh pr edit` | this skill under `--execute` | existing create-pr contract |
 | `git push` (per layer, non-force) | `/push-ci`, or user runs the emitted command | `@rules/git-workflow.md` exception |
-| `gh stack init/add/submit/rebase/push/modify` | **user only** — this skill prints, never runs | out of Claude's execution scope |
+| `gh stack link`, `gh stack push`, `gh stack submit --auto` | **delegated to `/gh-stack`** — never run here; that skill runs its own install, attestation and per-use approval gates | Anchor Register #4, `/gh-stack` grant |
+| `gh stack init/add/checkout/rebase/sync/modify/merge/unstack` | **user only** — printed, never run, by this skill or any other | outside every grant |
 
 ## Input
 
@@ -121,7 +122,14 @@ It prints the **raw status**, not a word, because that is what carries the third
 **Push remediation output** (two paths, user picks):
 
 1. Per-branch `/push-ci` (existing contract; requires checking out each branch)
-2. A copy-pasteable command: `git push origin -- 'b1' 'b2' 'b3'`
+2. A copy-pasteable command: `git push origin -- 'refs/heads/b1:refs/heads/b1' 'refs/heads/b2:refs/heads/b2' 'refs/heads/b3:refs/heads/b3'`
+
+Each operand is a **fully qualified `refs/heads/<b>:refs/heads/<b>` pair**, never a bare branch
+name. Shell quoting and `--` stop the shell and git's option parser, not git's refspec parser: a
+legitimate branch named `+main` passes `git check-ref-format --branch`, and as a bare operand git
+reads its leading `+` as *force* and the rest as `main` — the non-force remediation this section
+offers would overwrite another branch. Qualified, `+main` is only a ref name. The extension makes
+the same choice for the same reason (`internal/git/gitops.go` `Push`, `github/gh-stack` v0.1.1).
 
 Then re-run `/create-pr --stack` — the flow is re-entrant.
 
@@ -153,7 +161,9 @@ The ancestry check is a real topology test — comparing declared list order aga
 
 **The walk starts at the current branch**, resolved with `git rev-parse --abbrev-ref HEAD` — that branch becomes the chain's **top** layer and the walk descends from it. Saying only "walk back to the target branch" names a destination and no origin, which in a repo with several open chained PRs leaves no deterministic chain to walk. `--head` is rejected in stack mode precisely because this is the one resolution: a stack has one top, and it is where you are standing. If HEAD is detached or on the target branch itself, there is no chain to detect — require an explicit one.
 
-**Auto-detection accepts authoritative sources only**: existing PR base relations, or native stack metadata when available, walked back to **the resolved target branch** — the same `--base` → `{TARGET_BRANCH}` → `main` resolution the bottom layer uses, computed *before* the walk. Never walk to literal `main`: in a repo configured for `develop`, terminating on `main` validates the chain against a branch it was never meant to target. A git branch does not record its intended base, so with neither source present, require an explicit chain — ambiguity STOPs rather than guesses.
+**Auto-detection accepts one authoritative source**: existing PR base relations, walked back to **the resolved target branch** — the same `--base` → `{TARGET_BRANCH}` → `main` resolution the bottom layer uses, computed *before* the walk. Never walk to literal `main`: in a repo configured for `develop`, terminating on `main` validates the chain against a branch it was never meant to target. A git branch does not record its intended base, so without that source, require an explicit chain — ambiguity STOPs rather than guesses.
+
+**A native stack the extension already tracks is *not* a second source here, deliberately.** Reading it means reading the extension's tracking file, which this skill never does, and the only reader that does — `/gh-stack` — is invoked in D1, *after* Phase B, with an already-validated chain as its argument. Listing a source nothing in the phase order can reach would make the STOP unreachable in exactly the case it exists for. Opening it needs the sync recorded in `docs/features/create-pr-stacked/2-tech-spec/2-tech-spec.md` § 7 Q5, not a line here.
 
 A dirty working tree **warns but never blocks**: every v1 mutation is a remote `gh pr` operation and all content derives from fetched remote refs.
 
@@ -194,7 +204,7 @@ Stacked on `feat/auth-schema`
 
 Dry-run then emits one command per layer, bottom to top. Here layers 1 and 2 have no PR yet and layer 3 already has #118.
 
-**In dry-run the skill runs no mutating `gh` command and leaves nothing on disk.** Read-only queries are exactly what dry-run is made of: Phase B needs `gh pr list` to route each layer and Phase D needs `gh extension list` to choose which sequence to print, so a literal "no `gh` at all" would describe a mode that cannot produce its own report. `gh pr create` and `gh pr edit` are the ones that never run. What it does do is allocate, write and sanitize (SKILL.md § 4b): sanitization operates on files, and dry-run's whole output is a body a user may copy into a real `gh` invocation, so a preview that skipped it would be the one path by which an AI trailer reaches a PR. The distinction is durability, not activity — dry-run tears its directory down with the teardown fence before delivering the report, so no private PR body survives a preview, whereas leaving it for the user to clean would depend on a command they may well decide not to run. Step 3 below is the user's to perform, if and when they choose to run the chain; under `--execute` the skill performs all three itself, per layer, and owns the teardown (§ Phase C).
+**In dry-run the skill runs no mutating `gh` command and leaves nothing on disk.** Read-only queries are exactly what dry-run is made of: Phase B needs `gh pr list` to route each layer and Phase D0 needs `gh extension list` to choose which path this run takes — and in dry-run the native path it chooses is itself the read-only delegation (§ Phase D), so a literal "no `gh` at all" would describe a mode that cannot produce its own report. `gh pr create` and `gh pr edit` are the ones that never run. What it does do is allocate, write and sanitize (SKILL.md § 4b): sanitization operates on files, and dry-run's whole output is a body a user may copy into a real `gh` invocation, so a preview that skipped it would be the one path by which an AI trailer reaches a PR. The distinction is durability, not activity — dry-run tears its directory down with the teardown fence before delivering the report, so no private PR body survives a preview, whereas leaving it for the user to clean would depend on a command they may well decide not to run. Step 3 below is the user's to perform, if and when they choose to run the chain; under `--execute` the skill performs all three itself, per layer, and owns the teardown (§ Phase C).
 
 ```bash
 # Step 1 — allocate once per run. This fence holds nothing else; substitute the
@@ -318,34 +328,83 @@ Every run ends with one table — dry-run and `--execute` alike, success and par
 
 The `Sync` column carries Phase A's raw class rather than a yes/no, for the same reason the ancestry fence prints a raw status: `DIVERGED` and `REMOTE_AHEAD` need different remedies, and collapsing them into "not ready" hides which one applies.
 
-## Phase D — Environment Detection and Native Comparison
+## Phase D — Environment Detection and Native Routing (D0 runs **before** Phase C)
 
 ```bash
 gh extension list        # match the github/gh-stack identity, not a loose "stack" substring
 ```
 
-| Extension | Rollout | Behavior |
-|-----------|---------|----------|
-| available | **confirmed** covered | dry-run additionally prints the equivalent `gh stack init/add/submit` sequence for the user to run |
-| available | unknown (no confirmed signal — the current state, tech spec §7 Q2) | take the **conservative non-native path**; may mention that `gh-stack` is installed but must not present the native sequence as known-working |
-| missing | any | emit the message below verbatim, then fall back to the existing Multi-PR behavior with mode-appropriate dependency markers |
+**Native first, when it is actually available.** Until 2026-09-18 this phase took the conservative
+non-native path even with the extension installed, because no confirmed rollout signal existed
+(tech spec § 7 Q2/Q5). The extension itself is now that signal: its subcommands exit with typed
+statuses (`4` GitHub API failure, `9` Stacks not available for this repository, …), and GitHub
+answers *which Stack holds this PR* through a REST endpoint of its own, so "is this repo covered"
+is answered by attempting the native operation under approval and then asking GitHub what exists
+(`/gh-stack` Phase 4) — not by a flag this skill cannot compute. Not by `gh stack view` either: it
+reads local tracking for the current branch, which `gh stack link` never writes, and it rewrites
+that tracking file as it reads. What stays conservative is the *fallback direction*: every unreadable or
+refused state **before anything is executed** — detection, install, `/gh-stack`'s own validation —
+lands on Multi-PR mode, never on a native claim. **After** an executed native attempt the direction
+narrows: only a *confirmed absence* of a Stack falls back, and a result GitHub did not confirm
+**stops** without Phase C, because a Stack that exists under a fallback is every layer mutated
+twice.
+
+**Dry-run delegates read-only.** `/create-pr --stack` is dry-run by default, and a preview that
+installs an extension or pushes branches is not a preview — so the mode travels with the
+delegation, exactly as it governs Phase C. The routing table's first row says which form each mode
+sends.
+
+**Two steps, and the split is what keeps the paths from colliding.** **D0 — detection** runs as
+soon as Phase B has validated the chain and **before Phase C**. **D1 — routing** decides which
+publisher runs. Phase C and the native path are alternatives, never a sequence: Phase C publishes a
+chained-base PR per layer itself, so running it and *then* delegating the same branches to
+`gh stack link` would double-mutate every layer behind an approval that covered one of them.
+
+| D0 detection | D1 routing |
+|--------------|------------|
+| `--update` passed, any detection | **Phase C**, always. `--update` means *refresh each layer's title and body*, and the native path has no text-refresh form: neither native publishing form edits an existing PR's title or body — `gh stack link` pushes and re-chains (`cmd/link.go`), and `gh stack submit --auto` generates text only for the PRs it **creates** (`cmd/submit.go` `ensurePR` / `createPR`). Delegating here would answer a description refresh with a push that refreshes nothing |
+| Any layer that exists **only on the remote** (Phase A `IN_SYNC` via the remote-only row) | **Phase C.** `/gh-stack` Phase 2 requires every branch operand to exist locally and aborts otherwise, so delegating such a chain ends with no PRs at all — while Phase C handles it, deriving every layer's content from fetched remote refs. This row runs before the detection rows |
+| Any layer whose name **parses as an integer** (`^[+]?[0-9]+$` — `+400` included: git accepts it as a branch name and Go's `strconv.Atoi` reads it as `400`) | **Phase C.** `gh stack link` resolves a numeric operand as a PR number — or, first in the list, a Stack number — *before* it treats it as a branch, so the native path would act on PR #400 rather than on branch `400`. `/gh-stack` Phase 2 refuses such a chain; routing it here first is what keeps that refusal from being the report. This row runs before the detection rows |
+| `github/gh-stack` present (no `--update`, every layer local) | **Skip Phase C** and delegate the whole chain — **and the delegation carries this run's mode**: dry-run delegates the read-only form (`/gh-stack --base '<resolved target branch>' <layer>…`, which detects, resolves and reports the native plan and mutates nothing — **it carries the base too**, or the preview would report layer 1 on the repository default while the approved run builds it on the resolved one), `--execute` delegates `/gh-stack --link --open --base '<resolved target branch>' <layer>…` (bottom first) — **the resolved base travels with the chain**: Phases A and B validate every layer against it, and `gh stack link` without `--base` chains layer 1 onto the repository default instead, which is the wrong-base failure § Input and § Phase B each warn about, here behind an approved push. **`--link`, not `--submit`**: `gh stack submit` takes no operands and publishes the extension's locally tracked stack, which nothing here builds, while `gh stack link` takes the validated chain, pushes it and chains the PRs. **`--open` is not optional decoration** either: without it the new PRs are *drafts*, while the Phase C path this replaces creates review-ready ones. `/gh-stack` Phase 3's approval still names readiness, and a user who wants drafts says so there. Delegation is not execution: `/gh-stack` runs its own install, attestation and per-use approval gates, and this skill executes no `gh stack` subcommand either way |
+| absent | **Mode-qualified.** Under `--execute`: offer the install — the offer is `/gh-stack` Phase 1's AskUserQuestion, and **nothing is installed silently**; a successful install re-enters the `present` row above, declined or failed → **Phase C** (Multi-PR mode). In **dry-run**: no install is offered and none happens — report the missing extension with the block below (it names `/gh-stack --install` for the user to run) and take Phase C, because a preview that leaves software on disk is not a preview (§ Phase C, dry-run invariant) |
+| `gh extension list` errors or cannot run | Treat as **absent** → Phase C. An unreadable environment is never read as available |
+| `/gh-stack` refused the chain in **its own Phase 2 validation** (any STOP before it executed anything — *native unavailable* from its Stacks availability probe included: a repository without Stacks, or one this token cannot see them in, is caught there, before any mutation) | Report what it said and run **Phase C** — nothing was mutated, so Phase B's snapshot is still current and no re-query is needed |
+| `/gh-stack` executed, exit `0`, its Phase 4 verification reads **`confirmed`**, and every approved PR change read back as approved | Native success — report `/gh-stack`'s table (below). Phase C does not run |
+| `/gh-stack` executed, exit `0`, **`confirmed`**, but a PR read-back differs from the approval | **STOP**, reported as partial — the extension only warns when a base retarget, an auto-merge change or a ready-marking fails. The layers are in a Stack, so Phase C does not run |
+| `/gh-stack` executed, **non-zero** exit, verification reads **`confirmed`** | **STOP** — a Stack holds the chain, but the command that was approved failed (a rejected `link` push leaves an earlier Stack intact and untouched). Report the failure per layer; Phase C does not run, since the layers are already in a Stack |
+| `/gh-stack` executed with a **non-zero** exit, and verification reads **`confirmed absent`** — no Stack holds any layer's PR, or no layer has a PR at all (a `link` that failed before creating one) | Report what came back, then **re-run Phase B's existing-PR query** (`gh pr list --head '<head>' --state all --limit 100`) for every layer and route Phase C on *that* answer — `gh stack link` pushes the branches and creates the missing PRs one by one **before** it creates the Stack (`cmd/link.go`), so a failure at that last step leaves layers published that exist only in the refreshed result. Phase B's original snapshot predates the native mutation, and reading it here would issue `gh pr create` for a head that already has an open PR, which `gh` refuses and which ends the run mid-chain |
+| `/gh-stack` executed, and verification reads **`unverifiable`** | **STOP** — report what came back and route nothing. A Stack may exist that GitHub did not confirm, and Phase C on top of it would edit every layer a second time. The user reconciles, then re-runs; the flow is re-entrant |
 
 Missing-extension output — name the component, not just "unavailable":
 
 ```
-gh-stack extension not installed — falling back to Multi-PR mode.
+gh-stack extension not installed — Multi-PR mode unless you install it.
   Missing: github/gh-stack (gh extension)
-  Install: gh extension install github/gh-stack
+  Install: /gh-stack --install   (asks first; runs `gh extension install github/gh-stack`)
   Effect:  chained-base PRs are still created; no GitHub stack object,
            so no per-layer diff view and no linked merges.
 ```
 
-If `gh extension list` itself errors or cannot be run, **detection failure degrades conservatively to the non-native path** — an unreadable environment is treated as "missing", never as "available".
+**The two results are not equivalent, and the report says which one happened.** Both paths produce
+chained-base PRs. Only the native path yields a GitHub **Stack** object — per-layer diff view and
+linked merges — so a hand-built chain is never described as a stack. **Readiness is the second axis
+of that delta**: Phase C creates review-ready PRs, the native path creates drafts unless `--open` is passed (`--auto` on `submit`, and `gh stack link`
+alike), so the report states draft-or-ready per layer and never reports `created` for a
+PR nobody has been asked to review.
 
-Because no confirmed rollout signal exists yet, "extension installed" alone never unlocks the native output — the first row is unreachable until Q2 is answered, and that is deliberate: degrade conservatively rather than promise a native stack the repo may not support.
+**On the native path the report is `/gh-stack` Phase 4's table**, which owns the `PR`, `Draft` and
+`State` columns; this skill adds its own Phase A `Sync` and Phase B `Commits` columns beside them.
+One table per run either way — § Stack status table is the non-native shape.
 
-Both paths produce chained-base PRs. The native path additionally yields a GitHub stack object (per-layer diff view, linked merges) — **say so in the output**; a hand-built chained-base PR set is not claimed to be equivalent.
+**Reachability, since Phase A decides it:** under `--execute` Phase A refuses `LOCAL_AHEAD`, `ABSENT`, `REMOTE_AHEAD` and `DIVERGED`, so the native delegation is reached only for a chain whose every layer is already `IN_SYNC` **and exists locally** — for that chain the branch push `gh stack link` performs is a no-op, because `/gh-stack` pins it to the remote those checks read (`--remote 'origin'`, § Phase 3 there) rather than letting the extension choose one from `pushRemote` / `pushDefault` configuration — and what it adds is the PR chaining and the Stack object. The remote-only case is `IN_SYNC` too but has no local branch to push, which is why the routing table sends it to Phase C instead. An unpushed chain goes through `/push-ci` first, or through `/gh-stack --link` invoked directly, which Phase A does not bind.
+
+**Phases A and B always run; Phase C is the fallback's publisher.** A and B are what make the chain
+claim true before anything is delegated — sync classification, real ancestry, the existing-PR
+policy — so a native delegation happens **after** Phase B validates the chain and carries that
+validated chain as its argument; a chain this skill could not validate is not handed to a skill that
+pushes. Phase C then runs on the non-native path only, or on the native path's refusal remainder
+above.
 
 ## Update Flow
 
-After the user runs `gh stack rebase --upstack` + `gh stack push` themselves (which rewrites SHAs), `/create-pr --stack --update` refreshes each layer's title/body. CI monitoring can be chained via `/watch-ci`.
+After the stack is rebased and pushed (which rewrites SHAs) — `gh stack rebase --upstack` stays the user's, being a history rewrite outside every grant, while the push half can go through `/gh-stack --push`, `/create-pr --stack --update` refreshes each layer's title/body. CI monitoring can be chained via `/watch-ci`.

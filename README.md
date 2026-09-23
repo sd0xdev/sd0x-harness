@@ -13,7 +13,7 @@ v4 gives Claude discretion inside a closed, test-pinned anchor set; hooks are di
 Full control plane on Claude Code. Skills-only distribution for Codex CLI and other compatible agents.
 
 <!-- BEGIN:HERO-COUNT -->
-99 bundled · 99 public skills · 16 agents — ~4% of Claude's context window
+100 bundled · 100 public skills · 16 agents — ~4% of Claude's context window
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -45,8 +45,8 @@ $codex-setup init
 <!-- BEGIN:INSTALL-COVERAGE -->
 | Method | Tools | Coverage |
 |--------|-------|----------|
-| Plugin install | Claude Code | Full (99 bundled skills, hooks, rules, auto-loop) |
-| `npx skills add` | Codex CLI, Cursor, Windsurf, Aider | Skills only (99 public skills) |
+| Plugin install | Claude Code | Full (100 bundled skills, hooks, rules, auto-loop) |
+| `npx skills add` | Codex CLI, Cursor, Windsurf, Aider | Skills only (100 public skills) |
 | `$codex-setup init` | Codex CLI | AGENTS.md kernel + commit-msg hook (pre-push gate opt-in) |
 <!-- END:INSTALL-COVERAGE -->
 
@@ -159,7 +159,7 @@ sd0x-dev-flow is a reference implementation. Each row below maps a canonical har
 | 2 | **Digest-bound reminder state** | Verdicts are noted by the model (`node scripts/review-state.js note <plane> <pass\|fail>`) and bound to the tree digest — an edit re-opens its plane's reminder because the digest changed; gate sentinels (`✅ Ready` / `## Overall: ✅ PASS`) stay behaviour-layer signals | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context recovery across compaction** | Git baseline (branch + uncommitted files) and owed-gate reminders re-injected after SessionStart(compact) | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
 | 4 | **Lifecycle interceptors** | 5 hook event types dispatched to 6 scripts — 4 advisory reminder hooks, an auto-formatter, and one blocking security guard (SessionStart additionally runs `scripts/namespace-hint.sh`): PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (6 scripts) + [`.claude/settings.json`](.claude/settings.json) |
-| 5 | **Capability-based tool gating** | Skill frontmatter `allowed-tools` — e.g., `/ask` has no Edit/Write | 91 of 99 public skills declare `allowed-tools` |
+| 5 | **Capability-based tool gating** | Skill frontmatter `allowed-tools` — e.g., `/ask` has no Edit/Write | 92 of 100 public skills declare `allowed-tools` |
 | 6 | **Defense-in-depth safety** | Git-level guards stay hard where they are installed — commit-msg-guard always, pre-push-gate over `/dev/tty` when opted in; edit-time pre-edit-guard still blocks sensitive-path edits (a security guard, not workflow enforcement — it needs `jq`, and without it the guard does not fire); the Stop hook reminds — the layers that gate irreversible actions and secrets kept their teeth, the review layer became advisory by design | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex reviews what Claude wrote, researching the repo independently — never handed a conclusion to confirm | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | Evidence-based stall discipline: three review rounds that close no findings — counted by the model from the review reports — trigger a structured classification plus one bounded adjustment. The per-tier round budget (default 6 / 15 / 30, overridable 3–50) is the runaway backstop and runs the same diagnosis on its first hit, with enumerated human exits | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; details in `skills/codex-code-review/references/loop-diagnostics.md`) |
@@ -338,7 +338,7 @@ Real-world scenarios showing which skills to combine and in what order.
 <!-- BEGIN:WHATS-INCLUDED-COUNT -->
 | Category | Count | Examples |
 |----------|-------|---------|
-| Skills | 99 public (99 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
+| Skills | 100 public (100 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | Agents | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | Hooks | 6 | pre-edit-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
 | Rules | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
@@ -382,9 +382,9 @@ Skills load on-demand. Idle skills cost zero tokens.
 
 <!-- BEGIN:FULL-CATALOG -->
 <details>
-<summary>All 99 public skills</summary>
+<summary>All 100 public skills</summary>
 
-### Development (33)
+### Development (34)
 
 | Skill | Description |
 |-------|-------------|
@@ -402,6 +402,7 @@ Skills load on-demand. Idle skills cost zero tokens.
 | `/epic-merge` | Sequential squash-merge of stacked PR chains into an epic branch. |
 | `/feature-dev` | Feature development workflow. |
 | `/feature-verify` | Feature verification (READ-ONLY, P0-P5). |
+| `/gh-stack` | Native stacked pull requests through the github/gh-stack extension. |
 | `/git-investigate` | Git history investigation. |
 | `/git-profile` | Git identity and GPG signing profile manager. |
 | `/install-hooks` | Install plugin hooks into project .claude/ for persistent use without plugin loaded |

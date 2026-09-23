@@ -541,9 +541,19 @@ test('stack mode routes branch pushes to the authorized workflow', () => {
   assert.ok(stackSection.includes('/push-ci'), 'SKILL.md should delegate pushes to /push-ci');
   assert.match(
     stackContent,
-    /`gh stack init\/add\/submit\/rebase\/push\/modify`.*\|.*user only/s,
-    'reference authorization table should mark gh stack commands as user-only'
+    /`gh stack init\/add\/checkout\/rebase\/sync\/modify\/merge\/unstack`.*\|.*user only/s,
+    'the ungranted gh stack subcommands stay the user\'s, printed and never run'
   );
+  // The three granted ones are delegated, not executed here — and the table must say that
+  // delegation carries no authorization across the call, or "we called a skill that may push"
+  // reads as "we may push".
+  assert.match(
+    stackContent,
+    /`gh stack link`, `gh stack push`, `gh stack submit --auto`.*\|.*delegated to `\/gh-stack`/s,
+    'the granted subcommands should route to /gh-stack, not to this skill'
+  );
+  assert.match(stackContent, /\*\*Delegation is not execution\*\*/,
+    'the reference must state that the called skill re-asks for its own approval');
 });
 
 test('stack mode claims no authorization beyond existing gh pr create/edit', () => {
@@ -818,9 +828,15 @@ test('displayed commands are escaped and use an option terminator', () => {
     'dynamic display values should be single-quote escaped'
   );
   assert.ok(
-    stackContent.includes("git push origin -- 'b1' 'b2' 'b3'"),
-    'the emitted push command should demonstrate the -- terminator and quoting'
+    stackContent.includes("git push origin -- 'refs/heads/b1:refs/heads/b1' 'refs/heads/b2:refs/heads/b2' 'refs/heads/b3:refs/heads/b3'"),
+    'the emitted push command should demonstrate the -- terminator, quoting and qualified refspecs'
   );
+  // Quoting and `--` stop the shell and the option parser, not the refspec parser: a branch named
+  // `+main` is a legal ref name that git reads, as a bare operand, as a force push of `main`.
+  assert.ok(!stackContent.includes("git push origin -- 'b1'"),
+    'a bare-name operand must not survive anywhere in the remediation');
+  assert.match(stackContent, /a\s+legitimate branch named `\+main` passes `git check-ref-format --branch`/,
+    'the reason for the qualified form must be stated where the command is');
 });
 
 test('body is treated as a dynamic field that never enters shell syntax', () => {
@@ -911,28 +927,80 @@ test('environment detection matches the extension identity, not a loose substrin
 
 test('missing gh-stack degrades with an explicit message and fallback', () => {
   const phaseD = stackContent.slice(stackContent.indexOf('## Phase D'));
-  assert.match(phaseD, /emit the message below verbatim/, 'degradation message should be explicit');
-  assert.match(phaseD, /gh-stack extension not installed — falling back to Multi-PR mode/, 'the user-facing message should be shipped');
-  assert.match(phaseD, /fall back to the existing Multi-PR behavior/, 'fallback path should be named');
-  assert.match(phaseD, /mode-appropriate dependency markers/, 'fallback should keep the marker contract');
+  assert.match(phaseD, /gh-stack extension not installed — Multi-PR mode unless you install it/,
+    'the user-facing message should be shipped');
+  assert.match(phaseD, /Missing: github\/gh-stack/, 'the missing component should be named');
+  assert.match(phaseD, /declined or failed → \*\*Phase C\*\* \(Multi-PR mode\)/,
+    'a declined install must land on the fallback publisher');
+  // Dry-run may not reach the install offer at all: the same section promises a preview leaves
+  // nothing on disk, and an installed extension is something on disk.
+  assert.match(phaseD, /In \*\*dry-run\*\*: no install is offered and none happens/,
+    'the preview invariant must bind the install offer too');
+  assert.match(phaseD, /\*\*nothing is installed silently\*\*/,
+    'the install is an approval, never a side effect of detection');
 });
 
 test('native stack equivalence is not overclaimed', () => {
   const phaseD = stackContent.slice(stackContent.indexOf('## Phase D'));
-  assert.match(phaseD, /GitHub stack object/, 'native-only benefit should be named');
+  assert.match(phaseD, /GitHub \*\*Stack\*\* object/, 'native-only benefit should be named');
   assert.match(
     phaseD,
-    /is not claimed to be equivalent/,
-    'hand-built chained-base PRs should not be claimed equivalent to a native stack'
+    /The two results are not equivalent, and the report says which one happened/,
+    'hand-built chained-base PRs should not be reported as a stack'
   );
+  assert.match(phaseD, /no per-layer diff view and no linked merges/,
+    'the fallback must name what it does not deliver');
 });
 
-test('rollout detection degrades conservatively while its signal is unconfirmed', () => {
-  assert.match(
-    stackContent,
-    /detection failure degrades conservatively to the non-native path/,
-    'unknown rollout state should fall back rather than assume support'
-  );
+test('native routing is attempted first but every unreadable state still falls back', () => {
+  // The 2026-09-18 policy flip: "installed" now routes native, because the extension IS the
+  // rollout signal (its typed exit statuses, and the Stacks REST endpoint /gh-stack Phase 4 asks).
+  // What did NOT flip is the direction of every failure — each one lands on Multi-PR mode, never
+  // on a native claim — with one addition since 2026-09-23: an UNVERIFIABLE outcome after an
+  // executed native attempt lands on neither. A Stack may exist, so Phase C on top of it would be
+  // the second mutation per layer this routing exists to prevent.
+  const phaseD = stackContent.slice(stackContent.indexOf('## Phase D'));
+  assert.match(phaseD, /Treat as \*\*absent\*\* → Phase C/,
+    'an unreadable environment must degrade to absent');
+  assert.match(phaseD, /An unreadable environment is never read as available/,
+    'the direction of the degradation must be stated, not implied');
+  assert.match(phaseD, /executed with a \*\*non-zero\*\* exit, and verification reads \*\*`confirmed absent`\*\*/,
+    'only a failed command with a confirmed absence may route an executed native attempt to Phase C');
+  assert.match(phaseD, /verification reads \*\*`unverifiable`\*\* \| \*\*STOP\*\*/,
+    'an outcome GitHub did not confirm must stop, not fall back');
+  assert.ok(!/no Stack object afterwards/.test(phaseD),
+    'the retired "no Stack object afterwards" trigger conflated absence with a failed read');
+  // A repository without Stacks must still reach the fallback AC5 requires. A 404 cannot tell
+  // "not enabled" from "not visible", so it is settled BEFORE execution by /gh-stack's availability
+  // probe — a Phase 2 STOP, nothing mutated — never read as an absence after a push.
+  assert.match(phaseD, /\*native unavailable\* from its Stacks availability probe included/,
+    'an unavailable repository must reach Phase C through the pre-execution STOP');
+  assert.match(phaseD, /or no layer has a PR at all \(a `link` that failed before creating one\)/,
+    'a native attempt that created nothing must be able to fall back');
+  // The Stack existing is not the approved command succeeding.
+  assert.match(phaseD, /\*\*non-zero\*\* exit, verification reads \*\*`confirmed`\*\* \| \*\*STOP\*\*/,
+    'a failed command against an existing Stack must stop, not report success or fall back');
+  // The extension only warns when a retarget, auto-merge change or ready-marking fails, and exits 0.
+  assert.match(phaseD, /exit `0`, \*\*`confirmed`\*\*, but a PR read-back differs from the approval \| \*\*STOP\*\*/,
+    'an approved PR change that did not land must stop, not report success or fall back');
+  // Neither native form edits an existing PR's text, which is the whole reason --update stays on Phase C.
+  assert.match(phaseD, /neither native publishing form edits an existing PR's title or body/,
+    'the --update rationale must match what the extension actually does');
+  // A numeric branch name is resolved by the extension as a PR (or Stack) number first.
+  const numericRow = phaseD.match(/\| Any layer whose name \*\*parses as an integer\*\* \(`([^`]+)`[^|]*\| \*\*Phase C\.\*\*/);
+  assert.ok(numericRow, 'a chain with a numeric layer name must not be delegated to link');
+  // The routing pattern and /gh-stack's refusal pattern must be the same, or one lets through what
+  // the other was written to stop.
+  const ghStackSkill = readFileSync(resolve(__dirname, '../../skills/gh-stack/SKILL.md'), 'utf8');
+  const refusal = ghStackSkill.match(/\| `--link`: no branch operand parses as an integer \(`([^`]+)`/);
+  assert.ok(refusal && refusal[1] === numericRow[1], 'the caller and the skill must use one numeric pattern');
+  for (const name of ['400', '+400', '+0400']) assert.ok(new RegExp(numericRow[1]).test(name), `must route ${name} to Phase C`);
+  assert.ok(!new RegExp(numericRow[1]).test('feat-400'), 'an ordinary branch name must still delegate');
+  // The blanket "every unreadable or refused state falls back" sentence contradicted the STOP.
+  assert.match(phaseD, /refused state \*\*before anything is executed\*\*/,
+    'the fallback direction must be scoped to pre-execution states');
+  assert.match(phaseD, /What stays conservative is the \*fallback direction\*/,
+    'the flip must name what it did not change');
 });
 
 // --- Flag interactions ---
@@ -975,19 +1043,52 @@ test('--update in stack mode requires every layer to exist and never creates', (
   );
 });
 
-test('installed extension alone does not unlock the native path', () => {
-  // Rollout has no confirmed signal, so "installed" must still degrade conservatively.
+test('the native path is delegated, never executed here, and only after Phase B validated the chain', () => {
+  const phaseD = stackContent.slice(stackContent.indexOf('## Phase D'));
+  assert.match(phaseD, /\*\*Skip Phase C\*\* and delegate the whole chain/,
+    'the native path must route to the authorized workflow instead of publishing here');
+  // Phase C and the native path are alternatives. Running C first and then delegating the same
+  // branches would publish a chained-base PR per layer and then hand those layers to
+  // `gh stack link` — two mutations per layer behind one approval.
+  assert.match(phaseD, /Phase C and the native path are alternatives, never a sequence/,
+    'the two publishers must be exclusive');
+  assert.match(phaseD, /D0 — detection\*\* runs as\s+soon as Phase B has validated the chain and \*\*before Phase C\*\*/,
+    'detection must precede the fallback publisher, or the choice comes too late to matter');
+  // /create-pr --stack is dry-run by default; a preview that installs an extension or pushes is
+  // not a preview, so the mode has to travel with the delegation.
+  assert.match(phaseD, /dry-run delegates the read-only form/,
+    'the delegation must carry this run\'s mode');
+  // Readiness is the second axis of the native/non-native delta: `gh stack submit --auto` drafts by
+  // default, Phase C does not. A delegation that dropped `--open` would quietly turn every layer
+  // into a PR nobody was asked to review, while the report still said "created".
+  assert.match(phaseD, /`--open` is not optional decoration/,
+    'the delegation must carry readiness, not only the chain');
+  assert.match(phaseD, /\*\*Readiness is the second axis\s+of that delta\*\*/,
+    'the reported delta must name readiness beside the Stack object');
+});
+
+test('a tracked native stack is not an auto-detection source while nothing in the phase order reads it', () => {
+  // Source 2 named a reader that never runs at auto-detection time: this skill never reads the
+  // extension's tracking file, and /gh-stack is invoked in D1 — after Phase B, with an already
+  // validated chain. Listing it would make the STOP unreachable in the case it exists for.
+  assert.match(stackContent, /\*\*Auto-detection accepts one authoritative source\*\*: existing PR base relations/,
+    'auto-detection has one source until the sync ticket lands');
+  assert.match(stackContent, /is \*not\* a second source here, deliberately/,
+    'the exclusion must be stated with its reason, not left as an omission');
+  assert.ok(!/native stack metadata\)/.test(skillContent),
+    'SKILL.md must not keep listing the source the reference dropped');
+});
+
+test('the delegation carries no inherited authorization and follows chain validation', () => {
   const phaseD = stackContent.slice(stackContent.indexOf('## Phase D'));
   assert.match(
     phaseD,
-    /unknown \(no confirmed signal[^)]*\).*conservative non-native path/s,
-    'unknown rollout should take the conservative path even when installed'
+    /Delegation is not execution: `\/gh-stack` runs its own install, attestation and per-use approval gates/,
+    'the delegation must not read as an inherited authorization'
   );
-  assert.match(
-    phaseD,
-    /"extension installed" alone never unlocks the native output/,
-    'reference should state the rule explicitly'
-  );
+  // Order matters: a chain this skill could not validate must not be handed to a skill that pushes.
+  assert.match(phaseD, /a native delegation happens \*\*after\*\* Phase B validates the chain/,
+    'validation precedes delegation');
 });
 
 test('frontmatter allows the tool that execute-mode approval requires', () => {
@@ -1918,7 +2019,8 @@ test('the degradation path names the missing component and how to install it', (
   const phaseD = extractSection(stackContent, '## Phase D');
   assert.match(phaseD, /gh extension install github\/gh-stack/, 'install command should be given');
   assert.match(phaseD, /Missing: github\/gh-stack/, 'the missing component should be named');
-  assert.match(phaseD, /falling back to Multi-PR mode/, 'the fallback should be stated to the user');
+  assert.match(phaseD, /Multi-PR mode unless you install it/, 'the fallback should be stated to the user');
+  assert.match(phaseD, /asks first/, 'the install route must advertise its own approval');
 });
 
 test('the run directory is allocated by mktemp, not invented', () => {
@@ -3830,11 +3932,18 @@ const NON_EXECUTABLE_MUTATING = new Map([
   ["git merge-base --is-ancestor 'refs/remotes/origin/<lower>' 'refs/remotes/origin/<upper>'", { kind: 'read-only', where: ['span'] }],
   // Printed for the USER to run. This skill never executes them — that is the
   // whole of Anchor Register #4 as it applies here.
-  ["git push origin -- 'b1' 'b2' 'b3'", { kind: 'user-run', where: ['span'] }],
-  ['gh stack init/add/submit', { kind: 'user-run', where: ['span'] }],
-  ['gh stack init/add/submit/rebase/push/modify', { kind: 'user-run', where: ['span'] }],
-  ['gh stack push', { kind: 'user-run', where: ['span'] }],
+  ["git push origin -- 'refs/heads/b1:refs/heads/b1' 'refs/heads/b2:refs/heads/b2' 'refs/heads/b3:refs/heads/b3'", { kind: 'user-run', where: ['span'] }],
+  ['gh stack init/add/checkout/rebase/sync/modify/merge/unstack', { kind: 'user-run', where: ['span'] }],
   ['gh stack rebase --upstack', { kind: 'user-run', where: ['span'] }],
+  // Delegated to /gh-stack (Anchor Register #4's fourth workflow), which re-asks for its own
+  // approval. Named here so the routing table can say who runs them; this skill still runs none.
+  ['gh stack link', { kind: 'delegated', where: ['span'] }],
+  ['gh stack push', { kind: 'delegated', where: ['span'] }],
+  ['gh stack submit --auto', { kind: 'delegated', where: ['span'] }],
+  // Named, not run: `gh stack submit` in the prose that explains why `--link` is delegated, and
+  // `gh stack view` where Phase D says why it is NOT the verification (it writes the tracking file).
+  ['gh stack submit', { kind: 'name', where: ['span'] }],
+  ['gh stack view', { kind: 'name', where: ['span'] }],
   // Anti-pattern illustration in the rationale for literal-path substitution.
   ['rm -rf "$TMPDIR"', { kind: 'anti-pattern', where: ['span'] }],
 ]);
