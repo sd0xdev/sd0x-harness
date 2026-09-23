@@ -2698,3 +2698,20 @@ test('the catalog summary count is the one attached to `public skills`', () => {
   assert.equal(catalogSummaryCountIn(block('99 個分類；777 個 public skills'), 'fixture'), 777,
     'the first number in the summary is not the claim — the one at the noun is');
 });
+
+test('READMEs when they say commit-msg-guard is installed → name the setup path that installs it', () => {
+  // The Claude quickstart (plugin + /project-setup) installs no git commit-msg hook; only
+  // `/codex-setup init` does. "Always installed" / "by default" with no path told a Claude-path
+  // reader that commit attribution was mechanically guarded when nothing was.
+  const unqualified = /commit-msg[^|]{0,40}(always|by default|installed by default|一律安裝|預設安裝|始终安装|默认安装|常にインストール|既定|항상 설치|기본|por defecto|siempre)/;
+  const files = ['README.md', 'README.zh-TW.md', 'README.zh-CN.md', 'README.ja.md', 'README.ko.md', 'README.es.md'];
+  for (const f of files) {
+    const text = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../..', f), 'utf8');
+    const hits = text.split('\n').filter((l) => unqualified.test(l));
+    assert.deepEqual(hits, [], `${f} states a default install without its setup path`);
+    assert.ok((text.match(/commit-msg[^\n]{0,60}`\/codex-setup init`/g) || []).length >= 4,
+      `${f} must attribute every install claim to /codex-setup init`);
+  }
+  // Control: the retired wording is what the check exists to see.
+  assert.ok(unqualified.test('commit-msg-guard always, pre-push-gate opt-in'), 'the check must see the old claim');
+});
