@@ -2634,6 +2634,23 @@ test('DELETING an existing tag reaches no attestation prompt — the boundary, s
   }
 });
 
+test('DELETING a protected branch still reaches the protected prompt — the exclusion is from the rewrite class only', () => {
+  // The gate adds every destination branch to BRANCHES_PUSHING before its rewrite test, so a
+  // null-OID deletion skips the unshared attestation but not the protected-branch check.
+  // /push-ci used to say "removing an existing tag or branch reaches no prompt".
+  const { dir, second } = makeForwardRepo();
+  try {
+    const out = runGate2(dir, `(delete) ${NULL_OID} refs/heads/main ${second}`);
+    assert.doesNotMatch(out, /EXIT:0/, `deleting main must not pass silently, got: ${out}`);
+    assert.match(out, /Pushing to protected branch\(es\): main/, 'and the protected prompt must name the branch');
+    // Control: the same deletion of an unprotected branch reaches no prompt at all.
+    const ok = runGate2(dir, `(delete) ${NULL_OID} refs/heads/feat/x ${second}`);
+    assert.match(ok, /EXIT:0/, `an unprotected deletion is outside both classes, got: ${ok}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('MOVING an existing tag is still asked about — the deletion case is not a tag exemption', () => {
   const { dir, first, second } = makeForwardRepo();
   try {

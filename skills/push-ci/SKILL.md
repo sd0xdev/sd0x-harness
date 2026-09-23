@@ -39,7 +39,7 @@ Push to remote with user approval, then monitor CI run until completion.
 
 **Which layer authorizes depends on whether L1 is installed.** The `pre-push` hook is opt-in (`/codex-setup init --with-push-gate`, or `sync --with-push-gate` on an existing project). `/install-scripts` copies `pre-push-gate.sh` into `.claude/scripts/` and never wires up a hook, so having run it is not evidence the gate exists.
 
-**L1 prompts for two classes of push, and they are different questions.** The **protected** prompt asks *may this branch be pushed to at all*; it fires when the ref set includes a protected branch and `ALLOW_PUSH_PROTECTED` is unset. The **unshared attestation** asks *is anybody else working on the refs this push rewrites*; it fires when the push **rewrites a ref** and `ALLOW_FORCE_UNSHARED` is unset, over the rewritten refs the protected prompt will not already cover. **Rewrite is read per ref class, because ancestry is the *branch* rule**: a branch update is a rewrite when the remote tip is not provably an ancestor of what replaces it, while **every update to an existing tag is one** — git requires force semantics for any change to an existing `refs/tags/*` ref, forward moves included, because a tag names one commit rather than a line of history (`scripts/pre-push-gate.sh` § `is_tag_ref`, and the hook prints a separate line for tags precisely because a forced tag update can be a textbook fast-forward). A tag *creation* has no history to overwrite and is not asked about, and neither is a **deletion** of any ref class — the gate's rewrite test needs a non-null OID on both sides, so removing an existing tag or branch reaches no prompt (`rules/git-workflow.md` § Push safety states the boundary; the maintainer decided on 2026-08-22 to leave it there). Reading the class as "non-fast-forward" alone would wave through exactly the moves git itself classifies as forced — which is every rewritten ref when `ALLOW_PUSH_PROTECTED=1` has silenced that prompt. Neither variable clears the other. Every push the hook **permits** without meeting either condition exits 0 (`scripts/pre-push-gate.sh`). A push the hook *refuses* is a third outcome and not a row below: it never happens, so nothing authorized it. So the gate is chosen by **both** axes, and an installed hook never demotes L2 for a push the hook does not prompt on:
+**L1 prompts for two classes of push, and they are different questions.** The **protected** prompt asks *may this branch be pushed to at all*; it fires when the ref set includes a protected branch and `ALLOW_PUSH_PROTECTED` is unset. The **unshared attestation** asks *is anybody else working on the refs this push rewrites*; it fires when the push **rewrites a ref** and `ALLOW_FORCE_UNSHARED` is unset, over the rewritten refs the protected prompt will not already cover. **Rewrite is read per ref class, because ancestry is the *branch* rule**: a branch update is a rewrite when the remote tip is not provably an ancestor of what replaces it, while **every update to an existing tag is one** — git requires force semantics for any change to an existing `refs/tags/*` ref, forward moves included, because a tag names one commit rather than a line of history (`scripts/pre-push-gate.sh` § `is_tag_ref`, and the hook prints a separate line for tags precisely because a forced tag update can be a textbook fast-forward). A tag *creation* has no history to overwrite and is not asked about, and neither is a **deletion** of any ref class — the gate's rewrite test needs a non-null OID on both sides, so removing an existing tag or branch never reaches the **unshared attestation** (`rules/git-workflow.md` § Push safety states the boundary; the maintainer decided on 2026-08-22 to leave it there). That exclusion is from the rewrite class only: the gate collects every destination branch into its protected-branch check *before* the rewrite test runs, so deleting a **protected** branch — `main`, say — still reaches the protected prompt exactly as pushing to it would (`scripts/pre-push-gate.sh`, the `BRANCHES_PUSHING` collection and the protected gate). Only an unprotected deletion — or any deletion under `ALLOW_PUSH_PROTECTED=1`, which silences the protected prompt — reaches no prompt at all. Reading the class as "non-fast-forward" alone would wave through exactly the moves git itself classifies as forced — which is every rewritten ref when `ALLOW_PUSH_PROTECTED=1` has silenced that prompt. Neither variable clears the other. Every push the hook **permits** without meeting either condition exits 0 (`scripts/pre-push-gate.sh`). A push the hook *refuses* is a third outcome and not a row below: it never happens, so nothing authorized it. So the gate is chosen by **both** axes, and an installed hook never demotes L2 for a push the hook does not prompt on:
 
 | Push (one the hook permits) | L1 installed | L1 not installed |
 |------|--------------|------------------|
@@ -635,8 +635,10 @@ When branch is `main`, `master`, `develop`, or `release/*`:
      over `D` with exit 0 while the only topology anyone saw said `fast-forward`. The
      same tree with `--force-with-lease=refs/heads/<b>:<C>` was rejected `(stale info)`.
      So Phase 2 now passes the classified tip as the lease value and drops
-     `--force-if-includes`, which git documents as a no-op beside one (measured: the
-     combination succeeds exactly where the value alone refuses). What still cannot be
+     `--force-if-includes`, which git documents as a no-op beside one (measured 2026-09-23,
+     git 2.55.0: with the value set the push is refused `(stale info)` whether or not the
+     flag is added — an earlier note here said the pair succeeds where the value alone
+     refuses, which did not reproduce). What still cannot be
      proved on the push side is that the outgoing history *preserves* the remote tip —
      the lease binds the destination, not the shape of what replaces it.
    - **Disruption** — not addressed, by any flag. Rewriting history under someone with
@@ -669,7 +671,7 @@ When branch is `main`, `master`, `develop`, or `release/*`:
 2. Use AskUserQuestion with options:
    - "Continue — push to `<branch>`" — proceed to Phase 1
    - "Abort" — stop immediately
-3. If user aborts → stop. If user continues → proceed to Phase 1 (push approval asked separately). Where the `pre-push` hook is installed, it will still require terminal confirmation via `/dev/tty` as the final authorization gate — a claim that holds **here specifically** because this whole flow is scoped to protected branches — **one of the two** classes the hook prompts on, the other being a push that is **not provably a fast-forward** with `ALLOW_FORCE_UNSHARED` unset — read fail-closed and per ref class, so an ancestry test that *errors* lands there exactly as one that answers no, every update to an existing tag lands there whatever ancestry says, and creations, deletions and unchanged refs land in neither prompt at all (`rules/git-workflow.md` § Push safety) — and because Phase 2 clears `ALLOW_PUSH_PROTECTED` so the bypass cannot be inherited; where it is not installed, this approval and the Phase 1 approval are the only ones there will be — which is a reason to present them accurately, not a reason to skip them.
+3. If user aborts → stop. If user continues → proceed to Phase 1 (push approval asked separately). Where the `pre-push` hook is installed, it will still require terminal confirmation via `/dev/tty` as the final authorization gate — a claim that holds **here specifically** because this whole flow is scoped to protected branches — **one of the two** classes the hook prompts on, the other being a push that is **not provably a fast-forward** with `ALLOW_FORCE_UNSHARED` unset — read fail-closed and per ref class, so an ancestry test that *errors* lands there exactly as one that answers no, every update to an existing tag lands there whatever ancestry says, and creations, deletions and unchanged refs never land in the rewrite class — though a creation or deletion on a protected branch still reaches the protected prompt, and an unchanged ref reaches nothing because git hands the hook none, which is the one this flow is about (`rules/git-workflow.md` § Push safety) — and because Phase 2 clears `ALLOW_PUSH_PROTECTED` so the bypass cannot be inherited; where it is not installed, this approval and the Phase 1 approval are the only ones there will be — which is a reason to present them accurately, not a reason to skip them.
 
 ### Phase 1: Push Plan + User Approval
 
@@ -682,7 +684,7 @@ Present push summary and **ask user for explicit approval** using AskUserQuestio
 - Remote: `origin` → `<the effective push destination — the `PUSH_URLS_SAFE` value Phase 0 step 8 derived and printed, never the raw one: a push URL may carry `user:token@` and this line goes into the approval transcript>`. Show the destination, not just the remote name: `origin` can name a different URL for fetching than for pushing (an explicit `remote.origin.pushurl`, or a `url.<x>.pushInsteadOf` rewrite), and the name alone cannot tell the approver which repository is about to change. More than one URL means the push fans out to all of them — say so
 - Commits: <N> ahead
 - HEAD: `<the full object ID from Phase 0 step 6 — whatever width `git rev-parse HEAD` returned, not an abbreviation>`. Phase 2 re-derives it and refuses the push if it no longer matches, so this line is what that comparison is made against: shown short, it would either compare short (and pass on a prefix collision) or compare against a value the user never saw
-- Overwrites: `<on a `--force-with-lease` push whose Phase 0 step 8 reading is `rewrite`: the full `REMOTE_TIP` object ID that step printed — the commit on the remote this push replaces. On every other reading: `nothing (<the ASK_REASON word>)`>`. **This line is why the plan can be reused as a comparison at all.** Phase 2 re-measures the remote and refuses when the answer differs from what is written here, exactly as it does for `HEAD:` above — and without the line there is nothing to compare against, so an approval given for destroying one commit would silently carry to a push destroying another. Full object ID, for the same reason `HEAD:` is: a prefix can collide, and a value shown short is not the value compared. `nothing` is a measurement too, not a blank — a reading of `rewrite` that appears only at Phase 2 is a topology change the approval never described, and it is refused there
+- Overwrites: `<on a `--force-with-lease` push whose topology reading — from the Phase 1 classifier below, run **before** this plan is rendered — is `rewrite`: the full `REMOTE_TIP` object ID that classifier printed (`REMOTE_TIP=[…]`) — the commit on the remote this push replaces. On `unknown-tip` or `unknown-ancestry` — the lookup answered and printed a tip, but whether this push rewrites it could not be established: that same full object ID followed by `(topology unverified — <the ASK_REASON word>)`, because Phase 2 fills `PLAN_REMOTE_TIP` from the printed tip whatever the reading, and a `rewrite` it measures later passes when the tip still matches — so "nothing" here would be an approval for overwriting a commit it told the operator was not there. On `unknown-lookup` (no tip was read): `unknown (<the ASK_REASON word>)`. On `creation` and `fast-forward`, and on a plain push, where the classifier does not run: `nothing (<the ASK_REASON word>, or plain push)`>`. **This line is why the plan can be reused as a comparison at all.** Phase 2 re-measures the remote and refuses when the answer differs from what is written here, exactly as it does for `HEAD:` above — and without the line there is nothing to compare against, so an approval given for destroying one commit would silently carry to a push destroying another. Full object ID, for the same reason `HEAD:` is: a prefix can collide, and a value shown short is not the value compared. `nothing` is a measurement too, not a blank — a reading of `rewrite` that appears at Phase 2 against a tip the plan never named is a topology change the approval never described, and it is refused there
 - Push gate: state the **probe result and its limits**, never a credential verdict — `pre-push` hook found referencing the gate / **no direct reference found in the hook file (the probe does not follow indirection, so a gate reached through a shim would read this way too)**. Then, for a protected-branch push: if a `/dev/tty` prompt appears it is the terminal authorization and this approval was advisory; if none appears, **this approval is the only one there will be**
 
 Command to execute: `<the exact command Phase 2 will run, flags included>`
@@ -693,6 +695,12 @@ Two steps, and the second is the one this round added: approving `git push origi
 and approving a history rewrite in the abstract is not approval of destroying the particular commit
 that is there.
 ```
+
+**Order inside Phase 1, on a `--force-with-lease` push**: run the topology classifier below
+**first**, then render this plan from its output, then — if the classifier says ask — the unshared question, then the push
+approval. The `Overwrites:` line is a reading of that classifier, and Phase 0 prints no `REMOTE_TIP`
+of its own — rendering the plan before the classifier ran leaves the one line Phase 2 compares
+against with nothing in it.
 
 **Gate**: Use AskUserQuestion with options:
 - "Approve push" (or "Approve **force**-with-lease push to `<branch>`" when the flag is set) — proceed to execute
@@ -1026,7 +1034,9 @@ HEAD_SHA=$(/usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WO
 # than a warning is what the push below does with it: since round 72 the refspec source is that
 # literal, and an empty left side makes it `":refs/heads/${BRANCH}"` — git's spelling for DELETE
 # that branch. `pre-push-gate.sh` is no backstop here: its rewrite test requires a non-null OID on
-# BOTH sides, so a deletion reaches neither of its prompts by design. Same guard, same reason, as
+# BOTH sides, so a deletion never reaches its rewrite prompt, and an unprotected one no prompt at
+# all (a protected one still meets the protected prompt, which is no help to the unshared
+# question this guard stands in for). Same guard, same reason, as
 # the `[[ -n "$PUSHED" ]]` on the `epic-merge` pushes — that one was added and this one was not.
 if [[ -z "$PLAN_HEAD_SHA" ]] || [[ -z "$HEAD_SHA" ]]; then
   echo "⛔ the approved commit is '${PLAN_HEAD_SHA:-empty}' and HEAD reads '${HEAD_SHA:-empty}' —" >&2
@@ -1040,8 +1050,8 @@ fi
 # Branch and commit are two of the three things the approval fixed; the third is **where**. The
 # push below goes to the name `origin`, and that name resolves at push time — `remote.origin.pushurl`
 # or `url.<x>.pushInsteadOf` changing between the approval and here would redirect the approved
-# commits to a different repository with every assertion above still true. The Phase 0 topology
-# probe already resolved the destination and the plan printed it; this re-resolves it with the
+# commits to a different repository with every assertion above still true. Phase 0 step 8
+# already resolved the destination and the plan printed it; this re-resolves it with the
 # same oracle, in THIS fence, with no question asked in between — so what the comparison closes is
 # the window that actually existed: Phase 0 and the approval are minutes and several tool calls
 # away, this read is microseconds away.
@@ -1212,7 +1222,7 @@ if [[ "$FORCE_WITH_LEASE" == "true" ]]; then
   # answer a question nobody was asked, which is exactly the hazard `ALLOW_FORCE_UNSHARED` carries
   # and why this skill clears that one instead of imitating it. Empty refuses.
   UNSHARED_ATTESTED=
-  # The remote tip Phase 0 step 8 PRINTED as `REMOTE_TIP=[...]` — the commit the plan named as the
+  # The remote tip Phase 1's classifier PRINTED as `REMOTE_TIP=[...]` — the commit the plan named as the
   # thing this push would overwrite — written literally and quoted by the model, exactly like the
   # two `PLAN_PUSH_*` fields above and for the same reason. Not re-derived: re-reading it here
   # would ask the question again instead of remembering the answer, which is the whole failure
@@ -1363,9 +1373,10 @@ fi
 # own expectation — measured: `--force-with-lease=refs/heads/<new>:` creates the ref and the same
 # form against an existing ref is rejected `(stale info)`. `unknown` never reaches here; the `case`
 # above refuses it.
-# The two flags are **not** combined: measured on the same git, an explicit lease value plus
-# `--force-if-includes` succeeded (exit 0) where the value alone refuses — git documents the flag
-# as a no-op beside a lease value, and a silently-inert safety flag reads as protection nobody has.
+# The two flags are **not** combined: beside a lease value the flag adds nothing — git documents
+# it as a no-op there, and measured 2026-09-23 on git 2.55.0 the valued lease is refused
+# `(stale info)` with and without it (an earlier note claimed the pair succeeded; it did not
+# reproduce) — and a silently-inert safety flag reads as protection nobody has.
 # Requires git >= 2.30 for the valued form as well; on an older git the push fails with an
 # unknown-option error, which is the correct direction — falling back to the bare form would
 # restore the hazard silently.
@@ -1452,17 +1463,20 @@ fi
 # shell's own error and ends a non-interactive shell with nothing to shadow. The status itself is
 # reported in the message, since `:?` cannot carry it.
 if [[ "$PUSH_STATUS" != 0 ]]; then
-  echo "⛔ the push exited ${PUSH_STATUS} — nothing was published; Phase 3 must not run" >&2
+  echo "⛔ the push exited ${PUSH_STATUS} — Phase 3 must not run. Publication may be PARTIAL:" >&2
+  echo "   with more than one push URL, git pushes to each destination in turn and rolls none" >&2
+  echo "   back, so any destination, before or after the failing one, may hold the commit. Check every destination the plan" >&2
+  echo "   named (git ls-remote <url> refs/heads/<branch>) before pushing again." >&2
   SD0X_PUSH_CI_REFUSED=
-  : "${SD0X_PUSH_CI_REFUSED:?refusing — the push exited non-zero; nothing was published}"
+  : "${SD0X_PUSH_CI_REFUSED:?refusing — the push exited non-zero; publication may be partial}"
 fi
 # The other half of the promise. The push succeeding is not the whole of what Phase 2 was
 # approved to do when `--set-upstream` was in the plan: `-u` used to fail or succeed WITH the
 # push, and moving the upstream into two commands after it split one outcome into two — so a
 # fence that reads only the push status now reports success for a state the old form could not
 # produce. It is a DIFFERENT sentence from the one above because it is a different state: the
-# commits really are on the remote, and telling the operator "nothing was published" here would
-# send them to re-push something that is already there.
+# commits really are on the remote, and telling the operator "publication may be partial" here
+# would send them to reconcile destinations that are all already there.
 if [[ "$PUSH_STATUS" = 0 ]] && [[ "$UPSTREAM_STATUS" != 0 ]]; then
   echo "⛔ the push published ${BRANCH}, but the upstream write exited ${UPSTREAM_STATUS} —" >&2
   echo "   branch.${BRANCH}.remote / .merge may be unset or half-written. The COMMITS ARE PUSHED;" >&2
@@ -1658,17 +1672,17 @@ reviewed, not which of two conflicting instructions the reader follows. Phase 2 
 in this file where a push is written out; `test/skills/push-ci.test.js` pins that.
 
 **Every example below reads its credential off the matrix above — it does not restate the rule.**
-**Two** of these four are row 2, where the approval in this session is the only approval there will
-be, whether or not `PUSH_GATE` reported `referenced`. The third is the force row — the one cell
+**Two** of these four are row 3, where the approval in this session is the only approval there will
+be, whether or not `PUSH_GATE` reported `referenced`. The third is row 2, the force row — the one cell
 where an installed hook does prompt on an unprotected branch — and the fourth is row 1. Counting
-them is not bookkeeping: an example mislabelled row 2 is an example that tells its reader no
+them is not bookkeeping: an example mislabelled row 3 is an example that tells its reader no
 terminal prompt is coming, which is how the force example below came to contradict the matrix it
 sits under.
 
 ```
 Input: /push-ci
 Phase 0: Preflight — branch feat/auth, 3 commits ahead, remote OK, PUSH_GATE=referenced
-Phase 1: Show plan — row 2, so L2 authorizes: an installed hook exits without prompting on an
+Phase 1: Show plan — row 3, so L2 authorizes: an installed hook exits without prompting on an
          unprotected push, leaving nothing stronger to defer to → user approves
 Phase 2: Phase 2 assembly — non-force branch, upstream already set
 Phase 3: /watch-ci --sha <HEAD> --branch feat/auth (Monitor streaming — receive progress notifications)
@@ -1684,13 +1698,13 @@ Phase 3: /watch-ci --sha <HEAD> --branch <branch> --timeout 15
 ```
 Input: /push-ci --force-with-lease
 Phase 0: Preflight — feat/rebase-cleanup is not protected → continue (a protected branch hard-aborts here)
-Phase 1: Show plan naming the force form — the FORCE row, not row 2: `ALLOW_FORCE_WITH_LEASE=1`
+Phase 1: Show plan naming the force form — row 2, the FORCE row — not row 3: `ALLOW_FORCE_WITH_LEASE=1`
          clears the non-fast-forward refusal but not the unshared attestation, so the hook reaches
          /dev/tty and asks whether anybody else works on feat/rebase-cleanup. With the hook
          installed that terminal answer is the authorization and this approval is advisory;
          without it, this approval is the whole of it → ask the unshared question here (Phase 1),
          then user approves
-Phase 2: Phase 2 assembly — lease branch, so both lease flags and ALLOW_FORCE_WITH_LEASE=1
+Phase 2: Phase 2 assembly — lease branch, so the valued --force-with-lease and ALLOW_FORCE_WITH_LEASE=1
 Phase 3: CI monitoring
 ```
 

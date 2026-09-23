@@ -39,7 +39,7 @@ function readSkill() {
 // The section pins below survive because they give a precise message for the common case; the
 // digest is what makes the claim complete.
 
-const SKILL_DIGEST = "a83a020cad86717834977490ca4ce523f779fa581178711e17188ef881418224";
+const SKILL_DIGEST = "5c8136aeb068395a6b638ee88073a223e98fb8b56f8dbdefd1eadf883b8e6d55";
 
 function digestOf(text) {
   return createHash('sha256').update(text).digest('hex');
@@ -144,17 +144,17 @@ const CANONICAL_EXAMPLES = [
   "in this file where a push is written out; `test/skills/push-ci.test.js` pins that.",
   "",
   "**Every example below reads its credential off the matrix above — it does not restate the rule.**",
-  "**Two** of these four are row 2, where the approval in this session is the only approval there will",
-  "be, whether or not `PUSH_GATE` reported `referenced`. The third is the force row — the one cell",
+  "**Two** of these four are row 3, where the approval in this session is the only approval there will",
+  "be, whether or not `PUSH_GATE` reported `referenced`. The third is row 2, the force row — the one cell",
   "where an installed hook does prompt on an unprotected branch — and the fourth is row 1. Counting",
-  "them is not bookkeeping: an example mislabelled row 2 is an example that tells its reader no",
+  "them is not bookkeeping: an example mislabelled row 3 is an example that tells its reader no",
   "terminal prompt is coming, which is how the force example below came to contradict the matrix it",
   "sits under.",
   "",
   "```",
   "Input: /push-ci",
   "Phase 0: Preflight — branch feat/auth, 3 commits ahead, remote OK, PUSH_GATE=referenced",
-  "Phase 1: Show plan — row 2, so L2 authorizes: an installed hook exits without prompting on an",
+  "Phase 1: Show plan — row 3, so L2 authorizes: an installed hook exits without prompting on an",
   "         unprotected push, leaving nothing stronger to defer to → user approves",
   "Phase 2: Phase 2 assembly — non-force branch, upstream already set",
   "Phase 3: /watch-ci --sha <HEAD> --branch feat/auth (Monitor streaming — receive progress notifications)",
@@ -170,13 +170,13 @@ const CANONICAL_EXAMPLES = [
   "```",
   "Input: /push-ci --force-with-lease",
   "Phase 0: Preflight — feat/rebase-cleanup is not protected → continue (a protected branch hard-aborts here)",
-  "Phase 1: Show plan naming the force form — the FORCE row, not row 2: `ALLOW_FORCE_WITH_LEASE=1`",
+  "Phase 1: Show plan naming the force form — row 2, the FORCE row — not row 3: `ALLOW_FORCE_WITH_LEASE=1`",
   "         clears the non-fast-forward refusal but not the unshared attestation, so the hook reaches",
   "         /dev/tty and asks whether anybody else works on feat/rebase-cleanup. With the hook",
   "         installed that terminal answer is the authorization and this approval is advisory;",
   "         without it, this approval is the whole of it → ask the unshared question here (Phase 1),",
   "         then user approves",
-  "Phase 2: Phase 2 assembly — lease branch, so both lease flags and ALLOW_FORCE_WITH_LEASE=1",
+  "Phase 2: Phase 2 assembly — lease branch, so the valued --force-with-lease and ALLOW_FORCE_WITH_LEASE=1",
   "Phase 3: CI monitoring",
   "```",
   "",
@@ -243,7 +243,7 @@ const PHASE2_LABEL = 'Phase 2:';
 const PERMITTED_PHASE2 = [
   'Phase 2: Phase 2 assembly — non-force branch, upstream already set',
   'Phase 2: Phase 2 assembly — non-force branch, upstream written by the auto-detect after the push',
-  'Phase 2: Phase 2 assembly — lease branch, so both lease flags and ALLOW_FORCE_WITH_LEASE=1',
+  'Phase 2: Phase 2 assembly — lease branch, so the valued --force-with-lease and ALLOW_FORCE_WITH_LEASE=1',
   'Phase 2: Phase 2 assembly — non-force branch',
 ];
 // **One predicate, asserted true on the pin and false on every mutation.** Round 23's third finding
@@ -274,9 +274,9 @@ test('the Examples section names the assembly instead of restating the push', ()
   assert.ok(validPhase2Examples(CANONICAL_EXAMPLES),
     'every Phase 2 line must be one of the four permitted assembly references, in order and in full');
   // Round 21: the rewrite told the operator an ordinary unprotected push is authorized by the
-  // terminal hook. It is not — row 2 of the matrix says an installed hook exits without prompting,
+  // terminal hook. It is not — row 3 of the matrix says an installed hook exits without prompting,
   // so the in-session approval is the only one. Pin the corrected reading, in both directions.
-  assert.match(CANONICAL_EXAMPLES, /row 2, so L2 authorizes/,
+  assert.match(CANONICAL_EXAMPLES, /row 3, so L2 authorizes/,
     'the unprotected example must name L2 as its credential');
   assert.doesNotMatch(CANONICAL_EXAMPLES, /L1 is the credential/,
     'no example may claim the terminal gate for a push the hook does not prompt on');
@@ -1418,7 +1418,9 @@ const CANONICAL_PHASE2_SECTION = [
   "# than a warning is what the push below does with it: since round 72 the refspec source is that",
   "# literal, and an empty left side makes it `\":refs/heads/${BRANCH}\"` — git's spelling for DELETE",
   "# that branch. `pre-push-gate.sh` is no backstop here: its rewrite test requires a non-null OID on",
-  "# BOTH sides, so a deletion reaches neither of its prompts by design. Same guard, same reason, as",
+  "# BOTH sides, so a deletion never reaches its rewrite prompt, and an unprotected one no prompt at",
+  "# all (a protected one still meets the protected prompt, which is no help to the unshared",
+  "# question this guard stands in for). Same guard, same reason, as",
   "# the `[[ -n \"$PUSHED\" ]]` on the `epic-merge` pushes — that one was added and this one was not.",
   "if [[ -z \"$PLAN_HEAD_SHA\" ]] || [[ -z \"$HEAD_SHA\" ]]; then",
   "  echo \"⛔ the approved commit is '${PLAN_HEAD_SHA:-empty}' and HEAD reads '${HEAD_SHA:-empty}' —\" >&2",
@@ -1432,8 +1434,8 @@ const CANONICAL_PHASE2_SECTION = [
   "# Branch and commit are two of the three things the approval fixed; the third is **where**. The",
   "# push below goes to the name `origin`, and that name resolves at push time — `remote.origin.pushurl`",
   "# or `url.<x>.pushInsteadOf` changing between the approval and here would redirect the approved",
-  "# commits to a different repository with every assertion above still true. The Phase 0 topology",
-  "# probe already resolved the destination and the plan printed it; this re-resolves it with the",
+  "# commits to a different repository with every assertion above still true. Phase 0 step 8",
+  "# already resolved the destination and the plan printed it; this re-resolves it with the",
   "# same oracle, in THIS fence, with no question asked in between — so what the comparison closes is",
   "# the window that actually existed: Phase 0 and the approval are minutes and several tool calls",
   "# away, this read is microseconds away.",
@@ -1604,7 +1606,7 @@ const CANONICAL_PHASE2_SECTION = [
   "  # answer a question nobody was asked, which is exactly the hazard `ALLOW_FORCE_UNSHARED` carries",
   "  # and why this skill clears that one instead of imitating it. Empty refuses.",
   "  UNSHARED_ATTESTED=",
-  "  # The remote tip Phase 0 step 8 PRINTED as `REMOTE_TIP=[...]` — the commit the plan named as the",
+  "  # The remote tip Phase 1's classifier PRINTED as `REMOTE_TIP=[...]` — the commit the plan named as the",
   "  # thing this push would overwrite — written literally and quoted by the model, exactly like the",
   "  # two `PLAN_PUSH_*` fields above and for the same reason. Not re-derived: re-reading it here",
   "  # would ask the question again instead of remembering the answer, which is the whole failure",
@@ -1755,9 +1757,10 @@ const CANONICAL_PHASE2_SECTION = [
   "# own expectation — measured: `--force-with-lease=refs/heads/<new>:` creates the ref and the same",
   "# form against an existing ref is rejected `(stale info)`. `unknown` never reaches here; the `case`",
   "# above refuses it.",
-  "# The two flags are **not** combined: measured on the same git, an explicit lease value plus",
-  "# `--force-if-includes` succeeded (exit 0) where the value alone refuses — git documents the flag",
-  "# as a no-op beside a lease value, and a silently-inert safety flag reads as protection nobody has.",
+  "# The two flags are **not** combined: beside a lease value the flag adds nothing — git documents",
+  "# it as a no-op there, and measured 2026-09-23 on git 2.55.0 the valued lease is refused",
+  "# `(stale info)` with and without it (an earlier note claimed the pair succeeded; it did not",
+  "# reproduce) — and a silently-inert safety flag reads as protection nobody has.",
   "# Requires git >= 2.30 for the valued form as well; on an older git the push fails with an",
   "# unknown-option error, which is the correct direction — falling back to the bare form would",
   "# restore the hazard silently.",
@@ -1844,17 +1847,20 @@ const CANONICAL_PHASE2_SECTION = [
   "# shell's own error and ends a non-interactive shell with nothing to shadow. The status itself is",
   "# reported in the message, since `:?` cannot carry it.",
   "if [[ \"$PUSH_STATUS\" != 0 ]]; then",
-  "  echo \"⛔ the push exited ${PUSH_STATUS} — nothing was published; Phase 3 must not run\" >&2",
+  "  echo \"⛔ the push exited ${PUSH_STATUS} — Phase 3 must not run. Publication may be PARTIAL:\" >&2",
+  "  echo \"   with more than one push URL, git pushes to each destination in turn and rolls none\" >&2",
+  "  echo \"   back, so any destination, before or after the failing one, may hold the commit. Check every destination the plan\" >&2",
+  "  echo \"   named (git ls-remote <url> refs/heads/<branch>) before pushing again.\" >&2",
   "  SD0X_PUSH_CI_REFUSED=",
-  "  : \"${SD0X_PUSH_CI_REFUSED:?refusing — the push exited non-zero; nothing was published}\"",
+  "  : \"${SD0X_PUSH_CI_REFUSED:?refusing — the push exited non-zero; publication may be partial}\"",
   "fi",
   "# The other half of the promise. The push succeeding is not the whole of what Phase 2 was",
   "# approved to do when `--set-upstream` was in the plan: `-u` used to fail or succeed WITH the",
   "# push, and moving the upstream into two commands after it split one outcome into two — so a",
   "# fence that reads only the push status now reports success for a state the old form could not",
   "# produce. It is a DIFFERENT sentence from the one above because it is a different state: the",
-  "# commits really are on the remote, and telling the operator \"nothing was published\" here would",
-  "# send them to re-push something that is already there.",
+  "# commits really are on the remote, and telling the operator \"publication may be partial\" here",
+  "# would send them to reconcile destinations that are all already there.",
   "if [[ \"$PUSH_STATUS\" = 0 ]] && [[ \"$UPSTREAM_STATUS\" != 0 ]]; then",
   "  echo \"⛔ the push published ${BRANCH}, but the upstream write exited ${UPSTREAM_STATUS} —\" >&2",
   "  echo \"   branch.${BRANCH}.remote / .merge may be unset or half-written. The COMMITS ARE PUSHED;\" >&2",
@@ -5137,4 +5143,38 @@ test('the Phase 1 push plan names the commit a force push would overwrite', () =
   // compares a value no plan ever showed, are both the defect this pair closes.
   assert.match(body, /PLAN_REMOTE_TIP=/,
     'and Phase 2 must still carry the field that comparison reads');
+});
+
+test('Phase 2 when the push fails → the refusal says publication may be partial, never that nothing was published', () => {
+  // With more than one push URL git pushes to each destination in turn and rolls none back, so a
+  // non-zero exit can follow a destination that already holds the commit. "Nothing was published"
+  // was a false assurance that pointed recovery at the wrong remote state.
+  const failed = runAssembly({ force: 'false', upstream: 'false' }, { gitExit: 7 });
+  assert.notEqual(failed.status, 0, 'precondition: a rejected push must still fail the fence');
+  assert.match(failed.err, /Publication may be PARTIAL/, 'the refusal must admit partial publication: ' + failed.err);
+  assert.match(failed.err, /Check every destination the plan/, 'and say what to check before retrying: ' + failed.err);
+  assert.doesNotMatch(failed.err, /nothing was published/, 'the retired assurance must not return: ' + failed.err);
+});
+
+test('Phase 1 when a lease push is planned → the plan reads its overwrite target from the classifier that produces it', () => {
+  // REMOTE_TIP / ASK_REASON are printed by the Phase 1 topology classifier; Phase 0 prints no
+  // REMOTE_TIP. A plan naming Phase 0 as the source is rendered before the value exists.
+  const skill = readSkill();
+  assert.match(skill, /Overwrites: `<on a `--force-with-lease` push whose topology reading — from the Phase 1 classifier below, run \*\*before\*\* this plan is rendered/,
+    'the Overwrites line must name its real producer');
+  assert.match(skill, /\*\*Order inside Phase 1, on a `--force-with-lease` push\*\*: run the topology classifier below\s+\*\*first\*\*/,
+    'the order that makes the Overwrites line fillable must be stated');
+  assert.doesNotMatch(skill, /Phase 0 step 8 reading is `rewrite`|REMOTE_TIP.{0,40}Phase 0 step 8 printed|Phase 0 step 8 PRINTED as `REMOTE_TIP/,
+    'no remaining reference may send the reader to Phase 0 for REMOTE_TIP');
+});
+
+test('the Overwrites line on an unknown reading that printed a tip → names that tip, never "nothing"', () => {
+  // Phase 2 fills PLAN_REMOTE_TIP from the printed tip whatever the reading, and its rewrite arm
+  // passes when the tip still matches — so "nothing" on unknown-tip / unknown-ancestry was an
+  // approval for overwriting a commit the plan said was not there.
+  const skill = readSkill();
+  const line = skill.split('\n').find((l) => l.startsWith('- Overwrites:'));
+  assert.match(line, /On `unknown-tip` or `unknown-ancestry`[^.]*: that same full object ID followed by `\(topology unverified — <the ASK_REASON word>\)`/,
+    'unknown readings with a printed tip must name it');
+  assert.doesNotMatch(line, /On every other reading: `nothing/, 'the blanket "nothing" mapping must not return');
 });
