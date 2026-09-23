@@ -175,7 +175,7 @@ plugin_hash    = git hash-object --no-filters <plugin-path>  # source of truth
 | Category | Local Path | Plugin Source | Files |
 |----------|-----------|--------------|-------|
 | Rules | `.claude/rules/*.md` | `rules/*.md` | `auto-loop.md`, `codex-invocation.md`, `fix-all-issues.md`, `framework.md`, `testing.md`, `security.md`, `git-workflow.md`, `logging.md`, `docs-writing.md`, `docs-numbering.md`, `self-improvement.md`, `context-management.md` |
-| Hooks | `.claude/hooks/*.sh` | `hooks/*.sh` | `pre-edit-guard.sh`, `post-edit-format.sh`, `post-skill-auto-loop.sh`, `post-compact-auto-loop.sh`, `stop-guard.sh`, `user-prompt-review-guard.sh` |
+| Hooks | `.claude/hooks/*.sh` | `hooks/*.sh` | `pre-edit-guard.sh`, `pre-bash-codex-launch-guard.sh`, `post-edit-format.sh`, `post-skill-auto-loop.sh`, `post-compact-auto-loop.sh`, `stop-guard.sh`, `user-prompt-review-guard.sh` |
 | Scripts | `.claude/scripts/` | `scripts/` | `precommit-runner.js`, `verify-runner.js`, `review-state.js`, `dep-audit.sh`, `commit-msg-guard.sh`, `pre-push-gate.sh`, `lib/utils.js`, `lib/tree-digest.js` |
 
 #### S2.5: Override Safeguard Checks
@@ -309,7 +309,7 @@ Applied to both: settings.json and settings.local.json
 - [ ] Sync: S1-S3 checks executed (when scope includes sync)
 - [ ] Each check has clear ✅/⛔ status
 - [ ] P1 issues have specific fix commands
-- [ ] S2 classification covers all 23 managed files
+- [ ] S2 classification covers every file in the managed inventory above (27 today: 12 rules, 7 hooks, 8 scripts)
 - [ ] Fix delegation uses targeted file names (not `--all`)
 
 ## References

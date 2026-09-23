@@ -39,6 +39,7 @@ const ARBITRATED_HOOKS = [
   'post-skill-auto-loop.sh',
   'pre-edit-guard.sh',
   'post-edit-format.sh',
+  'pre-bash-codex-launch-guard.sh',
 ];
 
 const tempDirs = [];

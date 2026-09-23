@@ -29,7 +29,7 @@ Full control plane on Claude Code. Skills-only distribution for Codex CLI and ot
 /project-setup
 ```
 
-One command auto-detects framework, package manager, database, entrypoints, and scripts. Installs a subset of rules and hooks; the full plugin bundles 16 rules + 6 hooks. Use `--lite` to only configure CLAUDE.md (skip rules/hooks).
+One command auto-detects framework, package manager, database, entrypoints, and scripts. Installs a subset of rules and hooks; the full plugin bundles 16 rules + 7 hooks. Use `--lite` to only configure CLAUDE.md (skip rules/hooks).
 
 ```bash
 # Codex CLI / Cursor / Windsurf / Aider — skills only
@@ -158,7 +158,7 @@ sd0x-dev-flow is a reference implementation. Each row below maps a canonical har
 | 1 | **Tool loop control** | Terminal completion invariant — every gate a change class requires must pass after the last edit; the model chooses when and how to run them | [`rules/auto-loop.md`](rules/auto-loop.md) + [`scripts/review-state.js`](scripts/review-state.js) |
 | 2 | **Digest-bound reminder state** | Verdicts are noted by the model (`node scripts/review-state.js note <plane> <pass\|fail>`) and bound to the tree digest — an edit re-opens its plane's reminder because the digest changed; gate sentinels (`✅ Ready` / `## Overall: ✅ PASS`) stay behaviour-layer signals | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context recovery across compaction** | Git baseline (branch + uncommitted files) and owed-gate reminders re-injected after SessionStart(compact) | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
-| 4 | **Lifecycle interceptors** | 5 hook event types dispatched to 6 scripts — 4 advisory reminder hooks, an auto-formatter, and one blocking security guard (SessionStart additionally runs `scripts/namespace-hint.sh`): PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (6 scripts) + [`.claude/settings.json`](.claude/settings.json) |
+| 4 | **Lifecycle interceptors** | 5 hook event types dispatched to 7 scripts — 4 advisory reminder hooks, an auto-formatter, and two blocking guards (sensitive-path edits; a mis-launched Codex dispatch) (SessionStart additionally runs `scripts/namespace-hint.sh`): PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (7 scripts) + [`.claude/settings.json`](.claude/settings.json) |
 | 5 | **Capability-based tool gating** | Skill frontmatter `allowed-tools` — e.g., `/ask` has no Edit/Write | 92 of 100 public skills declare `allowed-tools` |
 | 6 | **Defense-in-depth safety** | Git-level guards stay hard where they are installed — commit-msg-guard wherever `/codex-setup init` installed it (the Claude plugin plus `/project-setup` does not), pre-push-gate over `/dev/tty` when opted in; edit-time pre-edit-guard still blocks sensitive-path edits (a security guard, not workflow enforcement — it needs `jq`, and without it the guard does not fire); the Stop hook reminds — the layers that gate irreversible actions and secrets kept their teeth, the review layer became advisory by design | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex reviews what Claude wrote, researching the repo independently — never handed a conclusion to confirm | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
@@ -340,7 +340,7 @@ Real-world scenarios showing which skills to combine and in what order.
 |----------|-------|---------|
 | Skills | 100 public (100 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | Agents | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
-| Hooks | 6 | pre-edit-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
+| Hooks | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
 | Rules | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
 | Scripts | 23 | precommit runner, verify runner, review-state CLI, dep audit, namespace hint, skill runner, commit-msg guard, pre-push gate, build-codex-artifacts, resolve-feature (node entrypoint + shell shim + CLI), classify-docs, detect-scope, migration-audit, migrate-hook-lightweighting, security-redact, readme-catalog, check-doc-links, resolve-review-profile, codex-exec adapter |
 <!-- END:WHATS-INCLUDED-COUNT -->
@@ -514,7 +514,7 @@ Skills load on-demand. Idle skills cost zero tokens.
 
 ## Rules & Hooks
 
-16 rules + 6 hooks. The rules are tiered contracts: `discretion.md` resolves every instruction in the 13 plugin-managed rule files to exactly one of Anchor / Default / Guidance, and the 2 user-owned override files resolve Anchor-first under their parent rules. The hook set is 4 advisory reminder hooks plus an auto-formatter and a blocking security guard. The reminder roles differ per hook: the Stop and post-compact hooks render owed-gate reminders from the digest-bound state (`review-state.js`), the prompt hook prints the `[AUTO_LOOP_STATE]` fact line, the post-skill hook prints a static gate-order line, and the post-compact hook also re-injects the git baseline; the review layer never blocks — pre-edit-guard still blocks sensitive-path edits (a security guard; it needs `jq` and does not fire without it), and the hard gates live at the git level (commit-msg-guard, installed by `/codex-setup init`; pre-push-gate, opt-in).
+16 rules + 7 hooks. The rules are tiered contracts: `discretion.md` resolves every instruction in the 13 plugin-managed rule files to exactly one of Anchor / Default / Guidance, and the 2 user-owned override files resolve Anchor-first under their parent rules. The hook set is 4 advisory reminder hooks plus an auto-formatter and two blocking guards. The reminder roles differ per hook: the Stop and post-compact hooks render owed-gate reminders from the digest-bound state (`review-state.js`), the prompt hook prints the `[AUTO_LOOP_STATE]` fact line, the post-skill hook prints a static gate-order line, and the post-compact hook also re-injects the git baseline; the review layer never blocks — pre-edit-guard still blocks sensitive-path edits (a security guard; it needs `jq` and does not fire without it), pre-bash-codex-launch-guard blocks a Codex dispatch launched with its progress redirected away from the task panel, and the hard gates live at the git level (commit-msg-guard, installed by `/codex-setup init`; pre-push-gate, opt-in).
 
 > **Customization**: Edit `auto-loop-project.md` to override auto-loop behavior per project. Plugin updates won't conflict — see [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md).
 

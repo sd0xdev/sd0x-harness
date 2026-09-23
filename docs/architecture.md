@@ -8,11 +8,11 @@ This plugin implements a complete agentic control loop architecture. Each layer 
 
 | Layer | sd0x-dev-flow Implementation | Key Files |
 |-------|------------------------------|-----------|
-| **Feedforward Gate** | `/precommit` hooks, `pre-edit-guard.sh`, lint:fix | `hooks/pre-edit-guard.sh`, `commands/precommit.md` |
+| **Feedforward Gate** | `/precommit` hooks, `pre-edit-guard.sh`, `pre-bash-codex-launch-guard.sh`, lint:fix | `hooks/pre-edit-guard.sh`, `hooks/pre-bash-codex-launch-guard.sh`, `skills/precommit/SKILL.md` |
 | **Feedback Loop (MAPE)** | `/verify` → `/codex-review-fast` → fix → re-review | `rules/auto-loop.md` |
-| **Hierarchical Loops** | Inner (hooks 30s) → Mid (review+precommit 10min) → Outer (PR review + rules) | `hooks/` → `commands/` → `rules/` |
+| **Hierarchical Loops** | Inner (hooks 30s) → Mid (review+precommit 10min) → Outer (PR review + rules) | `hooks/` → `skills/` → `rules/` |
 | **Sensors** | `audit.js`, `analyze.js`, `risk-analyze.js`, `skill-lint.js` | `skills/*/scripts/*.js` |
-| **Effectors** | Edit/Write tools, allowed-tools whitelist, diff budget | `commands/*.md` frontmatter |
+| **Effectors** | Edit/Write tools, allowed-tools whitelist, diff budget | `skills/*/SKILL.md` frontmatter |
 | **Human Governance** | `rules/` = Knowledge curation, `⚠️ Need Human` sentinel = circuit breaker | `rules/auto-loop.md` |
 
 ### Control Loop Pathology & Mitigation

@@ -29,7 +29,7 @@ Claude Code에서는 전체 control plane을 제공합니다. Codex CLI와 기�
 /project-setup
 ```
 
-하나의 명령어로 프레임워크, 패키지 매니저, 데이터베이스, 엔트리포인트, 스크립트를 자동 감지합니다. Rules와 Hooks의 서브셋을 설치하며, 전체 플러그인에는 16개 Rules + 6개 Hooks가 포함됩니다. `--lite`를 사용하면 CLAUDE.md만 설정합니다 (Rules/Hooks 스킵).
+하나의 명령어로 프레임워크, 패키지 매니저, 데이터베이스, 엔트리포인트, 스크립트를 자동 감지합니다. Rules와 Hooks의 서브셋을 설치하며, 전체 플러그인에는 16개 Rules + 7개 Hooks가 포함됩니다. `--lite`를 사용하면 CLAUDE.md만 설정합니다 (Rules/Hooks 스킵).
 
 ```bash
 # Codex CLI / Cursor / Windsurf / Aider — skills만
@@ -132,7 +132,7 @@ sd0x-dev-flow는 그 reference implementation입니다. 아래 각 행은 harnes
 | 1 | **Tool loop 제어** | 종결 완료 불변식 — 변경 클래스가 요구하는 모든 gate는 마지막 편집 이후 통과해야 하며, 언제 어떻게 실행할지는 모델이 선택 | [`rules/auto-loop.md`](rules/auto-loop.md) + [`scripts/review-state.js`](scripts/review-state.js) |
 | 2 | **Digest 기반 reminder 상태** | Verdict는 모델이 기록하고(`node scripts/review-state.js note <plane> <pass\|fail>`) tree digest에 바인딩됩니다 — 편집하면 digest가 바뀌므로 해당 plane의 reminder가 다시 열립니다; gate sentinel(`✅ Ready` / `## Overall: ✅ PASS`)은 동작 레이어 신호로 유지 | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context 압축 후 복구** | SessionStart(compact) 이후 git baseline(브랜치 + 미커밋 파일)과 미완료 gate reminder를 재주입 | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
-| 4 | **Lifecycle interceptor** | 5가지 hook event type을 6개 스크립트로 디스패치 — 4개의 권고형 reminder hook, 1개의 자동 포매터, 1개의 차단형 보안 가드(SessionStart는 추가로 `scripts/namespace-hint.sh`를 실행): PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (6개 스크립트) + [`.claude/settings.json`](.claude/settings.json) |
+| 4 | **Lifecycle interceptor** | 5가지 hook event type을 7개 스크립트로 디스패치 — 4개의 권고형 reminder hook, 1개의 자동 포매터, 2개의 차단형 가드(민감 경로 편집, 잘못 실행된 Codex dispatch)(SessionStart는 추가로 `scripts/namespace-hint.sh`를 실행): PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (7개 스크립트) + [`.claude/settings.json`](.claude/settings.json) |
 | 5 | **Capability 기반 tool gating** | Skill frontmatter의 `allowed-tools` — 예: `/ask`는 Edit/Write 없음 | 공개된 100개 skill 중 92개가 `allowed-tools`를 선언 |
 | 6 | **Defense-in-depth 안전장치** | 설치된 git 레벨 가드는 그대로 강제됩니다 — commit-msg-guard는 `/codex-setup init`으로 설치한 곳에서 작동하고(Claude 플러그인과 `/project-setup`으로는 설치되지 않음), `/dev/tty`를 통한 pre-push-gate는 opt-in한 경우에 작동합니다; 편집 시점의 pre-edit-guard는 민감 경로 편집을 여전히 차단하고(보안 가드이며 워크플로 강제가 아님 — `jq`가 필요하며, jq가 없으면 가드가 작동하지 않음), Stop hook은 reminder를 출력합니다 — 되돌릴 수 없는 동작을 막는 레이어는 강제력을 유지하고, 리뷰 레이어는 의도적으로 권고형이 되었습니다 | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator 분리** | Codex가 Claude의 결과물을 리뷰하며 저장소를 직접 조사 — 결론을 건네받아 승인만 하는 일은 없음 | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
@@ -314,7 +314,7 @@ flowchart TD
 |----------|------|------|
 | Skills | 100 public (100 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | Agents | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
-| Hooks | 6 | pre-edit-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
+| Hooks | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
 | Rules | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
 | Scripts | 23 | precommit runner, verify runner, review-state CLI, dep audit, namespace hint, skill runner, commit-msg guard, pre-push gate, build-codex-artifacts, resolve-feature (node entrypoint + shell shim + CLI), classify-docs, detect-scope, migration-audit, migrate-hook-lightweighting, security-redact, readme-catalog, check-doc-links, resolve-review-profile, codex-exec adapter |
 <!-- END:WHATS-INCLUDED-COUNT -->
@@ -488,7 +488,7 @@ Skills는 온디맨드로 로드됩니다. 미사용 Skills는 토큰을 소비�
 
 ## 규칙 & Hook
 
-16개 규칙 + 6개 Hook. 규칙은 tier화된 계약입니다: `discretion.md`가 플러그인이 관리하는 13개 규칙 파일의 모든 지시를 Anchor / Default / Guidance 중 정확히 하나로 해석하고, 사용자 소유의 오버라이드 파일 2개는 상위 규칙 아래에서 Anchor 우선으로 해석됩니다. Hook 구성은 4개의 권고형 reminder hook에 자동 포매터 1개와 차단형 보안 가드 1개를 더한 것입니다. reminder 역할은 hook마다 다릅니다: Stop과 post-compact hook은 digest 기반 상태(`review-state.js`)로부터 미완료 gate reminder를 렌더링하고, prompt hook은 `[AUTO_LOOP_STATE]` 사실 라인을, post-skill hook은 고정된 gate 순서 라인을 출력하며, post-compact hook은 추가로 git baseline을 재주입합니다. 리뷰 레이어는 아무것도 차단하지 않습니다 — pre-edit-guard는 민감 경로 편집을 여전히 차단하고(보안 가드, `jq` 필요 — 없으면 작동하지 않음), 강제 gate는 git 레벨에 있습니다 (commit-msg-guard는 `/codex-setup init`으로 설치, pre-push-gate는 opt-in).
+16개 규칙 + 7개 Hook. 규칙은 tier화된 계약입니다: `discretion.md`가 플러그인이 관리하는 13개 규칙 파일의 모든 지시를 Anchor / Default / Guidance 중 정확히 하나로 해석하고, 사용자 소유의 오버라이드 파일 2개는 상위 규칙 아래에서 Anchor 우선으로 해석됩니다. Hook 구성은 4개의 권고형 reminder hook에 자동 포매터 1개와 차단형 가드 2개를 더한 것입니다. reminder 역할은 hook마다 다릅니다: Stop과 post-compact hook은 digest 기반 상태(`review-state.js`)로부터 미완료 gate reminder를 렌더링하고, prompt hook은 `[AUTO_LOOP_STATE]` 사실 라인을, post-skill hook은 고정된 gate 순서 라인을 출력하며, post-compact hook은 추가로 git baseline을 재주입합니다. 리뷰 레이어는 아무것도 차단하지 않습니다 — pre-edit-guard는 민감 경로 편집을 여전히 차단하고(보안 가드, `jq` 필요 — 없으면 작동하지 않음), pre-bash-codex-launch-guard는 진행 상황을 작업 패널 밖으로 돌리는 Codex dispatch 실행을 차단하며, 강제 gate는 git 레벨에 있습니다 (commit-msg-guard는 `/codex-setup init`으로 설치, pre-push-gate는 opt-in).
 
 > **커스터마이징**: `auto-loop-project.md`를 편집하여 프로젝트별 auto-loop 동작을 오버라이드할 수 있습니다. 플러그인 업데이트와 충돌하지 않습니다 — [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md) 참조.
 

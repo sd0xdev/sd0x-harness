@@ -29,7 +29,7 @@ Claude Code ではフルコントロールプレーン。Codex CLI やその他�
 /project-setup
 ```
 
-1つのコマンドでフレームワーク、パッケージマネージャー、データベース、エントリポイント、スクリプトを自動検出します。ルールとフックのサブセットをインストールします。完全なプラグインには 16 ルール + 6 フックが含まれます。`--lite` で CLAUDE.md のみ設定（ルール/フックをスキップ）。
+1つのコマンドでフレームワーク、パッケージマネージャー、データベース、エントリポイント、スクリプトを自動検出します。ルールとフックのサブセットをインストールします。完全なプラグインには 16 ルール + 7 フックが含まれます。`--lite` で CLAUDE.md のみ設定（ルール/フックをスキップ）。
 
 ```bash
 # Codex CLI / Cursor / Windsurf / Aider — スキルのみ
@@ -132,7 +132,7 @@ sd0x-dev-flow は reference implementation です。以下の各行は、harness
 | 1 | **Tool loop control** | Terminal completion invariant — 変更クラスが要求するすべてのゲートが最後の編集の後にパスしていなければならない。いつ・どのように実行するかはモデルが選ぶ | [`rules/auto-loop.md`](rules/auto-loop.md) + [`scripts/review-state.js`](scripts/review-state.js) |
 | 2 | **Digest-bound reminder state** | verdict はモデルが note し（`node scripts/review-state.js note <plane> <pass\|fail>`）、ツリーの digest に束縛される — 編集すると digest が変わるため、そのプレーンのリマインダーが再オープンする。ゲート sentinel（`✅ Ready` / `## Overall: ✅ PASS`）は動作レイヤーのシグナルのまま | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context recovery across compaction** | SessionStart(compact) 後に git ベースライン（ブランチ + 未コミットファイル）と未完了ゲートのリマインダーを再注入 | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
-| 4 | **Lifecycle interceptors** | 5 種類の hook event を 6 本のスクリプトへディスパッチ — 4 本の advisory リマインダーフック、1 本の自動フォーマッタ、1 本のブロックするセキュリティガード（SessionStart は追加で `scripts/namespace-hint.sh` を実行）: PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (6 scripts) + [`.claude/settings.json`](.claude/settings.json) |
+| 4 | **Lifecycle interceptors** | 5 種類の hook event を 7 本のスクリプトへディスパッチ — 4 本の advisory リマインダーフック、1 本の自動フォーマッタ、2 本のブロックするガード（機密パスの編集、起動方法を誤った Codex dispatch）（SessionStart は追加で `scripts/namespace-hint.sh` を実行）: PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (7 scripts) + [`.claude/settings.json`](.claude/settings.json) |
 | 5 | **Capability-based tool gating** | Skill frontmatter の `allowed-tools` — 例: `/ask` には Edit/Write が無い | 100 個の公開 skill のうち 92 個が `allowed-tools` を宣言 |
 | 6 | **Defense-in-depth safety** | インストール済みの git レベルのガードはハードなまま — commit-msg-guard は `/codex-setup init` でインストールした環境で有効になり（Claude プラグインと `/project-setup` ではインストールされません）、`/dev/tty` 経由の pre-push-gate はオプトインした場合に有効です。編集時の pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガードであり、ワークフロー強制ではない — `jq` が必要で、jq が無いとガードは作動しない）、Stop hook はリマインドする — 不可逆な操作をゲートする層は牙を残し、レビュー層は設計として advisory になった | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex が Claude の書いたコードをレビュー。リポジトリを自力で調査し、結論を渡されて追認することはない | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
@@ -314,7 +314,7 @@ flowchart TD
 |----------|-----|-----|
 | スキル | 100 public (100 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | エージェント | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
-| フック | 6 | pre-edit-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
+| フック | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
 | ルール | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
 | スクリプト | 23 | precommit runner, verify runner, review-state CLI, dep audit, namespace hint, skill runner, commit-msg guard, pre-push gate, build-codex-artifacts, resolve-feature (node entrypoint + shell shim + CLI), classify-docs, detect-scope, migration-audit, migrate-hook-lightweighting, security-redact, readme-catalog, check-doc-links, resolve-review-profile, codex-exec adapter |
 <!-- END:WHATS-INCLUDED-COUNT -->
@@ -488,7 +488,7 @@ Claude の 200k context window のわずか ~4% — 96% はコードに使えま
 
 ## ルール & フック
 
-16 ルール + 6 フック。ルールは tier 付きの契約です：`discretion.md` が、プラグイン管理の 13 のルールファイル内のすべての指示を Anchor / Default / Guidance のいずれかちょうど 1 つに解決し、ユーザー所有の 2 つのオーバーライドファイルは親ルールの下で Anchor-first に解決されます。フック構成は 4 本の advisory リマインダーフックに、自動フォーマッタ 1 本とブロックするセキュリティガード 1 本を加えたものです。リマインダーの役割はフックごとに異なります：Stop と post-compact フックは digest 束縛の状態（`review-state.js`）から未完了ゲートのリマインダーを描画し、prompt フックは `[AUTO_LOOP_STATE]` の事実行を、post-skill フックは固定のゲート順序行を出力し、post-compact フックはさらに git ベースラインを再注入します。レビュー層は何もブロックしません — pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガード、`jq` 必須 — 無いと作動しない）、ハードなゲートは git レベルにあります（commit-msg-guard は `/codex-setup init` でインストール、pre-push-gate はオプトイン）。
+16 ルール + 7 フック。ルールは tier 付きの契約です：`discretion.md` が、プラグイン管理の 13 のルールファイル内のすべての指示を Anchor / Default / Guidance のいずれかちょうど 1 つに解決し、ユーザー所有の 2 つのオーバーライドファイルは親ルールの下で Anchor-first に解決されます。フック構成は 4 本の advisory リマインダーフックに、自動フォーマッタ 1 本とブロックするガード 2 本を加えたものです。リマインダーの役割はフックごとに異なります：Stop と post-compact フックは digest 束縛の状態（`review-state.js`）から未完了ゲートのリマインダーを描画し、prompt フックは `[AUTO_LOOP_STATE]` の事実行を、post-skill フックは固定のゲート順序行を出力し、post-compact フックはさらに git ベースラインを再注入します。レビュー層は何もブロックしません — pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガード、`jq` 必須 — 無いと作動しない）、pre-bash-codex-launch-guard は進捗をタスクパネルから逸らす Codex dispatch の起動をブロックし、ハードなゲートは git レベルにあります（commit-msg-guard は `/codex-setup init` でインストール、pre-push-gate はオプトイン）。
 
 > **カスタマイズ**：`auto-loop-project.md` を編集してプロジェクトの auto-loop 動作をオーバーライドできます。プラグイン更新と競合しません — [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md) 参照。
 

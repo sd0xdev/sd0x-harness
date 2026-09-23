@@ -52,7 +52,7 @@ Phase 5: Install Rules + Backfill CLAUDE.md (unless --no-rules or --lite)
 Phase 6: Install Hooks (unless --no-hooks or --lite)
     │
     ├─ Locate plugin hooks dir (3-level fallback)
-    ├─ mkdir -p .claude/hooks/ → copy 6 hooks + chmod +x
+    ├─ mkdir -p .claude/hooks/ → copy 7 hooks + chmod +x
     ├─ Merge hook definitions into .claude/settings.json
     └─ Output hooks install report
     │
@@ -280,11 +280,12 @@ Same 3-level fallback as Phase 5.1, but search for `hooks/pre-edit-guard.sh`:
 ### 6.2 Copy Hook Scripts
 
 1. `mkdir -p ${REPO_ROOT}/.claude/hooks/`
-2. Copy 6 hooks (exclude `namespace-hint.sh` — plugin-only):
+2. Copy 7 hooks (exclude `namespace-hint.sh` — plugin-only):
 
    | Hook | Event | Matcher | Purpose |
    |------|-------|---------|---------|
    | `pre-edit-guard.sh` | PreToolUse | Edit\|Write\|NotebookEdit | Block editing .env/.git |
+   | `pre-bash-codex-launch-guard.sh` | PreToolUse | Bash | Block a Codex dispatch launched with its progress redirected away from the task panel |
    | `post-edit-format.sh` | PostToolUse | Edit\|Write\|NotebookEdit | Auto-format reminder |
    | `post-skill-auto-loop.sh` | PostToolUse | Skill | Post-review reminder (next gate) |
    | `stop-guard.sh` | Stop | — | Reminder: open gates at stop (markdown, exit 0) |
@@ -304,7 +305,8 @@ Hook definition mapping (uses `$CLAUDE_PROJECT_DIR` for portability):
 {
   "hooks": {
     "PreToolUse": [
-      {"matcher": "Edit|Write|NotebookEdit", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-edit-guard.sh"}]}
+      {"matcher": "Edit|Write|NotebookEdit", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-edit-guard.sh"}]},
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash-codex-launch-guard.sh"}]}
     ],
     "PostToolUse": [
       {"matcher": "Edit|Write|NotebookEdit", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-edit-format.sh"}]},
@@ -527,7 +529,7 @@ Summarize all phases and perform closed-loop check:
 | Detection | ✅ Framework: X, PM: Y, DB: Z |
 | CLAUDE.md | ✅ Configured (0 remaining placeholders) |
 | Rules | ✅ 14/14 managed rules + 2 override templates |
-| Hooks | ✅ 6/6 installed + settings merged |
+| Hooks | ✅ 7/7 installed + settings merged |
 | Scripts | ✅ 5/5 scripts installed |
 | Env Config | ✅ AUTO_COMPACT_WINDOW=320000 (1M) |
 
@@ -550,7 +552,7 @@ Summarize all phases and perform closed-loop check:
 - [ ] User confirmed detection results before writing
 - [ ] No remaining auto-detected `{UPPER_CASE}` placeholders in `.claude/CLAUDE.md` after setup (manual placeholders like `{TICKET_PATTERN}` are acceptable)
 - [ ] `.claude/rules/` contains 16 `.md` files (14 managed + 2 override templates) (unless `--no-rules` or `--lite`)
-- [ ] `.claude/hooks/` contains 6 `.sh` files with execute permission (unless `--no-hooks` or `--lite`)
+- [ ] `.claude/hooks/` contains 7 `.sh` files with execute permission (unless `--no-hooks` or `--lite`)
 - [ ] `.claude/settings.json` contains hook definitions (unless `--no-hooks` or `--lite`)
 - [ ] `.claude/scripts/` contains `precommit-runner.js`, `verify-runner.js`, `review-state.js`, `lib/utils.js`, and `lib/tree-digest.js` (unless `--lite` or `--detect-only`)
 - [ ] `.claude/CLAUDE.md` contains `@rules/auto-loop.md` reference (unless `--lite`)

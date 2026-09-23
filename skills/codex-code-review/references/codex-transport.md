@@ -303,6 +303,13 @@ of context per eight-minute review, to learn what one notification says). Three 
    shipped with — opens a predictable pathname with a tool that follows symlinks, which is the
    overwrite class the adapter's exclusive creation exists to refuse (a review caught it the same
    day). Everything the observer needs is already in a file the adapter created exclusively.
+   This step is **guarded as well as stated** — for the launch shapes `docs/hooks.md` lists, within
+   the boundary it names: `hooks/pre-bash-codex-launch-guard.sh` (PreToolUse on `Bash`) rejects a `start`/`resume` launch that is not `run_in_background: true`, or that redirects or
+   pipes stdout or stderr, wraps in `nohup`/`setsid`, or backgrounds with a trailing `&` — exit 2,
+   with this step's shape on stderr — because the
+   adapter itself cannot tell the harness's task file from a caller's redirection (fd 1 and fd 2 are
+   the same regular file either way, measured 2026-09-23). `alloc` and `cleanup` are not guarded, and
+   a locator held in a variable an earlier tool call assigned is outside the guard's reach.
 2. **Observe** `progress.json` with the Monitor tool — a local read every 30 s, no model turn,
    surfacing only **state changes**: `started` once the thread id is known, every fifth minute
    of `elapsed_s`, the stall advisory when `last_event_s_ago` passes 120, and the terminal status.

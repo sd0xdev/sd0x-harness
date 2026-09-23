@@ -74,7 +74,7 @@ const CANONICAL_SYNC_CHECKS =
   '`auto-loop.md`, `codex-invocation.md`, `fix-all-issues.md`, `framework.md`, `testing.md`, ' +
   '`security.md`, `git-workflow.md`, `logging.md`, `docs-writing.md`, `docs-numbering.md`, ' +
   '`self-improvement.md`, `context-management.md` | | Hooks | `.claude/hooks/*.sh` | `hooks/*.sh` ' +
-  '| `pre-edit-guard.sh`, `post-edit-format.sh`, `post-skill-auto-loop.sh`, ' +
+  '| `pre-edit-guard.sh`, `pre-bash-codex-launch-guard.sh`, `post-edit-format.sh`, `post-skill-auto-loop.sh`, ' +
   '`post-compact-auto-loop.sh`, `stop-guard.sh`, `user-prompt-review-guard.sh` | | Scripts | ' +
   '`.claude/scripts/` | `scripts/` | `precommit-runner.js`, `verify-runner.js`, `review-state.js`, ' +
   '`dep-audit.sh`, `commit-msg-guard.sh`, `pre-push-gate.sh`, `lib/utils.js`, `lib/tree-digest.js` ' +

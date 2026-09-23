@@ -29,6 +29,15 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-guard.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash-codex-launch-guard.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [

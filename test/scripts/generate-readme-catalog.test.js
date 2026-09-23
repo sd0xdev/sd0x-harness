@@ -229,14 +229,14 @@ test('README hero public count matches summary count', () => {
 
 // === deep-explore regression: resource-count rows must match the shipped inventory ===
 
-test('README resource counts: Hooks row lists exactly the 6 shipped hooks', () => {
+test('README resource counts: Hooks row lists exactly the 7 shipped hooks', () => {
   const readme = readFileSync(README_PATH, 'utf8');
   const row = readme.split('\n').find((l) => l.startsWith('| Hooks |'));
   assert.ok(row, 'README should have a Hooks resource row');
-  assert.match(row, /^\| Hooks \| 6 \|/, 'hook count must be 6');
+  assert.match(row, /^\| Hooks \| 7 \|/, 'hook count must be 7');
   assert.ok(!row.includes('namespace hint'), 'namespace hint is a script, not a hook');
   const hookFiles = readdirSync(join(ROOT, 'hooks')).filter((f) => f.endsWith('.sh'));
-  assert.equal(hookFiles.length, 6, `hooks/ inventory drifted: ${hookFiles.join(', ')}`);
+  assert.equal(hookFiles.length, 7, `hooks/ inventory drifted: ${hookFiles.join(', ')}`);
 });
 
 test('README resource counts: Scripts row count matches top-level scripts/ inventory', () => {

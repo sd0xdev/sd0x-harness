@@ -361,3 +361,11 @@ Recurring corrections, recorded so the class stops repeating. Format and rules: 
 - **Correct approach**: 一份實作，測試與其控制都呼叫它。然後突變**真正的程式碼**——不是它的複本——確認轉紅。單一 fixture 無法辨別時，改為斷言突變會改變的**集合**（候選數量），而非其中一個成員。
 - **Prevention**: 宣稱守衛有效前先跑突變測試。`rules/testing.md` § Guards 已經寫了判準——「刪掉守衛；若既有案例全數維持綠，它就沒有反向控制」——這四次都通過了對該句的**解讀**，卻沒通過該句本身。
 - **Source**: 2026-08-29 — rules-residency r1，code review 第 1–5 輪。
+
+### L19 — Codex 背景審查的進度要照 transport 契約走，不是自己輪詢
+
+- **Context**: gh-stack-native 與其後續修正，2026-09-22～23 共 20 多次 Codex dispatch。
+- **Error pattern**: 用 `nohup … > log 2>&1 &` 啟動，把 stderr 倒進檔案——task 輸出面板整段「No output yet」，adapter 每 60 秒的 `[CODEX_EXEC_PROGRESS]` 沒人看得到；之後又自己寫 10 秒一則的 `progress.json` 輪詢往對話灌進度。兩者都是 `codex-transport.md` § Progress 明文排除的做法（「observe by push, not poll」；「redirect nothing」）。
+- **Correct approach**: `Bash(run_in_background: true)` 啟動、**不 redirect**（stderr 留在面板）；Monitor 只讀 `progress.json`、只在狀態改變時通知（started / 每 5 分鐘 / 卡住 120 秒 / 結束），用契約裡那段 watcher 腳本，`P` 寫成字面路徑。
+- **Prevention**: `hooks/pre-bash-codex-launch-guard.sh`（PreToolUse Bash）會以 exit 2 擋下未帶 `run_in_background: true`、或含 `>`／`|`／`nohup`／結尾 `&` 的 `codex-exec.js start|resume` 指令並印出正確啟動方式；使用者問「為什麼看不到日誌」仍是行為層訊號。
+- **Source**: 2026-09-23 — gh-stack-native 後續，使用者指出面板無輸出。
