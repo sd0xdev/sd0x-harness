@@ -39,7 +39,7 @@ function readSkill() {
 // The section pins below survive because they give a precise message for the common case; the
 // digest is what makes the claim complete.
 
-const SKILL_DIGEST = "b94ee09d4b944a780b2fe6860a9cfb1cb75b1bc43873681f70857693d7bac810";
+const SKILL_DIGEST = "a83a020cad86717834977490ca4ce523f779fa581178711e17188ef881418224";
 
 function digestOf(text) {
   return createHash('sha256').update(text).digest('hex');

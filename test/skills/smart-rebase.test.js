@@ -53,10 +53,13 @@ const skill = readFileSync(skillPath, 'utf8').replace(/\r\n/g, '\n');
 const CANONICAL_PERMISSIONS = [
   "## Permissions",
   "",
-  "Claude **must not** execute `git rebase` — **there is no authorization that lifts this**. `rebase` is",
-  "a destructive operation under Anchor Register #4 (`@rules/discretion.md`), whose enumerated",
-  "approval workflows are a closed set: `/push-ci` (push), `/smart-commit --execute` (add + commit) and",
-  "`/epic-merge` (rebase --onto, force-with-lease, squash-merge). This skill is not on that list, so",
+  "Claude **must not** execute `git rebase` — **no workflow authorization lifts this**, this skill's",
+  "included. The one credential that does reach it is Register #4's `user-authorized execution`: the",
+  "user's own message naming that execution, which this skill can neither grant, request nor infer.",
+  "`rebase` is a destructive operation under Anchor Register #4 (`@rules/discretion.md`), whose",
+  "enumerated approval workflows are a closed set: `/push-ci` (push), `/smart-commit --execute` (add + commit),",
+  "`/epic-merge` (rebase --onto, force-with-lease, squash-merge) and `/gh-stack`",
+  "(`gh stack link` / `push` / `submit --auto`). This skill is not on that list, so",
   "user approval here cannot create the exception — adding a workflow to the list is itself an",
   "Anchor-level change. This skill **outputs** the rebase command; the developer runs it.",
   "",
@@ -71,8 +74,10 @@ const CANONICAL_PERMISSIONS = [
 const CANONICAL_PROHIBITED = [
   "## Prohibited",
   "",
-  "- **Claude never executes `git rebase`** — not with user approval, not with a confirmed plan.",
-  "  Anchor Register #4's workflow list is closed and this skill is not on it",
+  "- **Claude never executes `git rebase` on an approval given in this skill** — not an AskUserQuestion",
+  "  answer, not a confirmed plan. Anchor Register #4's workflow list is closed and this skill is not on",
+  "  it; the one credential that reaches `rebase` is the user's own message naming that execution",
+  "  (§ Permissions), which this skill never asks for",
   "- No rebase on a protected branch — the full set is `@rules/git-workflow.md` § Prohibited",
   "  (`main`, `master`, `develop`, `release/*`), never a shorter list restated here",
   "- No force push to a protected branch, same set",
@@ -114,7 +119,7 @@ const PINS = [
 // what Claude executes — and a digest change is a review trigger with a one-command remedy, not a
 // false positive. The section pins stay because they name the likeliest change precisely; the
 // digest is what makes the coverage complete.
-const SKILL_DIGEST = 'd2c6b96e86d171e2cef41200cb8f2cd93268d5d796e7ef80a9819ea8129f9b77';
+const SKILL_DIGEST = '67e119432a2b2c71891483fb91eb63e52fe989da0933a79f4aa75f3773066595';
 
 function digestOf(text) {
   return createHash('sha256').update(text).digest('hex');
@@ -138,7 +143,7 @@ test('the digest when execution is granted outside the pinned sections → repor
       'Output the command for the developer to run. Claude does not execute it — see § Permissions;',
       'After the user confirms the plan, Claude executes the generated rebase command. See § Permissions;'),
     'the verification checklist item inverted': (t) => t.replace(
-      '- [ ] The rebase command was **output**, never executed by Claude',
+      '- [ ] The rebase command was **output**, never executed by Claude on this skill\'s approval',
       '- [ ] The rebase command was executed after the user confirmed the plan'),
     'the workflow step relabelled as an execution step': (t) => t.replace(
       'Step 5: Output → print the rebase command for the developer to run',
@@ -171,14 +176,20 @@ test('the pins when the prohibition is weakened → report it in every spelling 
     'a double negative that reinstates the grant': (t) => t.replace(
       'Claude **must not** execute `git rebase`',
       'It is not prohibited for Claude to execute `git rebase`'),
+    // The prohibition names one credential that reaches it (Register #4's user-authorized
+    // execution) and refuses every other. This mutation puts a SKILL-level approval back in —
+    // the exact widening the sentence exists to refuse.
     'an unless-clause appended to the prohibition': (t) => t.replace(
-      '— **there is no authorization that lifts this**',
-      '— unless the user explicitly approves it'),
+      '— **no workflow authorization lifts this**',
+      '— unless the user explicitly approves it here'),
+    'the user-authorized credential widened into something this skill may request': (t) => t.replace(
+      'which this skill can neither grant, request nor infer',
+      'which this skill may ask the user for'),
     'the closed-list sentence deleted': (t) => t.replace(
       'user approval here cannot create the exception — adding a workflow to the list is itself an\nAnchor-level change. ', ''),
     'the Prohibited bullet softened': (t) => t.replace(
-      '**Claude never executes `git rebase`** — not with user approval, not with a confirmed plan.',
-      '**Claude executes `git rebase`** only with user approval and a confirmed plan.'),
+      '**Claude never executes `git rebase` on an approval given in this skill**',
+      '**Claude executes `git rebase` on an approval given in this skill**'),
     'a grant smuggled into the allowed-tools note': (t) => t.replace(
       '> string happens to permit.',
       '> string happens to permit. With approval, this skill may run the rebase itself.'),

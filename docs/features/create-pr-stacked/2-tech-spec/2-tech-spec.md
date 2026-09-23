@@ -202,7 +202,7 @@ sequenceDiagram
 
 ### 3.2 Data Model
 
-Stack chain 為記憶體內的有序結構，不落地任何狀態檔（Phase B 以 GitHub 查詢重建狀態、Phase C 據以可重入分流）。欄位分兩批取值，界線就是 A0：**`head` 與 `base` 在 A0.1 解析時即已定案**——`head` 序列在顯式引數模式下原樣沿用引數、在自動偵測模式下由**既有 PR base 關係**唯讀回溯產生（**這是唯一可執行的來源**；native stack metadata 在 Q5 有答案前不是合法來源，見 §3.4「自動偵測」段與 § Phase A0 的 ERRATUM E1）。**三類值取得即以 `git check-ref-format --branch` 驗**：`{TARGET_BRANCH}`／`--base`、每個顯式 head、每個回傳的 `baseRefName`——失敗即中止並指名該層；`base` 則**兩種模式都要填**，最底層走 `--base` → `{TARGET_BRANCH}` → `main`。兩個欄位提前的理由**不同**，混為一談會直接推翻 A0.2 的規則：**`head` 提前是因為 A0.2 要比對它**（純詞法，不需要任何 remote 事實）；**`base` 提前不是為了被比對**——A0.2 明確不驗最底層的 base（它正常就是 protected 的 `main`，見 §3.4）——而是因為它是 layer 輸出契約的一部分：自動偵測靠它定義回溯的終止點，Phase B 的 ancestry 與 commit range 也整段以它為輸入。自動偵測另會在 A0.1 產出 **`discovery_relation`**——那一跳所依據的 PR 關係，**只用來建構 chain，不作政策判斷**，且不被 Phase B 沿用（見 Phase Contract 表）。**其餘欄位**（OID、sync 分類、commit range，以及 Phase B 重新查詢的 `pr` 政策狀態）才在 `git fetch --prune origin` 之後取值（`--prune` 確保已刪除的 remote branch 不會以 stale ref 混入），一律以 **remote refs** 為準：
+Stack chain 為記憶體內的有序結構，不落地任何狀態檔（Phase B 以 GitHub 查詢重建狀態、Phase C 據以可重入分流）。欄位分兩批取值，界線就是 A0：**`head` 與 `base` 在 A0.1 解析時即已定案**——`head` 序列在顯式引數模式下原樣沿用引數、在自動偵測模式下由**既有 PR base 關係**唯讀回溯產生（**這是唯一可執行的來源**；native stack metadata 不是合法來源——原條件寫的是「Q5 有答案前」，而 Q5 已於 2026-09-18 結案且行為不變，限制改以 § 7 Q5 結案段所要求的同步票為條件，見 §3.4「自動偵測」段與 § Phase A0 的 ERRATUM E1）。**三類值取得即以 `git check-ref-format --branch` 驗**：`{TARGET_BRANCH}`／`--base`、每個顯式 head、每個回傳的 `baseRefName`——失敗即中止並指名該層；`base` 則**兩種模式都要填**，最底層走 `--base` → `{TARGET_BRANCH}` → `main`。兩個欄位提前的理由**不同**，混為一談會直接推翻 A0.2 的規則：**`head` 提前是因為 A0.2 要比對它**（純詞法，不需要任何 remote 事實）；**`base` 提前不是為了被比對**——A0.2 明確不驗最底層的 base（它正常就是 protected 的 `main`，見 §3.4）——而是因為它是 layer 輸出契約的一部分：自動偵測靠它定義回溯的終止點，Phase B 的 ancestry 與 commit range 也整段以它為輸入。自動偵測另會在 A0.1 產出 **`discovery_relation`**——那一跳所依據的 PR 關係，**只用來建構 chain，不作政策判斷**，且不被 Phase B 沿用（見 Phase Contract 表）。**其餘欄位**（OID、sync 分類、commit range，以及 Phase B 重新查詢的 `pr` 政策狀態）才在 `git fetch --prune origin` 之後取值（`--prune` 確保已刪除的 remote branch 不會以 stale ref 混入），一律以 **remote refs** 為準：
 
 ```
 chain := [ layer_1, ..., layer_N ]   # 底層在前；宣告的 base 關係須通過 Phase B ancestry 驗證，非僅列表順序
@@ -306,10 +306,12 @@ layer := {
 - [ ] **Q1**：`/push-ci --branches b1 b2 b3`（多 branch、非 force、單次 AskUserQuestion 列出全部）是否屬於 Anchor #4 既有例外「`/push-ci` (push)」的範圍內擴充？本 spec 的讀法是**是**（工作流未變，僅引數面擴大），但因觸及 Anchor 所指名的工作流，採納前需人工確認。v1 不阻塞於此：主路徑為輸出手動 push 指令。
 
   這題的授權面比本節原先寫的窄。`pre-push-gate.sh` 是 **opt-in** 的（`/codex-setup init|sync --with-push-gate`；`/install-scripts` 只複製腳本、不掛 hook），且**只在一種情況下真的攔**：ref set 含 protected branch 且 `ALLOW_PUSH_PROTECTED` 未設。所以「逐 push 把關」與「雙層 gate」不是可以假定的前提——多數 branch 的多 branch push 一個 `/dev/tty` 提示都不會出現，`/push-ci` 的 AskUserQuestion **就是**那次授權本身，而非備援層。契約全文見 `@rules/git-workflow.md` § Push safety 與 `@rules/discretion.md` § Efficacy Boundary。
-- [ ] **Q2**：repo 是否已被 preview rollout 涵蓋、rollout 偵測的可靠訊號（API 欄位或 CLI 行為）——待實測。
+- [x] **Q2（2026-09-18 結案，改由 `gh-stack-native` 承接；2026-09-23 更正）**：不再需要「事前確認 rollout」。extension 本身就是訊號：它的子命令有型別化的 exit status（`4` API 失敗、`9` 此 repository 未開放 Stacks……），而 GitHub 以 REST 端點 `repos/{owner}/{repo}/stacks?pull_request=<n>` 回答「哪個 Stack 持有這個 PR」。作法：**執行前**先探測 Stacks 可用性（`/gh-stack` Phase 2），`404` 即 STOP 並退回 Multi-PR——此時什麼都還沒動，而 `404` 分不出「未開放」與「token 看不到」，只有在這個時間點兩者的處置才相同。通過探測才在核准下送出原生操作，再以該端點驗證，結果分三態、並與 exit 一起讀：exit `0` 且 `confirmed`、且每項核准的 PR 變更都讀回如核准，即原生成功（讀回不符是 partial，STOP——extension 改 base、改 auto-merge、轉 ready 失敗時只警告）；非 0 且 `confirmed` 是對既有 Stack 執行失敗，**STOP**；非 0 且 `confirmed absent`（每層都查過，且沒有任何一層有 PR，或每個 per-PR 回答都是 HTTP 200 空清單）才退回 Multi-PR，且退回前重新查詢各層既有 PR；`unverifiable` 一律 **STOP**、不退回——執行後的任何 `404`、其他錯誤、成員或順序不符，以及 **`link` 以 `0` 結束卻查得空清單**（它只在 Stack 建好後回報成功，這個矛盾優先於一般的空清單規則）都在此列。Stack 可能存在時退回，會讓每層被改兩次。執行前的解析錯誤同樣是 STOP（`skills/gh-stack/SKILL.md` § Phase 2）。`skills/create-pr/references/stack-mode.md` § Phase D 的政策於 2026-09-18 翻轉為原生優先，路徑委派 `/gh-stack`。詳見 [`gh-stack-native` 2-tech-spec](../../gh-stack-native/2-tech-spec.md)。
+
+  **2026-09-23 更正**：原結案文字以 `gh stack view --json` 為查詢契約，並寫「送出之後讀不到或被拒的狀態一律退回 Multi-PR」。兩者皆錯。讀 extension v0.1.1 原始碼可知 `view` 依**目前分支**讀本地 tracking，而 `gh stack link` 不寫本地 tracking，且 `view` 讀完會回寫 `.git/gh-stack`；「讀不到」與「確認不存在」也必須分開，否則會在一個存在的 Stack 上再跑一次 Multi-PR。
 - [ ] **Q3**：R4 的推定（手動 chained-base PR ≠ native stack 物件）待 rollout 後實測確認。
 - [ ] **Q4**：`stack metadata`（`github.event.pull_request.stack.*`）欄位實測後，本 repo CI 是否需要分層策略——延續 `1-requirements.md` 的 open question，不在 v1。
-- [ ] **Q5（2026-08-20 round 15 新開，由 § Phase A0 的 ERRATUM E1 提出；round 16 補入本節）**：
+- [x] **Q5（2026-08-20 round 15 新開，由 § Phase A0 的 ERRATUM E1 提出；round 16 補入本節；2026-09-18 結案）**：
   native stack 探索的**查詢契約**尚不存在，需回答三件事——(a) **查詢指令**為何；(b) **回應 schema**
   為何；(c)「查無資料／查詢失敗／權限不足」三種**失敗語意**各自的後果為何（三者後果不同，不可合併）。
   實測依據：`gh pr view --json` 與 `gh pr list --json` 的欄位清單，**於 2026-08-20 在現地 `gh 2.97.0` 上實測**（不是 2026-07-31 的環境——當日記載為 2.95.0，見 § 環境事實的未解決衝突註記）
@@ -318,6 +320,10 @@ layer := {
   查詢契約本身（介面問題）。
   **阻擋後果**：在 Q5 有答案之前，A0.1 **不得**把「native stack metadata」當成可用的探索來源；
   清單為空即走 STOP，與「關係不唯一」同一條路徑。
+
+  **2026-09-18 結案**：查詢契約存在，只是在 **extension 裡**而不在 `gh pr view --json`——當日量測的兩個指令確實都沒有 stack 欄位，那筆記載沒有錯，錯的是由此推論「契約不存在」。(a) `gh stack view --json`、(b) 其 JSON 輸出、(c) exit `2`（不在 stack）/`4`（API 失敗）/`6`（多重歸屬）/`7`（rebase 進行中）/`8`（被鎖）——三問俱答，且 `4` 明確不得讀成「沒有 stack」。Q5 的**阻擋條件因此解除**——但本次只是結案註記，A0.1 的來源敘述沒有跟著改，而且不能只改這裡：§ 3.2 的 A0.1 欄位契約與 [1-core-logic.md](./1-core-logic.md) § 自動偵測 都仍寫著既有 PR base 關係是**唯一**來源，ERRATUM E1 也已把「來源二」從 A0.1 的序列圖裡拿掉。要真的開放 `gh stack view --json` 當第二來源，得同步這三處、另立同步票；在那之前 A0.1 的行為不變（清單為空即 STOP）。
+
+  **2026-09-23 更正**：上段 (a)(b) 答錯了介面。`gh stack view --json` 讀的是本地 tracking、只回答**目前分支**所屬的 stack，且會回寫 `.git/gh-stack`（`cmd/view.go` 的 `SaveNonBlocking`，v0.1.1）——它不是唯讀查詢，也驗證不了 `gh stack link` 建立的 Stack。可用的契約有兩個，各答一件事：本地 tracking 直接讀 `.git/gh-stack`（JSON，`schemaVersion` 1，`internal/stack/stack.go`）；遠端 Stack 用 `GET repos/{owner}/{repo}/stacks?pull_request=<n>`（`internal/github/github.go`）。(c) 的失敗語意改以 extension 的 exit status（`cmd/utils.go`，含 `9`）與該端點的 HTTP 狀態（`404` 表示未開放，不是空結果）為準。回應形狀是從 extension 的 decoder 讀出的，尚未對實際 repository 實測。上段「另立同步票」的條件不變，只是那張票要開放的第二來源是 `.git/gh-stack`，不是 `gh stack view --json`。
 
 > **§ 7 曾附有 12 條第 50–61 輪的通用教訓**（`/install-scripts` hook 路徑解析、F6b shell 分析器），
 > 主題與 stacked PR 無關且非開放問題，已於 2026-08-20 round 16 移入

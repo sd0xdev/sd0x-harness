@@ -2549,7 +2549,7 @@ fi
 
 | File | Purpose | When to Read |
 |------|---------|--------------|
-| `@rules/git-workflow.md` | Push/rebase exception model (this skill is one of three exceptions) | Before any destructive op |
+| `@rules/git-workflow.md` | Push/rebase exception model (this skill is one of four skill exceptions, beside `user-authorized execution`) | Before any destructive op |
 | `skills/smart-rebase/SKILL.md` | Single-PR squash-merge rebase pattern | Phase 2 rebase logic |
 | `skills/merge-prep/SKILL.md` | Pre-merge analysis primitives | Phase 0 chain analysis |
 | `skills/watch-ci/SKILL.md` | CI verdict polling — argument contract | Phase 2 Step 7 delegation |

@@ -12,19 +12,22 @@ Push to remote with user approval, then monitor CI run until completion.
 ## Authorization
 
 ```
-⚠️ This skill is one of two authorized paths for Claude to execute `git push`.
-⚠️ The other is /epic-merge (--force-with-lease for stacked PR chains, per-iteration AskUserQuestion gate).
+⚠️ This skill is one of three *skill* paths authorized to execute `git push`, beside Register #4's
+⚠️ `user-authorized execution` — the user's own message naming the push, which no skill can grant,
+⚠️ request or infer, and which this block must never be cited to refuse.
+⚠️ The second is /epic-merge (--force-with-lease for stacked PR chains, per-iteration AskUserQuestion gate).
+⚠️ The third is /gh-stack, which pushes through `gh stack link|push|submit --auto` — a plain `--atomic` push for link, a per-branch `--force-with-lease` for the other two (per-use AskUserQuestion gate). It never pushes a branch directly.
 ⚠️ This skill may also use --force-with-lease, but only when the caller passes the flag — and NEVER onto a protected branch; bare --force is forbidden everywhere.
 ⚠️ All other skills and rules MUST output push commands only (not execute).
 ⚠️ Push REQUIRES explicit user approval via AskUserQuestion — no exceptions.
 ```
 
-| Rule | This Skill | `/epic-merge` | All Other Skills |
-|------|-----------|---------------|------------------|
-| `git push` | Execute (after user approval) | Forbidden (uses `--force-with-lease` only) | Forbidden (output only) |
-| `git push --force` | Forbidden | Forbidden | Forbidden |
-| `git push --force-with-lease` | Execute — **only** when `--force-with-lease` is explicitly passed, after user approval naming the force form; **never onto a protected branch** (Phase 0 hard-aborts, Phase 2 re-asserts) | Execute (after per-iteration AskUserQuestion) | Forbidden |
-| Push to protected branches (main/master/develop/release/*) | Warn + pre-approval via AskUserQuestion (final gate is the terminal hook when installed, otherwise this approval); with `--force-with-lease` → **hard abort**, no question asked | Protected PR heads rejected — Phase 0 validation, re-asserted before Step 5 and Rollback (a PR head is not inherently unprotected) | Forbidden |
+| Rule | This Skill | `/epic-merge` | `/gh-stack` | All Other Skills |
+|------|-----------|---------------|-------------|------------------|
+| `git push` | Execute (after user approval) | Forbidden (uses `--force-with-lease` only) | Never directly — only as what `gh stack link` runs underneath (`--atomic`, no force), after a per-use AskUserQuestion naming that form | Forbidden (output only) |
+| `git push --force` | Forbidden | Forbidden | Forbidden | Forbidden |
+| `git push --force-with-lease` | Execute — **only** when `--force-with-lease` is explicitly passed, after user approval naming the force form; **never onto a protected branch** (Phase 0 hard-aborts, Phase 2 re-asserts) | Execute (after per-iteration AskUserQuestion) | Execute **through the extension** (`gh stack push` / `submit --auto`, per-branch value-bearing lease), after the unshared attestation and a per-use AskUserQuestion naming the force form; a protected branch may be the stack's base, never a layer | Forbidden |
+| Push to protected branches (main/master/develop/release/*) | Warn + pre-approval via AskUserQuestion (final gate is the terminal hook when installed, otherwise this approval); with `--force-with-lease` → **hard abort**, no question asked | Protected PR heads rejected — Phase 0 validation, re-asserted before Step 5 and Rollback (a PR head is not inherently unprotected) | Refused as a stack layer in Phase 2; the chain's base may be one | Forbidden |
 
 ## Defense in Depth: Push Safety
 

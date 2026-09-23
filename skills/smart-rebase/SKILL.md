@@ -1,6 +1,6 @@
 ---
 name: smart-rebase
-description: "Smart partial rebase for squash-merge repositories. Auto-detect which commits to keep/drop when base branch was squash-merged into target. Use when: user says 'rebase', 'partial rebase', 'base already merged', 'smart rebase', or /smart-rebase. Not for: simple git rebase (the developer runs it — Claude never executes rebase), merge conflict resolution (use /merge-prep), branch switching (the developer runs git checkout). Output: rebase plan table + a shell-quoted git rebase --onto command for the developer to run after the ambiguity check in Step 5."
+description: "Smart partial rebase for squash-merge repositories. Auto-detect which commits to keep/drop when base branch was squash-merged into target. Use when: user says 'rebase', 'partial rebase', 'base already merged', 'smart rebase', or /smart-rebase. Not for: simple git rebase (the developer runs it — no skill executes rebase for them), merge conflict resolution (use /merge-prep), branch switching (the developer runs git checkout). Output: rebase plan table + a shell-quoted git rebase --onto command for the developer to run after the ambiguity check in Step 5."
 allowed-tools: Bash(git:*), Bash(bash:*), Read, Grep, Glob
 ---
 
@@ -10,9 +10,10 @@ Analyze branch history → identify squash-merged commits → generate precise `
 
 ## When NOT to Use
 
-- Simple `git rebase` without squash-merge complexity — **the developer runs it**; Claude never
-  executes `rebase`, here or anywhere else (§ Permissions). "Use git directly" is an instruction to
-  the human, and this list is read by the dispatcher before § Permissions loads, so it says so here
+- Simple `git rebase` without squash-merge complexity — **the developer runs it**; no skill runs
+  `rebase` for them, this one included, and the one credential that reaches it is the user's own
+  message naming that execution (§ Permissions). "Use git directly" is an instruction to the human,
+  and this list is read by the dispatcher before § Permissions loads, so it says so here
 - Merge conflict resolution (use `/merge-prep`)
 - Branch management or switching — the developer runs the git command
 - Cherry-picking specific commits (use `git cherry-pick`)
@@ -32,10 +33,13 @@ Need: `git rebase --onto main B3 feature` to keep only F1-F3.
 
 ## Permissions
 
-Claude **must not** execute `git rebase` — **there is no authorization that lifts this**. `rebase` is
-a destructive operation under Anchor Register #4 (`@rules/discretion.md`), whose enumerated
-approval workflows are a closed set: `/push-ci` (push), `/smart-commit --execute` (add + commit) and
-`/epic-merge` (rebase --onto, force-with-lease, squash-merge). This skill is not on that list, so
+Claude **must not** execute `git rebase` — **no workflow authorization lifts this**, this skill's
+included. The one credential that does reach it is Register #4's `user-authorized execution`: the
+user's own message naming that execution, which this skill can neither grant, request nor infer.
+`rebase` is a destructive operation under Anchor Register #4 (`@rules/discretion.md`), whose
+enumerated approval workflows are a closed set: `/push-ci` (push), `/smart-commit --execute` (add + commit),
+`/epic-merge` (rebase --onto, force-with-lease, squash-merge) and `/gh-stack`
+(`gh stack link` / `push` / `submit --auto`). This skill is not on that list, so
 user approval here cannot create the exception — adding a workflow to the list is itself an
 Anchor-level change. This skill **outputs** the rebase command; the developer runs it.
 
@@ -439,7 +443,9 @@ is the *redesign* — replacing the positive reconstruction with git-mediated re
 (`git ls-remote` + an ambiguity-aware probe + `git fetch --dry-run`) — not this write path.
 
 Output the command for the developer to run. Claude does not execute it — see § Permissions;
-no confirmation the user gives in this skill changes that.
+no confirmation the user gives in this skill changes that. A confirmation is an answer to this
+skill's question; the credential that reaches `rebase` is the user's own message naming the
+execution, which this skill neither asks for nor infers.
 
 ### Step 6: Verify
 
@@ -515,8 +521,10 @@ can see that. Full measurements:
 
 ## Prohibited
 
-- **Claude never executes `git rebase`** — not with user approval, not with a confirmed plan.
-  Anchor Register #4's workflow list is closed and this skill is not on it
+- **Claude never executes `git rebase` on an approval given in this skill** — not an AskUserQuestion
+  answer, not a confirmed plan. Anchor Register #4's workflow list is closed and this skill is not on
+  it; the one credential that reaches `rebase` is the user's own message naming that execution
+  (§ Permissions), which this skill never asks for
 - No rebase on a protected branch — the full set is `@rules/git-workflow.md` § Prohibited
   (`main`, `master`, `develop`, `release/*`), never a shorter list restated here
 - No force push to a protected branch, same set
@@ -540,7 +548,7 @@ Rebase plan table with keep/drop commits:
 
 - [ ] Prerequisites validated (not a protected branch per `@rules/git-workflow.md`, clean tree, not detached)
 - [ ] Script output parsed and displayed as plan table
-- [ ] The rebase command was **output**, never executed by Claude
+- [ ] The rebase command was **output**, never executed by Claude on this skill's approval
 - [ ] Post-rebase commit count matches expected keep count
 - [ ] **Both** `--force-with-lease` **and** `--force-if-includes` used (never `--force`, never the
   bare lease — a checklist that accepts the lease alone green-lights exactly what § Prohibited bans)

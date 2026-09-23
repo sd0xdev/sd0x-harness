@@ -1187,11 +1187,11 @@ test('every git command in the document → carries the canonical prefix', () =>
     'a table cell naming git is not a command and must not be judged as one');
 });
 
-const SKILL_DIGEST = "7e4e18262ee626c933159afd51ad11e38f2f0cec3f09118b2e04e55f838ed2aa";
+const SKILL_DIGEST = "060fe57810e8bc2ca9bb21a40db3b32c5d887174259bc96e265152c04a2d4689";
 
 test('the skill document when read → matches its pinned digest', () => {
   assert.equal(createHash('sha256').update(readSkill()).digest('hex'), SKILL_DIGEST,
-    'skills/epic-merge/SKILL.md changed. This document is one of three that carry an Anchor '
+    'skills/epic-merge/SKILL.md changed. This document is one of four that carry an Anchor '
     + 'Register #4 grant, so the change is meant to be read: confirm no step, table row or code '
     + 'fence now has Claude execute a git/gh form outside `git rebase --onto`, '
     + '`git push --force-with-lease` and `gh pr merge --squash`, and that every destructive step '
