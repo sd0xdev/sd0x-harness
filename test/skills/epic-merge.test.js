@@ -1187,7 +1187,7 @@ test('every git command in the document → carries the canonical prefix', () =>
     'a table cell naming git is not a command and must not be judged as one');
 });
 
-const SKILL_DIGEST = "060fe57810e8bc2ca9bb21a40db3b32c5d887174259bc96e265152c04a2d4689";
+const SKILL_DIGEST = "3132628b93745ccd709164cc9e0a19aea0b6724db9b7300f49691d1f1e4a05a2";
 
 test('the skill document when read → matches its pinned digest', () => {
   assert.equal(createHash('sha256').update(readSkill()).digest('hex'), SKILL_DIGEST,
@@ -5082,4 +5082,96 @@ test('the rollback push when the remote tip moved after classification → refus
   assert.equal(ok.status, 0, 'the undrifted attested rollback must still push: ' + ok.err);
   assert.match(ok.pushArgs, /--force-with-lease=refs\/heads\/feat\/pr-3:/,
     'and carry its own lease: ' + ok.pushArgs);
+});
+
+test('the bundled approval when a rewrite is measured → names the remote tip Step 5 binds the lease to', () => {
+  // Step 5 carries the classifier's REMOTE_TIP as APPROVED_TIP and binds the lease to it. The
+  // per-step question showed it; the bundled Proceed question did not, so the default path bound
+  // execution to a value no approval had covered.
+  const skill = readFileSync(skillPath, 'utf8');
+  const proceed = skill.split('\n').find((l) => l.startsWith('| 2 | `question` | `"Proceed with PR #'));
+  assert.ok(proceed, 'the bundled Proceed question row must exist');
+  assert.match(proceed, /` \(a history rewrite, replacing <REMOTE_TIP>\)` on a \*\*measured rewrite\*\*, with the \*\*full object ID\*\*/,
+    'the bundled rewrite clause must name the tip, in full');
+  assert.match(proceed, /the value Step 5 then carries as `APPROVED_TIP`/, 'and say why it must');
+  // An unknown reading is not tipless: only LOOKUP_FAILED=1 is. Ancestry errors and an unresolved
+  // cut point leave REMOTE_TIP printed, and Step 5 binds to it.
+  assert.match(proceed, /the remote holds <REMOTE_TIP>\)` whenever the classifier printed a non-empty `REMOTE_TIP`/,
+    'an unknown bundled row must name a printed tip');
+  assert.doesNotMatch(proceed, /which has no tip to name/, 'the tipless claim about every unknown row must not return');
+  const perStep = skill.split('\n').find((l) => l.startsWith('| Before push | `"Manifest verified'));
+  for (const reading of ['`rewrite` →', '`unknown` →', '`fast-forward` →', '`creation` →']) {
+    assert.ok(perStep.includes(reading), `the per-step push question needs its own clause for ${reading}`);
+  }
+  // The rule is scoped to the questions a later fence compares against, and its exceptions are named
+  // — the "whatever the reading / only LOOKUP_FAILED" version contradicted its own clause tables.
+  assert.match(skill, /\*\*One rule for the approval questions a later fence compares against\*\*/,
+    'the shared naming rule must be stated once, with its scope');
+  assert.doesNotMatch(skill, /whatever the reading — because\s+Step 5 binds/, 'the over-broad version must not return');
+  const rollback2 = skill.split('\n').find((l) => l.startsWith('| 2 | `question` | `"Rollback: force-push'));
+  assert.match(rollback2, /treated fail-closed as a rewrite; the remote holds <REMOTE_TIP>\.` whenever the classifier printed a non-empty one/,
+    'the rollback unknown question must name a printed tip — its fence compares against it');
+  assert.match(proceed, /the remote holds no <head> — nothing there is overwritten/,
+    'the head-absent bundled state needs a clause of its own');
+  // The rule's exception for unshared questions covers the iteration ones only; rollback gate 1 names the tip.
+  const rollback1 = skill.split('\n').find((l) => l.startsWith('| 1 | `question` | `"Is anybody else working on <head>? The rollback'));
+  assert.ok(rollback1 && /over <REMOTE_TIP>/.test(rollback1), 'rollback gate 1 must keep naming the tip');
+  assert.match(skill, /rollback gate 1 names `<REMOTE_TIP>` as context for the same question/,
+    'the shared rule must not contradict rollback gate 1');
+});
+
+test('the deleted-head rollback row when read → describes the guard that stops it, not a retired lease', () => {
+  const skill = readFileSync(skillPath, 'utf8');
+  const row = skill.split('\n').find((l) => l.startsWith('| `ROLLBACK_READING=head-deleted` |'));
+  assert.ok(row, 'the head-deleted row must exist');
+  assert.match(row, /the rollback fence's own `case`, which refuses `head-deleted` \*\*before\*\* any push/,
+    'the refusal must be attributed to the classifier guard');
+  assert.doesNotMatch(row, /The push below leases against the tracking ref/, 'the retired mechanism must not return');
+  assert.doesNotMatch(row, /not on the Anchor grant/, 'the value-bearing lease is inside the grant');
+});
+
+test('--force-if-includes beside a lease value when measured → refuses exactly where the value alone refuses', () => {
+  // The safety table used to say the pair SUCCEEDED where the value alone refused. Measured on a
+  // real repository — D committed on the branch and reset away, so it sits in the branch's own
+  // reflog, the shape the claim described — the pair is refused, and only the bare lease plus the
+  // flag goes over D. The doc now states that; this keeps the claim tied to git's behaviour.
+  const skill = readFileSync(skillPath, 'utf8');
+  // The same claim lived in three carriers (two in push-ci); every one of them is checked.
+  const pushCi = readFileSync(resolve(root, 'skills/push-ci/SKILL.md'), 'utf8');
+  for (const [name, text] of [['epic-merge', skill], ['push-ci', pushCi]]) {
+    assert.doesNotMatch(text, /succeeded \(exit 0\)[^.]*where the value alone refuses|combination succeeds exactly where the value alone refuses/,
+      `the withdrawn claim must not return in ${name}`);
+  }
+  // The skill's own stated minimum: below 2.30 the valued form is an unknown option, and the
+  // refusal assertion would pass for the wrong reason.
+  const [maj, min] = (spawnSync('git', ['--version'], { encoding: 'utf8' }).stdout.match(/(\d+)\.(\d+)/) || []).slice(1).map(Number);
+  if (!(maj > 2 || (maj === 2 && min >= 30))) return;
+  const dir = mkdtempSync(resolve(tmpdir(), 'fii-'));
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@x', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@x' };
+  const git = (cwd, ...args) => spawnSync('git', args, { cwd, env, encoding: 'utf8' });
+  try {
+    git(dir, 'init', '-q', '--bare', 'remote.git');
+    git(dir, 'init', '-q', '-b', 'x', 'work');
+    const w = resolve(dir, 'work');
+    const commit = (file, msg) => { require('node:fs').writeFileSync(resolve(w, file), msg); git(w, 'add', file); git(w, 'commit', '-qm', msg); return git(w, 'rev-parse', 'HEAD').stdout.trim(); };
+    const C = commit('f', 'A');
+    git(w, 'remote', 'add', 'origin', '../remote.git');
+    git(w, 'push', '-q', 'origin', 'x');
+    const D = commit('f', 'D');
+    git(w, 'push', '-q', 'origin', 'x');
+    git(w, 'fetch', '-q', 'origin');
+    git(w, 'reset', '-q', '--hard', C);
+    commit('g', 'R');
+    const remoteTip = () => git(dir, '--git-dir', resolve(dir, 'remote.git'), 'rev-parse', 'refs/heads/x').stdout.trim();
+    const spec = 'refs/heads/x:refs/heads/x';
+    const withValue = git(w, 'push', 'origin', `--force-with-lease=refs/heads/x:${C}`, '--force-if-includes', spec);
+    assert.notEqual(withValue.status, 0, 'a lease value plus --force-if-includes must still refuse a moved remote');
+    assert.equal(remoteTip(), D, 'and the collaborator commit must survive');
+    // Control: the bare lease plus the flag is the form that overwrites — the weakness the value closes.
+    const bare = git(w, 'push', 'origin', '--force-with-lease', '--force-if-includes', spec);
+    assert.equal(bare.status, 0, 'the bare lease with the flag goes through when D is in the branch reflog');
+    assert.notEqual(remoteTip(), D, 'and overwrites the collaborator commit');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
