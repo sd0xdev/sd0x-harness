@@ -210,3 +210,13 @@ Stack 同步是 best-effort、exit 不檢查（exit `0` 加 `confirmed absent` �
 `^[+]?[0-9]+$`，skill 與 `create-pr` 共用同一個，測試改為從文件取出 pattern 實際比對（`400`／`+400`／
 `+0400` 必擋，`feat-400` 必放），並以把 pattern 改回舊版的反向驗證確認兩支測試都會紅。另更正 `push` 的
 modify guard：它只擋 `applying` 與 `conflict`，不擋 `pending_submit`（`push` 本身不 unstack，所以無害）。
+
+### 2026-09-23 — 延後項目的後續
+
+上方 8 筆 `[OPPORTUNISTIC_DEFERRED]` 經 maintainer 擴大範圍後，已在 `262d614` 之後的下一個變更中修正，
+每筆附回歸測試：`smart-rebase` 以 `--base` 重跑時保留 `--target`；`push-ci` 的 push 失敗訊息改為「可能已部分
+發佈」、刪除受保護分支仍會觸發 protected prompt 的敘述（gate 端補可執行測試）、`Overwrites:` 行的來源改為
+Phase 1 classifier 並規定先跑；`epic-merge` 的 bundled 核准列出完整 `REMOTE_TIP`、`--force-if-includes` 那格
+改為 2026-09-23 在 git 2.55.0 的實測結果（lease 值加該旗標一樣被拒——原文「反而成功」無法重現，已撤回，並以
+真實 git 的可執行測試固定）、deleted-head 那列改述現行的 classifier guard；六份 README 的 `commit-msg-guard`
+安裝說法改為註明由 `/codex-setup init` 安裝。
