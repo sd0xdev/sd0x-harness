@@ -119,7 +119,7 @@ const PINS = [
 // what Claude executes — and a digest change is a review trigger with a one-command remedy, not a
 // false positive. The section pins stay because they name the likeliest change precisely; the
 // digest is what makes the coverage complete.
-const SKILL_DIGEST = '67e119432a2b2c71891483fb91eb63e52fe989da0933a79f4aa75f3773066595';
+const SKILL_DIGEST = '97a58dae1219bd52c29b73a28ad316d446f755b1c4dd043a757df81f94ac845b';
 
 function digestOf(text) {
   return createHash('sha256').update(text).digest('hex');
@@ -2060,8 +2060,8 @@ test('an option taking a ref value in the skill → carries it as a joined quote
       'smart-rebase-analyze.sh --target=<quoted target>',
       'smart-rebase-analyze.sh --target <quoted target>'],
     'a bare value on --base': [
-      'smart-rebase-analyze.sh --base=<quoted branch-or-commit>',
-      'smart-rebase-analyze.sh --base fix/feature-xyz'],
+      'smart-rebase-analyze.sh --target=<quoted target> --base=<quoted branch-or-commit>',
+      'smart-rebase-analyze.sh --target=<quoted target> --base fix/feature-xyz'],
   };
   for (const [label, [from, to]] of Object.entries(breakages)) {
     const reverted = skill.replace(from, to);
@@ -2083,7 +2083,7 @@ test('a quoted slot in the skill → is never nested inside another pair of quot
   assert.deepEqual(nested, [],
     `a slot that already carries its quotes must not be wrapped again: ${JSON.stringify(nested)}`);
   // The negative control, and the exact text this file shipped one round ago.
-  const reverted = skill.replace('smart-rebase-analyze.sh --base=<quoted branch-or-commit>',
+  const reverted = skill.replace('smart-rebase-analyze.sh --target=<quoted target> --base=<quoted branch-or-commit>',
     "smart-rebase-analyze.sh '--base=<quoted branch-or-commit>'");
   assert.notEqual(reverted, skill, 'the fixture must differ from the skill');
   assert.notEqual(quoteNestedPlaceholders(reverted).length, 0,
@@ -2237,8 +2237,8 @@ test('the quoting guard when a bare slot returns anywhere → reports it', () =>
       'git merge-base --end-of-options <quoted base-branch> HEAD',
       'git merge-base <base-branch> HEAD'],
     'the Step 2 analysis re-run': [
-      'smart-rebase-analyze.sh --base=<quoted branch-or-commit>',
-      'smart-rebase-analyze.sh --base <branch-or-commit>'],
+      'smart-rebase-analyze.sh --target=<quoted target> --base=<quoted branch-or-commit>',
+      'smart-rebase-analyze.sh --target=<quoted target> --base <branch-or-commit>'],
     'the Step 6 count command': [
       'range=$(git log --oneline HEAD --not --end-of-options <quoted target>)',
       'range=$(git log --oneline HEAD --not <target>)'],
@@ -3295,4 +3295,20 @@ test('the Step 5 ambiguity guard under an imported `[` → still refuses, and th
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('every --base re-run of the analyzer when rendered → carries the --target Step 1 used', () => {
+  // The analyzer initialises TARGET="origin/main" on every invocation, so a base-only re-run after
+  // an origin/develop analysis plans — and emits the rebase command — against origin/main.
+  const baseOnly = (md) => md.split('\n')
+    .filter((l) => /smart-rebase-analyze\.sh\b.*--base=/.test(l) && !/--target=/.test(l));
+  assert.deepEqual(baseOnly(skill), [], 'a --base invocation without --target resets the target silently');
+  assert.ok(/smart-rebase-analyze\.sh --target=<quoted target> --base=<quoted branch-or-commit>/.test(skill),
+    'Step 2 must show the combined form');
+  // Control: the same check must see the defect it exists for.
+  assert.equal(baseOnly('bash skills/smart-rebase/scripts/smart-rebase-analyze.sh --base=x').length, 1,
+    'the check must report a base-only invocation');
+  const script = readFileSync(resolve(__dirname, '../../skills/smart-rebase/scripts/smart-rebase-analyze.sh'), 'utf8');
+  assert.match(script, /^TARGET="origin\/main"$/m,
+    'the reason for the rule — the per-invocation default — must still hold; drop the rule if it does not');
 });

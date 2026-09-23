@@ -226,16 +226,22 @@ Auto-detect mode uses `git cherry` to find commits already cherry-picked to targ
 ```bash
 # Resolve the common ancestor as cut candidate
 git merge-base --end-of-options <quoted base-branch> HEAD
-# Or specify the cut point commit directly
-bash skills/smart-rebase/scripts/smart-rebase-analyze.sh --base=<quoted branch-or-commit>
+# Or specify the cut point commit directly — with the SAME --target Step 1 used
+bash skills/smart-rebase/scripts/smart-rebase-analyze.sh --target=<quoted target> --base=<quoted branch-or-commit>
 ```
+
+**Every `--base` re-run carries the `--target` Step 1 used.** The analyzer resets its target to
+`origin/main` on every invocation (`skills/smart-rebase/scripts/smart-rebase-analyze.sh`, where
+`TARGET` is initialised before argument parsing), so a base-only re-run after an `origin/develop`
+analysis plans — and emits a rebase command — against `origin/main`. When Step 1 used the default,
+`--target=origin/main` restates it; it is never wrong to pass it.
 
 **Case B — Inference needed**
 
 1. Check `target_new` squash merge commit messages
 2. Compare with `commits` messages in current branch
 3. Identify which commits are covered by the squash merge
-4. Confirm cut point and re-run with `--base`
+4. Confirm cut point and re-run with `--base` **and the same `--target`** as Step 1 (Case A's command)
 
 **Case C — `git cherry` detected all**
 
