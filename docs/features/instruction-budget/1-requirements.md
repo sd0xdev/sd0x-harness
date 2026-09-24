@@ -5,6 +5,8 @@
 > **Updated**: 2026-09-24
 > **Tier**: standard
 > **Intent**: [intent-instruction-budget.md](./intent-instruction-budget.md)
+> **Tech Spec**: [2-tech-spec.md](./2-tech-spec.md)
+> **Request tickets**: See [`requests/`](./requests/) for per-task execution tracking
 
 ## 1. Problem Statement
 
