@@ -6,6 +6,7 @@
 > **Tier**: standard
 > **Intent**: [intent-git-autonomy.md](./intent-git-autonomy.md)
 > **Tech Spec**: [2-tech-spec.md](./2-tech-spec.md)
+> **Request tickets**: See [`requests/`](./requests/) for per-task execution tracking
 
 ## 1. Problem Statement
 
@@ -153,6 +154,7 @@ Priority: Must / Should / Could / Won't (MoSCoW)
 ## 10. References
 
 - Tech Spec: [2-tech-spec.md](./2-tech-spec.md) — downstream design
+- Request tickets: [`./requests/`](./requests/) — R1–R6, per-task execution tracking
 - `rules/discretion.md` § Anchor Register #4, § Efficacy Boundary — the closed exception list and the credential rule
 - `rules/git-workflow.md` L8–15 (grant block), L20–21 (protected), L25 (push safety) — byte-pinned by `test/rules/discretion-tiers.test.js`
 - `rules/auto-loop.md` § Override Contract; `rules/testing.md` § Project Customization — the override mechanism to replicate
