@@ -130,21 +130,26 @@ the merge uses. No match → the step is refused, never created.
 - `pre-push-gate.sh` **inlines** the same function (it runs as a single copied hook file and
   re-execs under `bash -p`); a parity test runs both over one fixture corpus.
 
-**`review-state.js offer [--format=json]`** → `{offer, kind, reason, branch, digest}`
+**`review-state.js offer [--format=json|fact|md]`** → `{offer, kind, reason, branch, digest, push_dropped}` (`md` prints the one reminder line `stop-guard.sh` shows, or nothing)
 - `kind`: `commit` (uncommitted changes), `commit+push`, `push` (clean tree, commits ahead of
   upstream), or `none`.
 - `offer:true` only when: a real branch (detached → `none`); the push kinds require
   `protected-branches.sh` to exit 1 — on a protected branch (exit 0 or 2) `commit+push` becomes a
   commit-only menu and `push` becomes `none`, because a local commit publishes nothing; every plane whose change class
   appears in what the offer would publish — uncommitted changes ∪ commits ahead of the upstream
-  (or of the default branch's merge-base when there is none) — is **passed** at the current digest
+  (or of the default branch's merge-base when there is none), counted **per commit** — `git log --name-only
+  --no-renames --diff-merges=first-parent`, so a reverted change, both sides of a rename and a change made
+  while resolving a merge all count — is **passed** at the current digest
   (`noted ∧ digest_match ∧ verdict pass`, not merely "not owed": a clean plane is never owed, so
   owed-ness cannot vouch for a clean-tree push); the project's
   `## Offer Mode` is not `off` (`commit-only` turns `commit+push` into a commit-only menu and
   `push` into `none`); the menu has **not already been shown** at this digest.
 - `reason` for `false`: `detached` · `protected` (push-only work on a protected branch) ·
   `protected-unknown` (exit 2, same) · `gates-open` · `already-offered` · `disabled` ·
-  `nothing-to-do`. A commit-only menu on a protected branch carries `push_dropped: protected`.
+  `nothing-to-do`. When a push option is dropped from a commit menu, `push_dropped` names why, most
+  specific first: `commit-only` (the setting), `protected` / `protected-unknown` (the branch),
+  `ahead-unknown` (no upstream and no `origin/HEAD`, so what a push would publish cannot be
+  established — no push kind is offered). The gate verdicts and the digest come from one tree read.
 
 **On selection**, the model re-runs `offer` and proceeds only if it returns `offer:true` with the
 **same digest, branch and `kind`** it showed the menu for, and the picked option is still in the
