@@ -2,7 +2,7 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md` (created via `/req-analyze`).
 > **Created**: 2026-09-24
-> **Status**: Pending
+> **Status**: Candidate Complete
 > **Priority**: P1
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) <- Technical detail (primary source)
 > **Requirements**: [1-requirements.md](../1-requirements.md) <- Feature-level problem-space rationale
@@ -41,20 +41,20 @@ Maintainer decision 2026-09-24: a project may declare its deploy workflow and th
 
 ## Acceptance Criteria
 
-- [ ] `validateDestructiveContract` accepts the new `Exception:` line and `AUTHORIZED_GRANTS` lists `/deploy-flow` in order; Register and grant pins updated in one change citing the maintainer decision
-- [ ] Merge happy path, conflict → `--abort`, dirty tree refused, undeclared step never offered, source or target moved after approval → abort with nothing merged
-- [ ] `release/*` binds only to a user-picked existing branch; a valid branch name containing `$(…)` merges without shell evaluation
-- [ ] Post-merge read-back ignores a replace ref and an inherited `ALLOW_AI_COAUTHOR`; a `commit-msg` hook appending an AI trailer is caught and the flow stops naming the OID
-- [ ] `--ff-only` verifies HEAD == SRC_OID with TGT_OID as ancestor and checks no message
-- [ ] `Run Steps`: default `print` executes nothing; `execute` runs a step only after its approval; invalid value is a parse error; tokens outside `^[A-Za-z0-9._/@:=+,-]+$`, or a script path resolving outside the repository, are a parse error
-- [ ] Each `execute` question states the run-script risk verbatim from tech spec § 3.3 step 3
-- [ ] `/deploy-flow` appears in `docs/skill-catalog.yml` and the generated README catalog, and a suggested release reaches the user as an option that invokes it, never as copy-text
+- [x] `validateDestructiveContract` accepts the new `Exception:` line and `AUTHORIZED_GRANTS` lists `/deploy-flow` in order; Register and grant pins updated in one change citing the maintainer decision
+- [x] Merge happy path, conflict → `--abort`, dirty tree refused, undeclared step never offered, source or target moved after approval → abort with nothing merged
+- [x] `release/*` binds only to a user-picked existing branch; a valid branch name containing `$(…)` merges without shell evaluation
+- [x] Post-merge read-back ignores a replace ref and an inherited `ALLOW_AI_COAUTHOR`; a `commit-msg` hook appending an AI trailer is caught and the flow stops naming the OID
+- [x] `--ff-only` verifies HEAD == SRC_OID with TGT_OID as ancestor and checks no message
+- [x] `Run Steps`: default `print` executes nothing; `execute` runs a step only after its approval; invalid value is a parse error; tokens outside `^[A-Za-z0-9._/@:=+,-]+$`, or a script path resolving outside the repository, are a parse error
+- [x] Each `execute` question states the run-script risk verbatim from tech spec § 3.3 step 3
+- [x] `/deploy-flow` appears in `docs/skill-catalog.yml` and the generated README catalog, and a suggested release reaches the user as an option that invokes it, never as copy-text
 
 ## Progress
 
 | Phase      | Status | Note |
 | ---------- | ------ | ---- |
-| Analysis   | -      |      |
-| Development | -     |      |
-| Testing    | -      |      |
-| Acceptance | -      |      |
+| Analysis   | Done   | Grant wording kept to two code spans (`git switch`, `git merge`) so the pinned validator reads exactly what is granted |
+| Development | Done  | `skills/deploy-flow/` (skill + `deploy-flow.sh`); grant block, Register #4 and both CLAUDE rule 4 lines; § Proactive Offer names `/deploy-flow`; catalog + six READMEs |
+| Testing    | Done   | `test/skills/deploy-flow.test.js` (25, incl. run approval bound to HEAD + script blob, tracked-only run scripts, declaration order: grammar, symlink/outside paths, pattern binding, happy/conflict/dirty/undeclared/moved, `$(…)` name as data, `--ff-only`, hook-appended trailer caught, pre-merge guard mutation, target-branch guard copy ignored, print vs execute, argv); Register/grant pins re-recorded; `npm test` 4913/4913; `/precommit` ✅ PASS |
+| Acceptance | Done   | Codex thorough review ✅ Ready after fixes (clean-tree gap incl. untracked, plugin locator, guard bytes pinned before the switch; doc review: run approval bound to HEAD + script blob, run scripts must be tracked, steps in declaration order); `--verify-ac` not yet run, hence Candidate Complete |

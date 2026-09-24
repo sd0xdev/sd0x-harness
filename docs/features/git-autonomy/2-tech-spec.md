@@ -187,16 +187,28 @@ protected pre-approval then applies.
 
 **`/deploy-flow`** (new skill, `disable-model-invocation` **not** set, `AskUserQuestion` in
 `allowed-tools`)
-1. Parse `## Deploy Workflow`; refuse on parse error or dirty tree.
+1. Parse `## Deploy Workflow`; refuse on parse error or a dirty tree — tracked and untracked files
+   (ignored ones excluded), checked again before every merge and every `run`. A declared `run`
+   script must be **tracked**, so a change to it always reads as dirty, and each `run` approval
+   names the `HEAD` commit and the script's blob hash, re-checked immediately before execution — a
+   step approved against one tree never runs a modified, swapped or ignored script. The executable half is
+   `skills/deploy-flow/scripts/deploy-flow.sh` (`parse` · `clean` · `candidates` · `resolve` · `merge` · `run-plan` · `run`).
 2. For each `merge` step: resolve `SRC_OID`/`TGT_OID` (`git rev-parse --verify refs/heads/<name>`)
    and ask one AskUserQuestion naming source, target, form and both full OIDs. On approval,
    re-resolve both and **abort if either moved**; `git switch <target>`, assert `HEAD == TGT_OID`,
    (every branch name reaches git as its own argv entry after `--` where git accepts one — never
    interpolated into a shell string; a test uses a valid name containing `$(…)`)
-   then `git merge <form> -m "Merge branch '<source>' into <target>" <SRC_OID>` — the approved
+   then `git merge --no-ff --no-edit -F <file holding "Merge branch '<source>' into <target>"> <SRC_OID>` — the approved
    object, never the name (default `--no-ff`). The message is that **fixed template**, never
    model-authored, run through `commit-msg-guard.sh` before the merge (a rejection refuses the
-   step). The merge runs with `--no-edit` and `GIT_MERGE_AUTOEDIT=no`, so no editor can change it.
+   step). The guard is the first readable regular file of, in order: `<repo>/.claude/scripts/`
+   (the installed copy), `<repo>/scripts/` (the plugin's own checkout), `$CLAUDE_PLUGIN_ROOT/scripts/`
+   when that variable is set, and the plugin tree the helper runs from when it runs from
+   `skills/deploy-flow/scripts/` — never a path relative to an installed helper. The first two are
+   repository files; the last two name the plugin's own files. Whichever is
+   chosen is copied privately **before** the switch, so within one `merge` call both checks run the
+   same bytes and a target branch that tracks its own copy cannot supply them; it is not re-bound to
+   the approval, so a copy replaced between approval and execution is the one that judges. The merge runs with `--no-edit` and `GIT_MERGE_AUTOEDIT=no`, so no editor can change it.
    A `commit-msg` hook still can, so the check that **establishes** INV-002 comes after, under the
    same environment fence as `smart-commit-execute.sh` (every git call behind its `env -u GIT_*`
    list, `ALLOW_AI_COAUTHOR` unset for the guard): read back the created commit's message and
