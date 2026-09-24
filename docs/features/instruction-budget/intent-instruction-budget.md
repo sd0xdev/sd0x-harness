@@ -12,7 +12,8 @@ keeps real room for its own instructions. Every rule is still in context when it
 ## Non-goals
 
 - Rewording a rule's content. This feature changes where and when a rule loads, not what it says.
-- Moving Anchor-tier text out of the always-loaded set without the maintainer's approval.
+- Leaving any Anchor rule without an always-loaded statement of it. Register #3's testing rows
+  may path-scope with `testing.md` because `discretion.md` Register #3 states their rule.
 - Making `/claude-health` enforce the limit, edit files, or delete a user's lessons log.
 - Re-doing `rules-residency`'s kernel rewrite, canary cohort or Anchor compaction.
 
