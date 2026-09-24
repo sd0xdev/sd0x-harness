@@ -52,7 +52,18 @@ sequenceDiagram
     RS->>PB: is <branch> protected?
     PB-->>RS: exit 0 protected / 1 not / 2 unreadable (→ protected)
     RS-->>M: {offer:true|false, reason, kind}
-    alt offer:true
+    alt Goal mode holds (§ 3.5) — checked first, it takes precedence for the commit
+        M->>SC: invoke → plan printed with a [GOAL_COMMIT] record, no menu, no approval question
+        M->>RS: offer again — a fresh result, computed after the commit
+        opt the fresh offer is true with kind push
+            M->>U: AskUserQuestion — push / not now (only what the fresh result allows)
+            M->>RS: on push: offer again — same digest, branch, kind?
+            M->>RS: offer-shown <digest> — whatever was chosen
+            opt push picked and still offered
+                M->>PC: invoke → its own plan + approval
+            end
+        end
+    else offer:true (Goal mode does not hold)
         M->>U: AskUserQuestion — commit / commit and push / not now
         U-->>M: selection (router, never the credential)
         opt a workflow was picked
@@ -183,7 +194,8 @@ once. Nothing here writes the override; Scaffold invokes `/install-rules --custo
 | `push` | "Push (`/push-ci`)" · "Not now" |
 
 The question text states that each workflow will show its own plan and ask again. Picking an option
-**invokes** the workflow; the workflow's AskUserQuestion is the credential (INV-001). The menu is
+**invokes** the workflow; the workflow's AskUserQuestion is the credential (INV-001) — except a
+commit under Goal mode (§ 3.5), which takes precedence over this menu and prints its plan instead. The menu is
 never offered for `stash`, `reset --hard` or `rebase` (FR-13).
 
 **Suggested next command → option, never text (FR-16).** Wherever the model or a skill would end a
@@ -284,13 +296,21 @@ behaviour layer only, like the per-use approval it stands in for.
    asks one AskUserQuestion recommending a feature branch (`git switch -c <suggested name>`, then
    commit there); if the user declines, a second question asks whether commits on this branch may
    proceed for this goal. Yes → this and later commits of the same goal on that branch run unasked;
-   no → the ordinary menu. The allowance is held in conversation and ends with the goal. A detached
-   HEAD always falls back to the menu.
-4. `review-state.js check` reads `pass` for every plane the change classes require at the current
-   digest, and the project has not set `## Goal Commit: off` (§ 3.2).
+   no → the ordinary menu. The allowance is held in conversation and ends with the goal. On a
+   detached HEAD Goal mode is unavailable and no menu is offered (`offer` answers `detached`); a
+   commit the user asks for there takes `/smart-commit`'s ordinary per-use approval.
+4. Every plane the change classes require is passed at the current digest, and the project has not
+   set `## Goal Commit` set to `off` (the heading, then a bare `off` line under it) (§ 3.2).
+
+Conditions 3 and 4 are one call, `review-state.js goal-commit --format=json` →
+`{ok, reason, branch, digest, needs_branch_allowance}` (`reason`: `detached` · `nothing-to-do` ·
+`disabled` · `gates-open`); a protected branch answers `ok: true` with `needs_branch_allowance: true`.
+Conditions 1 and 2 are behaviour-layer only — no hook input carries the goal. When all four hold,
+Goal mode takes precedence over the offer menu for the commit (`rules/git-workflow.md` § Proactive
+Offer); a push still goes through the menu and `/push-ci`'s own approval.
 
 **What changes in `/smart-commit --execute`.** Only the one plan approval (Step 5, "show the full
-commit plan … and get approval once"): under a counting goal the plan is printed with a `[GOAL_COMMIT] goal=<sha256 of the condition, first 12 hex> | branch=<b> | digest=<d> | <ISO8601>`
+commit plan … and get approval once"): under a counting goal the plan is printed with a `[GOAL_COMMIT] goal=<first 12 hex of git hash-object --stdin of the condition> | branch=<b> | digest=<d> | <ISO8601>`
 record and execution proceeds. The goal text itself is never printed, since a user may have put a
 secret in it. Every validation still runs, and every *judgement* prompt still asks —
 identity conflict, unresolved grouping, a sensitive-file exclusion to confirm. `--ai-co-author` is
@@ -345,7 +365,7 @@ Order: R1 → R2 (R2's protected heading needs R1) → R3 ∥ R4 → R5 → R6; 
 | Integration | Real temp repos: `/deploy-flow` step parser; merge happy path, conflict → `--abort`, refusal on dirty tree, undeclared step never offered, source or target moved after approval → abort with nothing merged, `release/*` pattern binds only to a user-picked existing branch; `--ff-only` verifies HEAD == SRC_OID with TGT_OID as ancestor and checks no message; the merge read-back ignores a replace ref and an inherited `ALLOW_AI_COAUTHOR`; `Run Steps`: default `print` executes nothing, `execute` runs a step only after its approval and never after a refusal, an invalid mode value is a parse error, arguments arrive as separate argv entries |
 | Contract | `discretion-tiers` and `override-contract` pins updated with the new grant; `validateDestructiveContract` accepts the new `Exception:` line; `push-ci.test.js` "no exceptions" still green and `SKILL_DIGEST` re-recorded after the full-diff review; a new test asserts `push-ci` frontmatter has no `disable-model-invocation` |
 | Guard (both directions) | Menu path reaches `smart-commit-execute.sh commit` (AI trailer → exit 4); `/deploy-flow`'s pre-merge `commit-msg-guard.sh` check passes the fixed template and refuses the step when the guard rejects (mutation proof on that call); a `commit-msg` hook that appends an AI trailer during the merge is caught by the post-merge read-back and stops the flow naming the OID; override omitting `main` → `main` still protected in all four workflows |
-| Goal-mode commit | Contract tests on the rule text for each § 3.5 condition in both directions (user goal on a feature branch → no question; a protected branch the user allowed for the goal → no question after the first-commit pair; a protected branch not yet allowed or declined, model-set goal, `/goal clear`, open gate, `Goal Commit: off` → the ordinary approval); the goal path still reaches `smart-commit-execute.sh commit` (AI trailer → exit 4) and never passes `--ai-co-author` |
+| Goal-mode commit | Contract tests on the rule text for each § 3.5 condition in both directions (user goal on a feature branch → no question; a protected branch the user allowed for the goal → no question after the first-commit pair; a protected branch not yet allowed or declined, model-set goal, `/goal clear`, open gate, `## Goal Commit` set to `off` (the heading, then a bare `off` line under it) → the ordinary approval); the goal path still reaches `smart-commit-execute.sh commit` (AI trailer → exit 4) and never passes `--ai-co-author` |
 | Carriers | Override count/list agrees with `rules/*-project.md` on disk in every carrier (NFR-5) |
 
 ## 7. Open Questions
