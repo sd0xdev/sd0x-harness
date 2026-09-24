@@ -2,7 +2,7 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md` (created via `/req-analyze`).
 > **Created**: 2026-09-24
-> **Status**: Pending
+> **Status**: In Progress
 > **Priority**: P1
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) <- Technical detail (primary source)
 > **Requirements**: [1-requirements.md](../1-requirements.md) <- Feature-level problem-space rationale
@@ -34,17 +34,17 @@ The only repeat-call restriction on `/push-ci` is `disable-model-invocation: tru
 
 ## Acceptance Criteria
 
-- [ ] `push-ci` frontmatter carries no `disable-model-invocation`, asserted by a test
-- [ ] The "no exceptions" pin still passes unchanged
-- [ ] § Authorization names `/deploy-flow` as a column and the run-script boundary; "All Other Skills" note excludes it
+- [x] `push-ci` frontmatter carries no `disable-model-invocation`, asserted by a test
+- [x] The "no exceptions" pin still passes unchanged
+- [x] § Authorization names `/deploy-flow` as a column and the run-script boundary; "All Other Skills" note excludes it
 - [ ] Two model invocations in one session on a branch with new commits each run Phase 0/1 and ask their own approval (walkthrough recorded in Progress)
-- [ ] `SKILL_DIGEST` re-recorded after the full-diff review; `npm test` green
+- [x] `SKILL_DIGEST` re-recorded after the full-diff review; `npm test` green
 
 ## Progress
 
 | Phase      | Status | Note |
 | ---------- | ------ | ---- |
-| Analysis   | -      |      |
-| Development | -     |      |
-| Testing    | -      |      |
-| Acceptance | -      |      |
+| Analysis   | Done   | `/gh-stack` never carried `disable-model-invocation`, so R3 changes `/push-ci` alone; `/epic-merge` keeps the flag |
+| Development | Done  | Flag removed; § Prohibited "Auto-triggering" → per-invocation approval; § Authorization block and table gain `/deploy-flow` |
+| Testing    | Done   | Frontmatter test (push-ci invocable, epic-merge not); "no exceptions" pin unchanged; `SKILL_DIGEST` re-recorded after the full-diff review; `npm test` 4876/4876 |
+| Acceptance | Pending | Codex thorough review ✅ Ready. The two-invocation walkthrough is still owed — it needs a branch with new commits and a real push, so it waits for the next feature-branch push |

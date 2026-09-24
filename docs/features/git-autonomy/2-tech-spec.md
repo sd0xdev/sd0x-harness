@@ -18,7 +18,7 @@
   Register #4 exception**; `run` steps are the project's choice, with the risk stated; `git merge`
   stays **off** the forbidden list; the pain to remove is the copy-paste of a suggested
   `/smart-commit --execute` on a phone (FR-16); while a goal the user set is active, the model
-  commits on a feature branch without a per-use question (FR-17, § 3.5).
+  commits without a per-use question — on a protected branch only once the user allowed it (FR-17, § 3.5).
 - **Scope**: rules, skills, one script, one hook line, tests. No change to `commit-msg-guard.sh`,
   `smart-commit-execute.sh`, `/create-pr` sanitization, or the `ALLOW_*` contract.
 
@@ -250,8 +250,13 @@ behaviour layer only, like the per-use approval it stands in for.
    nothing after it reports the goal ended — met, impossible, cleared by `/goal clear`, cleared by an
    error, or superseded by another goal. `/clear` or a compaction that drops the set notice removes
    the evidence, and missing evidence reads as *no goal* (fail-closed). A new user goal re-arms it.
-3. The branch is a **feature branch** (`protected-branches.sh` exit 1). Exit 0 or 2, or a detached
-   HEAD, falls back to the ordinary menu (FR-4).
+3. The branch is a **feature branch** (`protected-branches.sh` exit 1), **or** a protected branch
+   (exit 0 or 2) the user allowed for this goal. The first goal-mode commit on a protected branch
+   asks one AskUserQuestion recommending a feature branch (`git switch -c <suggested name>`, then
+   commit there); if the user declines, a second question asks whether commits on this branch may
+   proceed for this goal. Yes → this and later commits of the same goal on that branch run unasked;
+   no → the ordinary menu. The allowance is held in conversation and ends with the goal. A detached
+   HEAD always falls back to the menu.
 4. `review-state.js check` reads `pass` for every plane the change classes require at the current
    digest, and the project has not set `## Goal Commit: off` (§ 3.2).
 
@@ -270,7 +275,7 @@ execution", and the `--execute` row of § Examples.
 **Anchor edits (R7, maintainer decision 2026-09-24).** Register #4 and the `git-workflow.md` grant
 block gain the credential with its four conditions; § Efficacy Boundary gains one clause saying the
 per-use AskUserQuestion inside `/smart-commit --execute` is replaced — not bypassed — by an active
-user-set goal on a feature branch; CLAUDE.md rule 4 names it. Each pin is re-recorded in the same
+user-set goal (on a protected branch, one the user allowed for that goal); CLAUDE.md rule 4 names it. Each pin is re-recorded in the same
 reviewed change.
 
 ## 4. Risks and Dependencies
@@ -311,7 +316,7 @@ Order: R1 → R2 (R2's protected heading needs R1) → R3 ∥ R4 → R5 → R6; 
 | Integration | Real temp repos: `/deploy-flow` step parser; merge happy path, conflict → `--abort`, refusal on dirty tree, undeclared step never offered, source or target moved after approval → abort with nothing merged, `release/*` pattern binds only to a user-picked existing branch; `--ff-only` verifies HEAD == SRC_OID with TGT_OID as ancestor and checks no message; the merge read-back ignores a replace ref and an inherited `ALLOW_AI_COAUTHOR`; `Run Steps`: default `print` executes nothing, `execute` runs a step only after its approval and never after a refusal, an invalid mode value is a parse error, arguments arrive as separate argv entries |
 | Contract | `discretion-tiers` and `override-contract` pins updated with the new grant; `validateDestructiveContract` accepts the new `Exception:` line; `push-ci.test.js` "no exceptions" still green and `SKILL_DIGEST` re-recorded after the full-diff review; a new test asserts `push-ci` frontmatter has no `disable-model-invocation` |
 | Guard (both directions) | Menu path reaches `smart-commit-execute.sh commit` (AI trailer → exit 4); `/deploy-flow`'s pre-merge `commit-msg-guard.sh` check passes the fixed template and refuses the step when the guard rejects (mutation proof on that call); a `commit-msg` hook that appends an AI trailer during the merge is caught by the post-merge read-back and stops the flow naming the OID; override omitting `main` → `main` still protected in all four workflows |
-| Goal-mode commit | Contract tests on the rule text for each § 3.5 condition in both directions (user goal → no question; model-set goal, `/goal clear`, protected branch, open gate, `Goal Commit: off` → the ordinary approval); the goal path still reaches `smart-commit-execute.sh commit` (AI trailer → exit 4) and never passes `--ai-co-author` |
+| Goal-mode commit | Contract tests on the rule text for each § 3.5 condition in both directions (user goal on a feature branch → no question; a protected branch the user allowed for the goal → no question after the first-commit pair; a protected branch not yet allowed or declined, model-set goal, `/goal clear`, open gate, `Goal Commit: off` → the ordinary approval); the goal path still reaches `smart-commit-execute.sh commit` (AI trailer → exit 4) and never passes `--ai-co-author` |
 | Carriers | Override count/list agrees with `rules/*-project.md` on disk in every carrier (NFR-5) |
 
 ## 7. Open Questions
@@ -324,6 +329,5 @@ Order: R1 → R2 (R2's protected heading needs R1) → R3 ∥ R4 → R5 → R6; 
   `/smart-commit --execute`, worst on a phone. FR-16: any suggested git workflow is an
   AskUserQuestion option that invokes the skill; commit menus are allowed on protected branches
   too (a local commit publishes nothing), push kinds are not.
-- [ ] **Q4 goal-mode commit on protected branches** — § 3.5 condition 3 limits it to feature
-  branches (a local commit on `main` publishes nothing, but an unattended one is harder to spot).
-  Widening it is the maintainer's call.
+- [x] **Q4 goal-mode commit on protected branches** — resolved 2026-09-24: allowed after the
+  first-commit questions in § 3.5 condition 3 (feature branch recommended first).

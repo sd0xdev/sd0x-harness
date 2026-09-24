@@ -2,7 +2,7 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md` (created via `/req-analyze`).
 > **Created**: 2026-09-24
-> **Status**: Pending
+> **Status**: Candidate Complete
 > **Priority**: P1
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) <- Technical detail (primary source)
 > **Requirements**: [1-requirements.md](../1-requirements.md) <- Feature-level problem-space rationale
@@ -40,18 +40,18 @@ A third user-owned override, same Anchor-first contract as `auto-loop-project.md
 
 ## Acceptance Criteria
 
-- [ ] `/install-rules` copies all three override templates once, stamping `Based on:` with the base blob hash, and never rewrites an installed one
-- [ ] An override heading that hits the Anchor Register is reported as a conflict and ignored
-- [ ] `claude-health` S2.5 reports drift and missing-reference for all three files, and the three conflict classes above
-- [ ] A test fails when any carrier's override count or list disagrees with `rules/*-project.md` on disk
-- [ ] `override-contract.test.js` pins `git-workflow.md` § Project Customization like the other two sections
-- [ ] `npm test` green; README rule counts regenerated and matching disk
+- [x] `/install-rules` copies all three override templates once, stamping `Based on:` with the base blob hash, and never rewrites an installed one
+- [x] An override heading that hits the Anchor Register is reported as a conflict and ignored
+- [x] `claude-health` S2.5 reports drift and missing-reference for all three files, and the three conflict classes above
+- [x] A test fails when any carrier's override count or list disagrees with `rules/*-project.md` on disk
+- [x] `override-contract.test.js` pins `git-workflow.md` § Project Customization like the other two sections
+- [x] `npm test` green; README rule counts regenerated and matching disk
 
 ## Progress
 
 | Phase      | Status | Note |
 | ---------- | ------ | ---- |
-| Analysis   | -      |      |
-| Development | -     |      |
-| Testing    | -      |      |
-| Acceptance | -      |      |
+| Analysis   | Done   | Settings-only scaffold per tech spec § 3.2; `## Project Customization` mirrors `testing.md`'s |
+| Development | Done  | `rules/git-workflow-project.md`; `git-workflow.md` § Project Customization; registered in discretion, CLAUDE*, docs/rules, install-rules, project-setup (incl. installing `protected-branches.sh`, the item R1 carried here), claude-health (S2.5 check #7, inventory), rule-override-pattern `override_templates`, six READMEs |
+| Testing    | Done   | `test/rules/override-carriers.test.js` (set comparison, six READMEs, negative control); override-contract pins for the section, preamble and mapping; claude-health check #7; project-setup counts derived from disk; `npm test` 4876/4876; `/precommit` ✅ PASS |
+| Acceptance | Done   | Codex thorough code review ✅ Ready after two P2 fixes (check #7 ran only on active content; carrier test was presence-only); `--verify-ac` not yet run, hence Candidate Complete |

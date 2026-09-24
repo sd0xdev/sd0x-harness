@@ -9,7 +9,7 @@
 On a feature branch, once a change has passed its gates, the model offers commit and push from a
 menu and the user picks — no typed or copy-pasted commands, which on a phone is the whole pain — while every
 credential that authorizes a mutating git operation stays what it is today, plus one: a goal the user
-set lets the model commit on a feature branch (`INV-008`). Projects that
+set lets the model commit on its own (`INV-008`). Projects that
 release their own way get a user-owned `rules/git-workflow-project.md` to say so.
 
 ## Non-goals
@@ -46,9 +46,9 @@ release their own way get a user-owned `rules/git-workflow-project.md` to say so
   what authorizes the push — "Push REQUIRES explicit user approval via AskUserQuestion — no
   exceptions" stays pinned.
 - `INV-007`: One offer per passing digest; `not now` silences it until a new gate pass.
-- `INV-008`: While a goal the **user** set or approved is active, `/smart-commit --execute` on a
-  feature branch may run unasked once the gates pass, through the same guarded commit path. Commit
-  only — push, `/deploy-flow`, protected branches and model-set goals keep today's approvals.
+- `INV-008`: While a goal the **user** set or approved is active, `/smart-commit --execute` may run
+  unasked once the gates pass, through the same guarded commit path — on a protected branch only
+  after the user, asked once, declined a feature branch and allowed it. Commit only.
 
 ## Acceptance sketch
 
