@@ -243,11 +243,11 @@ test('README resource counts: Scripts row count matches top-level scripts/ inven
   const readme = readFileSync(README_PATH, 'utf8');
   const row = readme.split('\n').find((l) => l.startsWith('| Scripts |'));
   assert.ok(row, 'README should have a Scripts resource row');
-  assert.match(row, /^\| Scripts \| 24 \|/, 'script count must be 24');
+  assert.match(row, /^\| Scripts \| 25 \|/, 'script count must be 25');
   const scriptFiles = readdirSync(join(ROOT, 'scripts')).filter(
     (f) => statSync(join(ROOT, 'scripts', f)).isFile() && /\.(sh|js)$/.test(f)
   );
-  assert.equal(scriptFiles.length, 24, `scripts/ inventory drifted: ${scriptFiles.join(', ')}`);
+  assert.equal(scriptFiles.length, 25, `scripts/ inventory drifted: ${scriptFiles.join(', ')}`);
 });
 
 // === deep-explore regression: LOCALE READMEs must not drift from disk inventory ===

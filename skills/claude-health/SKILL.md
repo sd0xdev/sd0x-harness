@@ -1,7 +1,7 @@
 ---
 name: claude-health
 description: "Claude Code config health check + plugin sync. Use when: auditing .claude/ structure, checking naming, verifying hook setup, detecting plugin version drift, syncing installed assets. Not for: skill quality (use skill-health-check), code review (use codex-code-review). Output: health report + fix recommendations."
-allowed-tools: Read, Grep, Glob, Bash(ls:*), Bash(find:*), Bash(wc:*), Bash(du:*), Bash(rm:*), Bash(git:*), Bash(/bin/bash:*)
+allowed-tools: Read, Grep, Glob, Bash(ls:*), Bash(find:*), Bash(wc:*), Bash(du:*), Bash(rm:*), Bash(git:*), Bash(/bin/bash:*), Bash(node:*)
 context: fork
 ---
 
@@ -23,7 +23,8 @@ context: fork
 |----------|-------------|
 | `--scope hygiene` | Only run C1-C7 hygiene checks |
 | `--scope sync` | Only run S1-S3 sync checks |
-| `--scope all` | Run both modules (**default**) |
+| `--scope budget` | Only run the Instruction Budget Module (B1-B3) |
+| `--scope all` | Run every module — hygiene, sync and budget (**default**) |
 
 ## Workflow
 
@@ -242,6 +243,34 @@ Applied to both: settings.json and settings.local.json
 
 **Argument conflict**: `--fix` and `--fix-safe` are mutually exclusive. If both specified, error.
 
+### Instruction Budget Module
+
+Claude Code adds up every always-loaded instruction file at launch and warns when the sum passes a
+total limit. The check reproduces that accounting (2.1.281) so the user learns it here first, with
+the plugin's share separated out. Runs under `--scope budget` and `--scope all` (the default), never
+under `--scope hygiene` or `--scope sync`. The script is the **plugin install's** copy — `$CLAUDE_PLUGIN_ROOT`
+when its real path lies outside the audited repository — **never** a copy inside the audited
+repository (`.claude/scripts/`, `scripts/`), because this check is read-only and the repository
+controls those files. No plugin install found → skip the module with a note:
+
+```bash
+REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "instruction budget: skipped — not in a git repository"; exit 0; }
+PR="${CLAUDE_PLUGIN_ROOT:-}"
+case "$(cd "$PR" 2>/dev/null && pwd -P)/" in "$(cd "$REPO_ROOT" && pwd -P)/"*|/) PR="" ;; esac
+[ -n "$PR" ] && [ -r "$PR/scripts/instruction-budget.js" ] \
+  && node "$PR/scripts/instruction-budget.js" --root "$REPO_ROOT" --plugin-root "$PR" \
+  || echo "instruction budget: skipped — no plugin install outside this repository"
+```
+
+| # | Check | Severity | Recommendation |
+|---|-------|----------|----------------|
+| B1 | Always-loaded total over the limit (total = `max(120000, per-file)`; pass `--per-file` for the model in use — the default is the 150,000 observed on 2.1.281) | P2 | Move a rule on demand (`paths:` frontmatter) or trim it; the three largest files are listed |
+| B2 | A file over the per-file limit | P2 | Claude Code warns on it alone and leaves it out of the total; split or trim it |
+| B3 | A lessons, archive, log or history file in `.claude/rules/` | P2 | Move it out of `rules/` — the lessons log lives at `.claude/sd0x-dev-flow-lessons.md` — or give it `paths:` frontmatter |
+
+The script is read-only; it never edits or moves a file. A missing script skips the module with a
+note rather than guessing a total.
+
 ## Output
 
 ```markdown
@@ -283,6 +312,13 @@ Applied to both: settings.json and settings.local.json
 | Entry integrity | ✅/⛔ | All matched / N missing |
 | Orphan entries | ✅/⛔ | None / N orphans |
 
+## Budget Summary (B1-B3)
+| Check | Status | Detail |
+|-------|--------|--------|
+| B1 Total | ✅/⚠️ | 89,472 / 150,000 chars; plugin share 89,472 |
+| B2 Per-file | ✅/⚠️ | None over / .claude/rules/big.md (152,000) |
+| B3 Lessons in rules/ | ✅/⚠️ | None / .claude/rules/lessons.md → move to .claude/sd0x-dev-flow-lessons.md |
+
 ## Statistics
 
 | Category | Count |
@@ -308,6 +344,7 @@ Applied to both: settings.json and settings.local.json
 
 - [ ] Hygiene: All 7 checks executed (when scope includes hygiene)
 - [ ] Sync: S1-S3 checks executed (when scope includes sync)
+- [ ] Budget: B1-B3 reported, or the skip note printed (when scope is `budget` or `all`)
 - [ ] Each check has clear ✅/⛔ status
 - [ ] P1 issues have specific fix commands
 - [ ] S2 classification covers every file in the managed inventory above (28 today: 12 rules, 7 hooks, 9 scripts)

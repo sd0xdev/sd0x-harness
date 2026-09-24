@@ -450,3 +450,17 @@ test('check #3 when specified → covers every shipped override file and a missi
   assert.match(section, /would otherwise fall through both/,
     'the failure mode is recorded so the coupling is not undone later');
 });
+
+test('Instruction Budget Module when read → sits after Fix Tiers, runs the plugin script, flags lessons files in rules/', () => {
+  // instruction-budget R3: outside the pinned S1-S3 region, read-only, three P2 checks.
+  const fix = skill.indexOf('### Fix Tiers');
+  const mod = skill.indexOf('### Instruction Budget Module');
+  assert.ok(fix !== -1 && mod > fix, 'the module follows Fix Tiers');
+  const section = rawSkill.slice(rawSkill.indexOf('### Instruction Budget Module'), rawSkill.indexOf('\n## Output'));
+  assert.match(section, /instruction-budget\.js/);
+  assert.match(section, /\| B3 \| A lessons, archive, log or history file in `\.claude\/rules\/`/);
+  assert.match(section, /never edits or moves a file/);
+  assert.match(section, /\*\*never\*\* a copy inside the audited\s+repository/, 'a read-only audit never runs repository-controlled code');
+  assert.doesNotMatch(section, /\$REPO_ROOT\/\.claude\/scripts\/instruction-budget\.js/, 'the repository copy is never the one run');
+  assert.match(rawSkill.split('\n').find((l) => l.startsWith('allowed-tools:')), /Bash\(node:\*\)/);
+});
