@@ -22,6 +22,8 @@ const managed = allRules.filter((f) => !OVERRIDE_TEMPLATES.includes(f));
 const M = managed.length;
 const O = OVERRIDE_TEMPLATES.length;
 const TOTAL = M + O;
+// Path-scoped rules (instruction-budget R1) are referenced in plain text, never `@`-imported.
+const SCOPED = allRules.filter((f) => readFileSync(resolve(root, 'rules', f), 'utf8').startsWith('---\npaths:')).length;
 
 test('rules directory when enumerated → the override set is exactly the known templates', () => {
   assert.deepEqual(OVERRIDE_TEMPLATES, KNOWN_TEMPLATES,
@@ -33,7 +35,7 @@ test('project-setup counts when claimed → all five sites carry the derived man
   const sites = [
     `copy ${M} managed rules + ${O} override templates`,
     `Copy all ${M} managed rules:`,
-    `(${TOTAL} \`@rules/\` references (${M} managed + ${O} override templates)`,
+    `(${TOTAL} rule references — ${TOTAL - SCOPED} \`@rules/\` imports and ${SCOPED} path-scoped plain references (${M} managed + ${O} override templates)`,
     `✅ ${M}/${M} managed rules + ${O} override templates`,
     `contains ${TOTAL} \`.md\` files (${M} managed + ${O} override templates)`,
   ];

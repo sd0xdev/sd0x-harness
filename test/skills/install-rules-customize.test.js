@@ -452,6 +452,12 @@ test('fresh install in a detached consumer fixture → live header AND Based-on 
     for (const [baseRule, projectFile] of Object.entries(OVERRIDE_TEMPLATES)) {
       const installed = readFileSync(join(dst, projectFile), 'utf8');
       assert.match(installed, /^Precedence: /m, `${projectFile}: fresh install carries the live header`);
+      // instruction-budget R1: a path-scoped template keeps its frontmatter through the copy.
+      const shipped = readFileSync(resolve(rulesDir, projectFile), 'utf8');
+      if (shipped.startsWith('---\npaths:')) {
+        assert.equal(installed.slice(0, installed.indexOf('\n---\n') + 5), shipped.slice(0, shipped.indexOf('\n---\n') + 5),
+          `${projectFile}: the paths: frontmatter must survive install unchanged`);
+      }
       assert.ok(!/<!--\s*Precedence:/.test(installed), `${projectFile}: fresh install has no legacy comment header`);
       const expected = blobHash(readFileSync(join(src, baseRule)));
       assert.match(installed, new RegExp(`<!-- Based on: ${baseRule.replace('.', '\\.')} @ ${expected}`),

@@ -249,12 +249,12 @@ Replace these placeholders with your project values:
 - @rules/codex-invocation.md -- Codex must independently research (critical)
 - @rules/fix-all-issues.md -- Zero tolerance for blocking findings; sub-threshold ones are logged, not fixed
 - @rules/scope-discipline.md -- Scope axis orthogonal to severity; out-of-scope pre-existing defects get a recorded exit, not a repo-wide sweep
-- @rules/testing.md -- Test pyramid, conventions, evidence model, adequacy gate
-- @rules/testing-project.md -- Project-specific testing overrides (user-owned)
+- `rules/testing.md` (path-scoped — loads when a matching file is read; never `@`-imported) -- Test pyramid, conventions, evidence model, adequacy gate
+- `rules/testing-project.md` (path-scoped — loads when a matching file is read; never `@`-imported) -- Project-specific testing overrides (user-owned)
 - @rules/framework.md
 - @rules/security.md
-- @rules/docs-writing.md
-- @rules/docs-numbering.md
+- `rules/docs-writing.md` (path-scoped — loads when a matching file is read; never `@`-imported)
+- `rules/docs-numbering.md` (path-scoped — loads when a matching file is read; never `@`-imported)
 - @rules/git-workflow.md
 - @rules/git-workflow-project.md -- Project-specific git overrides (user-owned)
 - @rules/logging.md

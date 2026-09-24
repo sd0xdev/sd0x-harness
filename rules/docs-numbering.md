@@ -1,3 +1,7 @@
+---
+paths:
+  - "docs/**"
+---
 # Document Numbering Rules
 
 Feature documents live in `docs/features/<feature>/`. Lifecycle docs carry a **numeric prefix** for their phase; ancillary docs carry a **semantic prefix** instead.

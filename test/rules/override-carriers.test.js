@@ -30,8 +30,11 @@ const README_LOCALES = ['README.md', 'README.zh-TW.md', 'README.zh-CN.md', 'READ
 
 /** [carrier name, () => the text region that is the carrier's list]. */
 const CARRIERS = [
-  ...['CLAUDE.template.md', 'CLAUDE.md'].map((f) => [`${f} ## Rules @-lines`, () =>
-    sectionAt(read(f), 2, 'Rules').split('\n').filter((l) => /^- @rules\/[\w-]+-project\.md/.test(l)).join('\n')]),
+  // A template is referenced by an `@` import or — path-scoped (instruction-budget R1) — by a plain
+  // `rules/<file>` mention, which Claude Code does not load at launch.
+  ...['CLAUDE.template.md', 'CLAUDE.md'].map((f) => [`${f} ## Rules references`, () =>
+    sectionAt(read(f), 2, 'Rules').split('\n')
+      .filter((l) => /^- (?:@rules\/|`rules\/)[\w-]+-project\.md/.test(l)).join('\n')]),
   ['docs/rules.md table rows', () =>
     read('docs/rules.md').split('\n').filter((l) => /^\| `[\w-]+-project` \|/.test(l)).join('\n')],
   ['rules/discretion.md out-of-scope sentence', () =>

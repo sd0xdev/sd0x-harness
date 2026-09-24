@@ -224,12 +224,12 @@ Find the plugin's `rules/` directory using this priority (short-circuit on first
 Ensure `.claude/CLAUDE.md` contains `@rules/` references so the auto-loop engine can activate:
 
 1. Grep `.claude/CLAUDE.md` for `@rules/auto-loop.md`
-2. **Found** → for each override template, check whether its line is also present — `@rules/auto-loop-project.md` after `auto-loop.md`, `@rules/testing-project.md` after `testing.md`, `@rules/git-workflow-project.md` after `git-workflow.md`:
+2. **Found** → for each override template, check whether its line is also present, in the form the template uses — `@rules/auto-loop-project.md` after `auto-loop.md`, `@rules/git-workflow-project.md` after `git-workflow.md`, and the plain `` `rules/testing-project.md` `` reference after `` `rules/testing.md` `` (path-scoped: a legacy `@rules/testing.md` or `@rules/testing-project.md` line counts as present but is **rewritten** to the template's plain reference, since an `@` import loads it at launch):
    - **Present** → skip that template (configured)
-   - **Base line present, override line missing** → insert the override's line from `CLAUDE.template.md` `## Rules` directly after its base line (e.g. `- @rules/git-workflow-project.md -- Project-specific git overrides (user-owned)`)
+   - **Base line present, override line missing** → insert the override's line from `CLAUDE.template.md` `## Rules` directly after its base line (e.g. `- @rules/git-workflow-project.md -- Project-specific git overrides (user-owned)`). A path-scoped template (`testing-project.md`) and its base are inserted as the template's **plain** `rules/<file>` references, never as `@` imports — an import would load them at launch
    - **Base line missing too** → insert both lines from `CLAUDE.template.md` `## Rules` — the base line, then the override line — at the end of the file's `## Rules` list. An installed override whose base is unreferenced is not configured; never report it as present
-3. **Not found but file exists** → append `## Rules` block at end of file (17 `@rules/` references (14 managed + 3 override templates) from `CLAUDE.template.md` `## Rules` section)
-4. **File does not exist** (edge case: Phase 3 was skipped) → extract from `CLAUDE.template.md`: `## Required Checks` through `### Auto-Loop Rule` sections + `## Rules` section → create minimal `.claude/CLAUDE.md`
+3. **Not found but file exists** → append `## Rules` block at end of file (17 rule references — 13 `@rules/` imports and 4 path-scoped plain references (14 managed + 3 override templates) from `CLAUDE.template.md` `## Rules` section)
+4. **File does not exist** (edge case: Phase 3 was skipped) → extract from `CLAUDE.template.md`: `## Required Checks` through the `### Auto-Loop` section (up to the next `##` heading) + `## Rules` section → create minimal `.claude/CLAUDE.md`
 
 When extracting from template, remove ecosystem block markers and leave unresolved placeholders as `{PLACEHOLDER}`.
 

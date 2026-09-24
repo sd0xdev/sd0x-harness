@@ -129,6 +129,7 @@ const ALLOWED_CLAUDE_READERS = new Set([
   'test/skills/review-dispatch.test.js',           // pins {TEST_COMMAND} placeholder + comments-only honesty prose
   'test/rules/review-loop-resilience.test.js',     // pins the fallback sentence in § Auto-Loop of the tracked CLAUDE surfaces
   'test/skills/testing-rules.test.js',             // pins testing-project.md references
+  'test/rules/path-scoped-rules.test.js',         // pins that the template never @-imports a path-scoped rule (instruction-budget R1)
   'test/rules/override-carriers.test.js',          // pins the override-template @rules/ lines in both tracked CLAUDE templates (git-autonomy R2)
 ]);
 

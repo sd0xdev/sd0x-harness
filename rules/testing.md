@@ -1,3 +1,12 @@
+---
+paths:
+  - "test/**"
+  - "tests/**"
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/__tests__/**"
+  - "docs/features/**/requests/**"
+---
 # Testing Rules
 
 ## Test Pyramid

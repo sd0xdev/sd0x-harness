@@ -1,3 +1,12 @@
+---
+paths:
+  - "test/**"
+  - "tests/**"
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/__tests__/**"
+  - "docs/features/**/requests/**"
+---
 # Testing Project Overrides
 
 Precedence: an active (non-comment) `##` section in this file customizes `testing.md` — for

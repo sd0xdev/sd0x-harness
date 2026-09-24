@@ -91,21 +91,24 @@ const CANONICAL_SYNC_CHECKS =
   'contains | "Override drops a required check command its base section carries" | | 3 | Missing ' +
   'reference or base | P1 | For **each** shipped override file (`auto-loop-project.md`, ' +
   '`testing-project.md`, `git-workflow-project.md`): `.claude/CLAUDE.md` has `@rules/<file>` but ' +
-  'the file is missing, OR the file exists but is not referenced, OR the file exists but the base ' +
-  'rule its `Based on:` comment names is missing from `.claude/rules/` | `/install-rules` to ' +
-  'recreate the missing file or base, or add the reference | | 4 | Wrong-layer edit | P2 | Base ' +
-  '`auto-loop.md` has `LOCAL_MODIFIED`, `CONFLICT`, or `LEGACY` state while project override ' +
-  'exists | "Move customization to auto-loop-project.md" | | 5 | Duplicate heading | P2 | Override ' +
-  'file has multiple active `## <heading>` with same text | "Keep one, remove duplicates. Last ' +
-  'occurrence takes effect." | | 6 | Legacy precedence header | P2 | Precedence declaration exists ' +
-  'only inside an HTML comment (`<!-- Precedence:` present, no live `Precedence:` line before the ' +
-  'first `##`) — HTML comments are stripped from model context (R8), so the declaration never ' +
-  'reaches its only reader | "Header predates the live-precedence contract; migrate the precedence ' +
-  'line to live text by hand or regenerate via `/install-rules --customize <rule> --reset`. This ' +
-  'check is **read-only** — it never edits the user-owned file" | | 7 | Git override conflict | P1 ' +
-  '/ P2 | `git-workflow-project.md` only. **P1** whenever the file exists, active content or not — ' +
-  'two empty duplicate `## Protected Branches` headings are already a parse error: when `/bin/bash ' +
-  '-p -- <resolver> --root <repo> --list` exits 2, where `<resolver>` is the **plugin install\'s** ' +
+  'the file is missing, OR the file exists but is not referenced (by `@rules/<file>`, or — for a ' +
+  'template carrying `paths:` frontmatter — by a plain `rules/<file>` mention; an `@` import of a ' +
+  'path-scoped template is reported **P2** instead, because it loads the file at launch and ' +
+  'defeats the scoping), OR the file exists but the base rule its `Based on:` comment names is ' +
+  'missing from `.claude/rules/` | `/install-rules` to recreate the missing file or base, or add ' +
+  'the reference | | 4 | Wrong-layer edit | P2 | Base `auto-loop.md` has `LOCAL_MODIFIED`, ' +
+  '`CONFLICT`, or `LEGACY` state while project override exists | "Move customization to ' +
+  'auto-loop-project.md" | | 5 | Duplicate heading | P2 | Override file has multiple active `## ' +
+  '<heading>` with same text | "Keep one, remove duplicates. Last occurrence takes effect." | | 6 ' +
+  '| Legacy precedence header | P2 | Precedence declaration exists only inside an HTML comment ' +
+  '(`<!-- Precedence:` present, no live `Precedence:` line before the first `##`) — HTML comments ' +
+  'are stripped from model context (R8), so the declaration never reaches its only reader | ' +
+  '"Header predates the live-precedence contract; migrate the precedence line to live text by hand ' +
+  'or regenerate via `/install-rules --customize <rule> --reset`. This check is **read-only** — it ' +
+  'never edits the user-owned file" | | 7 | Git override conflict | P1 / P2 | ' +
+  '`git-workflow-project.md` only. **P1** whenever the file exists, active content or not — two ' +
+  'empty duplicate `## Protected Branches` headings are already a parse error: when `/bin/bash -p ' +
+  '-- <resolver> --root <repo> --list` exits 2, where `<resolver>` is the **plugin install\'s** ' +
   'copy — `${CLAUDE_PLUGIN_ROOT}/scripts/protected-branches.sh` when that variable is set and its ' +
   'real path lies outside the audited repository, else ' +
   '`~/.claude/plugins/**/sd0x-dev-flow/scripts/protected-branches.sh` (one match) — **never** a ' +
