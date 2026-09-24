@@ -77,20 +77,26 @@ _CHECKER=""
 # the checker is skipped entirely and the git fallback runs — the ladder's
 # last rung would be unbounded (§3.2).
 _OUT=""; _SOURCE=""
-if [[ -n "$_CHECKER" ]] && command -v node >/dev/null 2>&1; then
-  _T="${AUTO_LOOP_CHECK_TIMEOUT:-10}"; case "$_T" in '' | *[!0-9]*) _T=10 ;; esac
-  [ "$_T" -gt 0 ] || _T=10  # 0 would DISABLE `timeout`/`alarm`, not bound them
-  if command -v timeout >/dev/null 2>&1; then
-    _OUT=$(timeout "$_T" node "$_CHECKER" check --format=md 2>/dev/null) && _SOURCE=state || _OUT=""
-  elif command -v gtimeout >/dev/null 2>&1; then
-    _OUT=$(gtimeout "$_T" node "$_CHECKER" check --format=md 2>/dev/null) && _SOURCE=state || _OUT=""
-  elif command -v perl >/dev/null 2>&1; then
-    _OUT=$(perl -e 'alarm shift; exec @ARGV or exit 127' "$_T" node "$_CHECKER" check --format=md 2>/dev/null) && _SOURCE=state || _OUT=""
+_T="${AUTO_LOOP_CHECK_TIMEOUT:-10}"; case "$_T" in '' | *[!0-9]*) _T=10 ;; esac
+[ "$_T" -gt 0 ] || _T=10  # 0 would DISABLE `timeout`/`alarm`, not bound them
+# One bounded checker call; with no bounding tool it fails, so nothing unbounded ever runs.
+_bounded() {
+  if command -v timeout >/dev/null 2>&1; then timeout "$_T" node "$_CHECKER" "$@" 2>/dev/null
+  elif command -v gtimeout >/dev/null 2>&1; then gtimeout "$_T" node "$_CHECKER" "$@" 2>/dev/null
+  elif command -v perl >/dev/null 2>&1; then perl -e 'alarm shift; exec @ARGV or exit 127' "$_T" node "$_CHECKER" "$@" 2>/dev/null
+  else return 1
   fi
+}
+if [[ -n "$_CHECKER" ]] && command -v node >/dev/null 2>&1; then
+  _OUT=$(_bounded check --format=md) && _SOURCE=state || _OUT=""
 fi
 
 if [[ "$_SOURCE" == "state" ]]; then
   [[ -n "$_OUT" ]] && printf '%s\n' "$_OUT"
+  # git-autonomy R4: one reminder line when a commit/push menu is due (rules/git-workflow.md
+  # § Proactive Offer). Empty unless `offer` is true; a failure prints nothing and never blocks.
+  _OFFER=$(_bounded offer --format=md) || _OFFER=""
+  [[ -n "$_OFFER" ]] && printf '%s\n' "$_OFFER"
   exit 0
 fi
 

@@ -1,7 +1,7 @@
 ---
 name: bug-fix
 description: "Bug fix workflow. Use when: fixing bugs, resolving issues, regression fixes. Not for: new features (use feature-dev), understanding code (use code-explore). Output: fix + regression test + review gate."
-allowed-tools: Read, Grep, Glob, Edit, Write, Bash
+allowed-tools: Read, Grep, Glob, Edit, Write, Bash, AskUserQuestion, Skill
 ---
 
 # Bug Fix Skill
@@ -22,7 +22,7 @@ allowed-tools: Read, Grep, Glob, Edit, Write, Bash
 ❌ git add | git commit | git push — per @rules/git-workflow.md
 ```
 
-This skill fixes bugs but does **not** commit. `/precommit` is a quality gate only. To commit, the user must invoke `/smart-commit --execute` separately.
+This skill fixes bugs but does **not** commit. `/precommit` is a quality gate only. To commit, offer the menu per `rules/git-workflow.md` § Proactive Offer — a commit option on any real branch, a push option only where `review-state.js offer` allows one — and invoke `/smart-commit --execute` on selection; never print the command for the user to copy.
 
 ## Workflow
 

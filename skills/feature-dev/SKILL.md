@@ -23,7 +23,7 @@ allowed-tools: Read, Grep, Glob, Edit, Write, Bash, Skill, AskUserQuestion
 ❌ git add | git commit | git push — per @rules/git-workflow.md
 ```
 
-This skill implements features but does **not** commit. `/precommit` is a quality gate only. To commit, the user must invoke `/smart-commit --execute` separately.
+This skill implements features but does **not** commit. `/precommit` is a quality gate only. To commit, offer the menu per `rules/git-workflow.md` § Proactive Offer — a commit option on any real branch, a push option only where `review-state.js offer` allows one — and invoke `/smart-commit --execute` on selection; never print the command for the user to copy.
 
 <budget:token_budget>200000</budget:token_budget>
 

@@ -387,3 +387,230 @@ test('intent_hint: changed feature doc + exact intent-<key>.md → hint; stray n
   assert.doesNotMatch(fact.stdout, /x bad/, 'a non-slug directory must not reach the fact line');
   assert.equal(fact.stdout.trim().split('\n').length, 1, 'the fact output stays exactly one line');
 });
+
+// --- offer / offer-shown (git-autonomy R4, tech spec § 3.3) -----------------------------------
+
+function offerJson(repo, home) {
+  const r = run(repo, home, ['offer', '--format=json']);
+  assert.equal(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout);
+}
+
+function passAll(repo, home) {
+  for (const p of ['code_review', 'precommit', 'doc_review']) note(repo, home, p, 'pass');
+}
+
+/** A repo on `feat/offer` with an upstream on a bare remote, so ahead-of-upstream is measurable. */
+function makeRemoteRepo() {
+  const repo = makeRepo();
+  const bare = tmp('rs-bare-');
+  execFileSync('git', ['init', '-q', '--bare', bare]);
+  git(repo, 'remote', 'add', 'origin', bare);
+  git(repo, 'switch', '-q', '-c', 'feat/offer');
+  git(repo, 'push', '-q', '-u', 'origin', 'feat/offer');
+  return repo;
+}
+
+function writeOverride(repo, body) {
+  mkdirSync(join(repo, 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'rules', 'git-workflow-project.md'), body);
+}
+
+test('offer when every required gate passed on a feature branch → commit+push, once per digest', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  passAll(repo, home);
+  const first = offerJson(repo, home);
+  assert.equal(first.offer, true, JSON.stringify(first));
+  assert.equal(first.kind, 'commit+push');
+  assert.equal(first.branch, 'feat/offer');
+  assert.match(first.digest, /^sha256:[0-9a-f]{64}$/);
+  const shown = run(repo, home, ['offer-shown', first.digest]);
+  assert.equal(shown.status, 0, shown.stderr);
+  const again = offerJson(repo, home);
+  assert.deepEqual([again.offer, again.reason], [false, 'already-offered'], 'a shown menu silences the offer at that digest');
+  // A new gate pass at a new digest re-arms it.
+  writeFileSync(join(repo, 'a.js'), 'const a = 3;\n');
+  passAll(repo, home);
+  const rearmed = offerJson(repo, home);
+  assert.equal(rearmed.offer, true);
+  assert.notEqual(rearmed.digest, first.digest);
+});
+
+test('offer when a required plane is open → gates-open, and a doc-only change needs only doc_review', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  note(repo, home, 'code_review', 'pass');
+  assert.equal(offerJson(repo, home).reason, 'gates-open', 'precommit not passed');
+  git(repo, 'checkout', '-q', '--', 'a.js');
+  writeFileSync(join(repo, 'readme.md'), '# doc changed\n');
+  note(repo, home, 'doc_review', 'pass');
+  const docOnly = offerJson(repo, home);
+  assert.equal(docOnly.offer, true, 'doc-only work needs doc_review alone');
+});
+
+test('offer on a protected branch → commit-only menu with push_dropped, push-only work → protected', () => {
+  const repo = makeRepo(); // default branch of `git init` in the fixture
+  git(repo, 'branch', '-M', 'main');
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  passAll(repo, home);
+  const r = offerJson(repo, home);
+  assert.equal(r.offer, true);
+  assert.equal(r.kind, 'commit', 'no push option on a protected branch');
+  assert.equal(r.push_dropped, 'protected');
+});
+
+test('offer with nothing uncommitted and nothing ahead → nothing-to-do; ahead only → push', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  assert.equal(offerJson(repo, home).reason, 'nothing-to-do');
+  writeFileSync(join(repo, 'a.js'), 'const a = 5;\n');
+  passAll(repo, home);
+  git(repo, 'commit', '-q', '-am', 'ahead');
+  const r = offerJson(repo, home);
+  assert.deepEqual([r.offer, r.kind], [true, 'push'], JSON.stringify(r));
+});
+
+test('offer when push-only work sits on a protected branch → protected, never a push kind', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  git(repo, 'switch', '-q', '-c', 'main');
+  git(repo, 'push', '-q', '-u', 'origin', 'main');
+  writeFileSync(join(repo, 'a.js'), 'const a = 6;\n');
+  passAll(repo, home);
+  git(repo, 'commit', '-q', '-am', 'ahead on main');
+  const r = offerJson(repo, home);
+  assert.deepEqual([r.offer, r.kind, r.reason], [false, 'none', 'protected']);
+});
+
+test('offer when the project override cannot be parsed → protected-unknown, never a push kind', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeOverride(repo, '# x\n\n## Protected Branches\n\n- !main\n');
+  git(repo, 'add', '-A'); git(repo, 'commit', '-q', '-m', 'override');
+  writeFileSync(join(repo, 'a.js'), 'const a = 7;\n');
+  passAll(repo, home);
+  git(repo, 'commit', '-q', '-am', 'ahead');
+  const r = offerJson(repo, home);
+  assert.deepEqual([r.offer, r.reason], [false, 'protected-unknown']);
+  // …and uncommitted work there becomes a commit-only menu, flagged the same way.
+  writeFileSync(join(repo, 'a.js'), 'const a = 8;\n');
+  passAll(repo, home);
+  const c = offerJson(repo, home);
+  assert.deepEqual([c.offer, c.kind, c.push_dropped], [true, 'commit', 'protected-unknown']);
+});
+
+test('offer under Offer Mode off → disabled; commit-only → commit menu; commented values are ignored', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeOverride(repo, '# x\n\n## Offer Mode\n\n<!-- off -->\n');
+  git(repo, 'add', '-A'); git(repo, 'commit', '-q', '-m', 'override');
+  writeFileSync(join(repo, 'a.js'), 'const a = 9;\n');
+  passAll(repo, home);
+  assert.equal(offerJson(repo, home).offer, true, 'a commented value is not a setting');
+  writeOverride(repo, '# x\n\n## Offer Mode\n\noff\n');
+  passAll(repo, home);
+  assert.deepEqual([offerJson(repo, home).offer, offerJson(repo, home).reason], [false, 'disabled']);
+  writeOverride(repo, '# x\n\n## Offer Mode\n\ncommit-only\n');
+  passAll(repo, home);
+  const c = offerJson(repo, home);
+  assert.deepEqual([c.offer, c.kind, c.push_dropped], [true, 'commit', 'commit-only']);
+});
+
+test('offer on a detached HEAD → detached; offer-shown refuses a malformed digest', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  git(repo, 'checkout', '-q', '--detach');
+  assert.equal(offerJson(repo, home).reason, 'detached');
+  const bad = run(repo, home, ['offer-shown', 'not-a-digest']);
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /invalid digest/);
+});
+
+test('offer --format=md when offer is false → prints nothing; when true → one line naming the menu', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  assert.equal(run(repo, home, ['offer', '--format=md']).stdout, '');
+  writeFileSync(join(repo, 'a.js'), 'const a = 10;\n');
+  passAll(repo, home);
+  const md = run(repo, home, ['offer', '--format=md']).stdout;
+  assert.equal(md.trim().split('\n').length, 1);
+  assert.match(md, /commit \/ commit and push/);
+});
+
+test('offer after a switch to a protected branch at the same digest → kind narrows, so a prior selection is void', () => {
+  // The rule: on selection the model re-runs `offer` and proceeds only at the same digest, branch
+  // and kind. This pins the data half — the recomputed answer differs where it must.
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 11;\n');
+  passAll(repo, home);
+  const onFeature = offerJson(repo, home);
+  git(repo, 'switch', '-q', '-c', 'release/2026.09');
+  const onRelease = offerJson(repo, home);
+  assert.equal(onRelease.digest, onFeature.digest, 'same tree, same digest');
+  assert.notEqual(onRelease.branch, onFeature.branch);
+  assert.deepEqual([onFeature.kind, onRelease.kind], ['commit+push', 'commit'], 'the push option is gone');
+});
+
+test('offer when what a push would publish cannot be established → commit-only, flagged ahead-unknown', () => {
+  // No upstream and no origin/HEAD: the ahead range is unknown, so an unreviewed commit could ride
+  // along with a push. A dirty tree still earns a commit menu, never a push option.
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'feat/no-upstream');
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 12;\n');
+  passAll(repo, home);
+  const r = offerJson(repo, home);
+  assert.deepEqual([r.offer, r.kind, r.push_dropped], [true, 'commit', 'ahead-unknown']);
+});
+
+test('offer when ahead commits change a doc and revert it → the doc gate is still required', () => {
+  // The net diff is empty; the published history is not. Per-commit paths keep the doc plane owed.
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'readme.md'), '# changed\n');
+  git(repo, 'commit', '-q', '-am', 'doc change');
+  writeFileSync(join(repo, 'readme.md'), '# doc\n');
+  git(repo, 'commit', '-q', '-am', 'doc revert');
+  const before = offerJson(repo, home);
+  assert.deepEqual([before.offer, before.reason], [false, 'gates-open'], 'ahead commits exist, doc gate not passed');
+  note(repo, home, 'doc_review', 'pass');
+  note(repo, home, 'code_review', 'pass');
+  note(repo, home, 'precommit', 'pass');
+  const after = offerJson(repo, home);
+  assert.deepEqual([after.offer, after.kind], [true, 'push'], 'a push-only menu once the gates pass');
+});
+
+test('offer when an ahead commit renames a doc into code → both classes are required', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  git(repo, 'mv', 'readme.md', 'readme.js');
+  git(repo, 'commit', '-q', '-m', 'rename doc to code');
+  note(repo, home, 'code_review', 'pass');
+  note(repo, home, 'precommit', 'pass');
+  assert.equal(offerJson(repo, home).reason, 'gates-open', 'the doc side of the rename still needs doc_review');
+  note(repo, home, 'doc_review', 'pass');
+  assert.equal(offerJson(repo, home).kind, 'push');
+});
+
+test('offer when an ahead merge commit adds a doc during resolution → doc_review is required', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  git(repo, 'switch', '-q', '-c', 'topic');
+  writeFileSync(join(repo, 'a.js'), 'const a = 20;\n');
+  git(repo, 'commit', '-q', '-am', 'topic code');
+  git(repo, 'switch', '-q', 'feat/offer');
+  git(repo, 'merge', '-q', '--no-ff', '--no-commit', 'topic');
+  writeFileSync(join(repo, 'notes.md'), '# added while merging\n');
+  git(repo, 'add', 'notes.md');
+  git(repo, 'commit', '-q', '-m', 'merge topic');
+  note(repo, home, 'code_review', 'pass');
+  note(repo, home, 'precommit', 'pass');
+  assert.equal(offerJson(repo, home).reason, 'gates-open', 'the doc added in the merge commit needs doc_review');
+  note(repo, home, 'doc_review', 'pass');
+  assert.equal(offerJson(repo, home).kind, 'push');
+});

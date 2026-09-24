@@ -1,7 +1,7 @@
 ---
 name: test-deep
 description: "Context-aware test orchestration. Use when: smart test selection, failure triage, progressive test ladder, test failure analysis. Not for: writing tests (use post-dev-test), reviewing tests (use codex-test-review), generating tests (use codex-test-gen), full manual run (use verify). Output: test results + triage report + fixer actions."
-allowed-tools: Read, Grep, Glob, Bash, Write, Agent
+allowed-tools: Read, Grep, Glob, Bash, Write, Agent, AskUserQuestion, Skill
 ---
 
 # Test Deep — Context-Aware Test Orchestration
@@ -38,7 +38,7 @@ Identify root cause and suggest minimal fix.`
 ❌ git add | git commit | git push — per @rules/git-workflow.md
 ```
 
-This skill runs tests and may apply safe fixers, but does **not** commit. To commit, the user must invoke `/smart-commit --execute` separately.
+This skill runs tests and may apply safe fixers, but does **not** commit. To commit, offer the menu per `rules/git-workflow.md` § Proactive Offer — a commit option on any real branch, a push option only where `review-state.js offer` allows one — and invoke `/smart-commit --execute` on selection; never print the command for the user to copy.
 
 ## Workflow
 

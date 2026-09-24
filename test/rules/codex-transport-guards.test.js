@@ -468,7 +468,7 @@ const ROUTER_TOOLS = {
   'codex-review-branch': 'Bash(git:*), Bash(bash:*), Read, Grep, Glob, Task, Monitor',
   'codex-review-doc': 'Bash(git:*), Read, Glob',
   'codex-test-review': 'Bash(git:*), Read, Grep, Glob',
-  debug: 'Read, Grep, Glob, Edit, Write, Bash, Skill',
+  debug: 'Read, Grep, Glob, Edit, Write, Bash, Skill, AskUserQuestion', // AskUserQuestion: the commit menu (git-autonomy R4), not a transport grant
   'post-dev-recap': 'Read, Grep, Glob, Write, Bash(node:*), Bash(git:*), Skill, AskUserQuestion',
   'req-analyze': 'Read, Grep, Glob, Bash(git:*), Bash(node:*), Bash(bash:*), Write, Agent, Skill, AskUserQuestion, WebSearch, WebFetch',
   'codex-security': 'Bash(git:*), Read, Grep, Glob',

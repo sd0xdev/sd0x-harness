@@ -26,6 +26,36 @@ Push safety (credential-selection contract — Anchor Register #4 material, byte
 
 PR workflow: Develop -> /codex-review-fast -> /precommit -> /pr-review -> PR
 
+## Proactive Offer
+
+When a change's gates have passed, offer to commit and push it instead of leaving the user to type
+a command (git-autonomy FR-1, FR-4, FR-14, FR-16). This section is Default tier; it decides *when*
+to ask and *how* to present the choice, and grants nothing — the workflow a selection invokes still
+asks its own approval.
+
+- **When**: `node <scripts>/review-state.js offer --format=json` returns `offer: true`. It already
+  applies every condition — required gates passed at the current digest, a real branch, no push
+  kind on a protected branch, the project's `## Offer Mode`, and once per passing digest. Do not
+  re-derive them; do not offer when it returns `false`.
+- **How**: one AskUserQuestion whose options follow `kind` — `commit+push`: Commit · Commit and
+  push · Not now; `commit`: Commit · Not now; `push`: Push · Not now. Say that each workflow shows its
+  own plan and asks again.
+- **On the answer**, in this order: (1) for a workflow option, run `offer` again — the selection is
+  valid only if it returns `offer: true` with the same digest, branch and `kind` and still offers the
+  picked option; (2) run `review-state.js offer-shown <digest>` with the digest the menu was shown
+  for, whatever was chosen, `Not now` included; (3) invoke a valid selection. An invalid one is void
+  and nothing is invoked. Recording before validating would make every selection read
+  `already-offered`.
+  A valid pick invokes, through the Skill tool: Commit → `/smart-commit --execute`; Commit and
+  push → `/smart-commit --execute`, then `/push-ci`; Push → `/push-ci` alone.
+- **Never text to copy**: whenever you would suggest `/smart-commit --execute` or `/push-ci` (and,
+  once git-autonomy R5 ships it, `/deploy-flow`) as a next step — after a task, or when a skill's closing step names one — ask with
+  AskUserQuestion and invoke the chosen skill; never print the command for the user to paste. An
+  unsolicited suggestion carries a push option only where `offer` would allow a push kind; only the
+  user's explicit request to push puts `/push-ci` on a protected branch into a menu.
+- **Never unasked**: do not invoke `/smart-commit --execute` or `/push-ci` except through a menu
+  selection or the user's explicit request.
+
 ## Project Customization
 
 Project-specific settings belong in `git-workflow-project.md` (not this file). See

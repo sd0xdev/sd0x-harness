@@ -1,7 +1,7 @@
 ---
 name: debug
 description: "Interactive debugging workflow with hypothesis-driven probe loop. Use when: unknown bugs, script errors, silent failures, troubleshooting. Not for: known bugs (use bug-fix), GitHub issue analysis (use issue-analyze), code understanding (use code-explore). Output: debug report with probe journal + root cause + fix."
-allowed-tools: Read, Grep, Glob, Edit, Write, Bash, Skill
+allowed-tools: Read, Grep, Glob, Edit, Write, Bash, Skill, AskUserQuestion
 ---
 
 # Debug Skill
@@ -26,7 +26,7 @@ allowed-tools: Read, Grep, Glob, Edit, Write, Bash, Skill
 ❌ git add | git commit | git push — per @rules/git-workflow.md
 ```
 
-This skill debugs and may fix code but does **not** commit. `/precommit` is a quality gate only. To commit, the user must invoke `/smart-commit --execute` separately.
+This skill debugs and may fix code but does **not** commit. `/precommit` is a quality gate only. To commit, offer the menu per `rules/git-workflow.md` § Proactive Offer — a commit option on any real branch, a push option only where `review-state.js offer` allows one — and invoke `/smart-commit --execute` on selection; never print the command for the user to copy.
 
 ## Workflow
 
