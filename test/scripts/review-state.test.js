@@ -756,3 +756,49 @@ test('flow-detect when checkout targets are quoted → read as the branch, and a
   writeFileSync(join(repo, 'scripts', 'r.sh'), "#!/bin/sh\ngit checkout main; git switch 'feat/x'; git merge topic\n");
   assert.equal(flowJson(repo, home).reason, 'no-signal', 'the quoted feat/x is the current target');
 });
+
+// --- goal-commit (git-autonomy R7, FR-17) ------------------------------------------------------
+
+function goalJson(repo, home) {
+  const r = run(repo, home, ['goal-commit', '--format=json']);
+  assert.equal(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout);
+}
+
+test('goal-commit on a feature branch with every required gate passed → ok, no branch allowance needed', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'feat/goal');
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 30;\n');
+  assert.equal(goalJson(repo, home).reason, 'gates-open', 'an open gate is never committed through');
+  passAll(repo, home);
+  const r = goalJson(repo, home);
+  assert.deepEqual([r.ok, r.needs_branch_allowance, r.branch], [true, false, 'feat/goal']);
+});
+
+test('goal-commit on a protected branch → ok only with the first-commit allowance flagged', () => {
+  const repo = makeRepo();
+  git(repo, 'branch', '-M', 'main');
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 31;\n');
+  passAll(repo, home);
+  assert.deepEqual([goalJson(repo, home).ok, goalJson(repo, home).needs_branch_allowance], [true, true]);
+});
+
+test('goal-commit refusals → detached, nothing-to-do, and Goal Commit: off', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  git(repo, 'switch', '-q', '-c', 'feat/goal');
+  assert.equal(goalJson(repo, home).reason, 'nothing-to-do');
+  mkdirSync(join(repo, 'rules'));
+  writeFileSync(join(repo, 'rules', 'git-workflow-project.md'), '# x\n\n## Goal Commit\n\n<!-- off -->\n');
+  git(repo, 'add', '-A'); git(repo, 'commit', '-q', '-m', 'override');
+  writeFileSync(join(repo, 'a.js'), 'const a = 32;\n');
+  passAll(repo, home);
+  assert.equal(goalJson(repo, home).ok, true, 'a commented value is not a setting');
+  writeFileSync(join(repo, 'rules', 'git-workflow-project.md'), '# x\n\n## Goal Commit\n\noff\n');
+  passAll(repo, home);
+  assert.equal(goalJson(repo, home).reason, 'disabled');
+  git(repo, 'checkout', '-q', '--detach');
+  assert.equal(goalJson(repo, home).reason, 'detached');
+});

@@ -197,21 +197,23 @@ function protectedStatus(root, branch) {
   return DEFAULT_PROTECTED.some((p) => (p.endsWith('/*') ? branch.startsWith(p.slice(0, -1)) : branch === p)) ? 0 : 1;
 }
 
-// `## Offer Mode` from the project's git override: the first live bare value line under the
-// heading. Absent file, heading or value → `on`; an unrecognised value also reads `on` (the
-// /claude-health check #7 reports it), since the offer is a menu, never a credential.
-function offerMode(root) {
+// A bare-value setting from the project's git override: the first live (non-comment) value line
+// under `## <heading>`. Absent file, heading or value → the default; an unrecognised value also reads
+// as the default (the /claude-health check #7 reports it) — these settings only ever narrow.
+function overrideSetting(root, heading, allowed, dflt) {
   for (const f of ['.claude/rules/git-workflow-project.md', 'rules/git-workflow-project.md']) {
     let text;
     try { text = fs.readFileSync(path.join(root, f), 'utf8'); } catch { continue; }
     const live = text.replace(/<!--[\s\S]*?-->/g, '');
-    const m = /^##[ \t]+Offer Mode[ \t]*$([\s\S]*?)(?=^##[ \t]|(?![\s\S]))/m.exec(live);
-    if (!m) return 'on';
+    const esc = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = new RegExp(`^##[ \\t]+${esc}[ \\t]*$([\\s\\S]*?)(?=^##[ \\t]|(?![\\s\\S]))`, 'm').exec(live);
+    if (!m) return dflt;
     const value = m[1].split('\n').map((l) => l.trim()).find((l) => l.length > 0);
-    return ['on', 'commit-only', 'off'].includes(value) ? value : 'on';
+    return allowed.includes(value) ? value : dflt;
   }
-  return 'on';
+  return dflt;
 }
+const offerMode = (root) => overrideSetting(root, 'Offer Mode', ['on', 'commit-only', 'off'], 'on');
 
 // Files the push kind would publish: commits ahead of the upstream, or of the default branch's
 // merge-base when there is none. null = cannot tell, which never yields a push kind.
@@ -330,6 +332,29 @@ function offerShown(digest) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'offer.json'), `${JSON.stringify({ digest, time: new Date().toISOString() })}\n`);
   process.stdout.write(`[OFFER_SHOWN] ${digest}\n`);
+}
+
+// --- Goal-mode commit (git-autonomy R7, FR-17) ---------------------------------------------------
+// The mechanical half of the goal credential: whether uncommitted work may be committed without a
+// per-use question — every required plane passed at this digest, a real branch, `## Goal Commit` not
+// off. Whether a goal the USER set is active is the behaviour-layer half (rules/git-workflow.md
+// § Proactive Offer, "Goal mode"): no hook or script can see it. A protected branch answers
+// `needs_branch_allowance: true` — the first commit there asks (tech spec § 3.5 condition 3).
+function goalCommit(format) {
+  const { planes, root, tree } = computeCheck();
+  const digest = combinedDigest(tree);
+  const head = gitOut(root, ['symbolic-ref', '--short', '-q', 'HEAD']);
+  const branch = head && head.trim() ? head.trim() : null;
+  const out = (ok, reason, extra = {}) => ({ ok, reason, branch, digest, needs_branch_allowance: false, ...extra });
+  let r;
+  const dirty = ['code', 'doc'].filter((p) => tree.planes[p].partial || tree.planes[p].dirty.length > 0);
+  if (!branch) r = out(false, 'detached');
+  else if (!dirty.length) r = out(false, 'nothing-to-do');
+  else if (overrideSetting(root, 'Goal Commit', ['on', 'off'], 'on') === 'off') r = out(false, 'disabled');
+  else if (dirty.flatMap((c) => PLANES_BY_CONTENT[c]).some((p) => !planes[p].passed)) r = out(false, 'gates-open');
+  else r = out(true, null, { needs_branch_allowance: protectedStatus(root, branch) !== 1 });
+  if (format === 'json') process.stdout.write(`${JSON.stringify(r)}\n`);
+  else process.stdout.write(`[GOAL_COMMIT_CHECK] ok=${r.ok} reason=${r.reason || 'none'} branch=${r.branch || '-'} needs_branch_allowance=${r.needs_branch_allowance}\n`);
 }
 
 // --- Custom-flow detection (git-autonomy R6) ----------------------------------------------------
@@ -548,6 +573,10 @@ try {
     offer(fmt);
   } else if (cmd === 'offer-shown') {
     offerShown(args[0]);
+  } else if (cmd === 'goal-commit') {
+    const fmt = (args.find(a => a.startsWith('--format=')) || '--format=fact').slice('--format='.length);
+    if (!['fact', 'json'].includes(fmt)) die(`unknown format "${fmt}" — valid: fact, json`);
+    goalCommit(fmt);
   } else if (cmd === 'flow-detect') {
     const fmt = (args.find(a => a.startsWith('--format=')) || '--format=fact').slice('--format='.length);
     if (!['fact', 'json', 'md'].includes(fmt)) die(`unknown format "${fmt}" — valid: fact, json, md`);
@@ -556,7 +585,7 @@ try {
   } else if (cmd === 'flow-answer') {
     flowAnswer(args[0]);
   } else {
-    die(`usage: review-state.js note <plane> <pass|fail> | check [--format=md|fact|json] | offer [--format=md|fact|json] | offer-shown <digest> | flow-detect [--format=fact|json|md] [--session <id>] | flow-answer never`);
+    die(`usage: review-state.js note <plane> <pass|fail> | check [--format=md|fact|json] | offer [--format=md|fact|json] | offer-shown <digest> | goal-commit [--format=fact|json] | flow-detect [--format=fact|json|md] [--session <id>] | flow-answer never`);
   }
 } catch (e) {
   die(String((e && e.message) || e));
