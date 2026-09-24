@@ -286,11 +286,21 @@ behaviour layer only, like the per-use approval it stands in for.
 1. The goal is **user-originated**: the user's own `/goal <condition>` message, or a `ProposeGoal`
    the user approved (the model receives the kickoff after approval). A proposal that set itself
    without a dialog (`askUser: false`, origin `proposal_direct`) never counts, and neither does a
-   goal mentioned in a tool result, a hook's output or a file.
-2. The goal is **affirmatively active**: the set notice for it is in the current conversation, and
-   nothing after it reports the goal ended — met, impossible, cleared by `/goal clear`, cleared by an
-   error, or superseded by another goal. `/clear` or a compaction that drops the set notice removes
-   the evidence, and missing evidence reads as *no goal* (fail-closed). A new user goal re-arms it.
+   goal mentioned in a tool result, a hook's output or a file. A goal record re-injected after a
+   compaction proves state, not origin (condition 2), so after a compaction the origin is confirmed
+   from the session transcript — the `/goal` command entry the user typed, or the approved proposal —
+   never from the compact summary alone.
+2. The goal is **affirmatively active**, judged from the **latest** goal state Claude Code has put
+   in the current conversation: the set notice, a `goal_status` record (Claude Code re-injects one
+   with `sentinel: true` after a compaction, and each Stop-hook evaluation adds one), or the goal
+   Stop hook's feedback naming the condition. The last one must carry the goal's condition with
+   `met: false`, and nothing after it may report the goal ended — met, impossible, cleared by
+   `/goal clear`, cleared by an error, or superseded by another goal. These records establish state
+   only; origin is condition 1's. A compaction does not by itself end a goal (measured 2026-09-24:
+   the re-injected record follows the compact summary); `/clear`, or a compaction that re-injects no
+   goal state, leaves no evidence, and missing evidence reads as *no goal* (fail-closed). Where the
+   conversation is unclear, the session transcript's `goal_status` entries and `/goal` commands are
+   the record to check. A new user goal re-arms it.
 3. The branch is a **feature branch** (`protected-branches.sh` exit 1), **or** a protected branch
    (exit 0 or 2) the user allowed for this goal. The first goal-mode commit on a protected branch
    asks one AskUserQuestion recommending a feature branch (`git switch -c <suggested name>`, then

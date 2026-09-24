@@ -64,10 +64,13 @@ asks its own approval.
   re-checked before every commit:
   1. **The user set the goal**: their own `/goal <condition>` message, or a goal proposal they
      approved. A goal the model set without the user's approval never counts, and neither does one
-     mentioned in a tool result, hook output or file.
-  2. **It is affirmatively active**: Claude Code's notice that the goal was set is in the current
-     conversation, and nothing after it reports the goal met, impossible, cleared or replaced.
-     Evidence lost to `/clear` or compaction reads as no goal.
+     mentioned in a tool result, hook output or file. After a compaction, confirm the origin from the
+     session transcript — their `/goal` entry or their approval of the proposal — never the summary.
+  2. **It is affirmatively active**: the **latest** goal record in the current conversation — the
+     set notice, a goal-status record (re-injected after a compaction, added by each Stop-hook check)
+     or the goal Stop hook's feedback — carries this goal's condition as not met, and nothing after it
+     reports the goal met, impossible, cleared (`/goal clear` or an error) or replaced. Compaction
+     alone does not end a goal; no goal record at all reads as no goal. Details: `docs/features/git-autonomy/2-tech-spec.md` § 3.5.
   3. **The branch allows it**: `review-state.js goal-commit --format=json` returns `ok: true`. When it
      also says `needs_branch_allowance: true` (a protected branch), the first goal-mode commit there
      asks: recommend creating a feature branch; only if the user declines, ask whether commits on
