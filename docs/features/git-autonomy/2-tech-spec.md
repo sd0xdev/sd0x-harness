@@ -162,6 +162,18 @@ branch turning `commit+push` into commit-only) voids the selection and invokes n
 with a new gate pass** (FR-14, INV-007). Committing the reviewed tree does not change the digest,
 so the push of the same content is not re-offered either; `/push-ci` stays one command away.
 
+**`review-state.js flow-detect [--format=fact|json|md] [--session <id>]`** / **`flow-answer never`** (FR-9, R6)
+— the custom-flow question. `ask: true` only when no `git-workflow-project.md` exists (either path),
+the repo has not been dismissed (`flow-never`), and at least one signal holds: `merge-script` (a
+`scripts/**` or CI file runs `git merge` while the branch last checked out before it — by
+`git switch|checkout`, or a CI `actions/checkout` step's `ref:` — is protected; statements are
+shell-tokenized, so quoted text is data and git's global options are skipped), `pipeline-trigger` (a
+script dispatches a pipeline: `gh workflow run`, a GitHub `/dispatches`, CircleCI, GitLab or Jenkins
+trigger), or `branch-name` (a non-protected current branch outside `feat|fix|docs|refactor/*`). The
+Stop hook passes the Claude Code session id from its input and prints the `md` line at most once per
+session — each session's marker is created exclusively under `flow-sessions/`, so racing hooks print
+once. Nothing here writes the override; Scaffold invokes `/install-rules --customize git-workflow --reset`.
+
 **The offer menu** (AskUserQuestion, one question):
 
 | `kind` | Options |

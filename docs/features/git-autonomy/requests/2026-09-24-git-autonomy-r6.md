@@ -2,7 +2,7 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md` (created via `/req-analyze`).
 > **Created**: 2026-09-24
-> **Status**: Pending
+> **Status**: Candidate Complete
 > **Priority**: P2
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) <- Technical detail (primary source)
 > **Requirements**: [1-requirements.md](../1-requirements.md) <- Feature-level problem-space rationale
@@ -35,15 +35,15 @@ FR-9: when a project releases its own way (a merge-based release script, a CI tr
 
 ## Acceptance Criteria
 
-- [ ] Each signal alone yields the question in a temp repo with no override — a merge script, a pipeline-trigger script with no merge, a rejected branch name; the same repo with the override does not
-- [ ] The question is asked at most once per session, and "never for this repo" suppresses it across sessions
-- [ ] Choosing scaffold invokes `/install-rules --customize git-workflow`; nothing writes the override without that choice
+- [x] Each signal alone yields the question in a temp repo with no override — a merge script, a pipeline-trigger script with no merge, a rejected branch name; the same repo with the override does not
+- [x] The question is asked at most once per session, and "never for this repo" suppresses it across sessions
+- [x] Choosing scaffold invokes `/install-rules --customize git-workflow`; nothing writes the override without that choice
 
 ## Progress
 
 | Phase      | Status | Note |
 | ---------- | ------ | ---- |
-| Analysis   | -      |      |
-| Development | -     |      |
-| Testing    | -      |      |
-| Acceptance | -      |      |
+| Analysis   | Done   | "Once per session" needs a session id no script sees — the Stop hook passes the one in its input; "never" and each session's marker are separate files, each created atomically |
+| Development | Done  | `review-state.js flow-detect` / `flow-answer never`; Stop hook `🧭` line; § Proactive Offer "Custom flow" names the question and routes Scaffold to `/install-rules --customize git-workflow --reset` |
+| Testing    | Done   | `test/scripts/review-state.test.js` +9 flow cases (each signal, negatives, quoted/global-option/CI-ref targets, racing hooks, never persists); hook test with session ids; `npm test` 4928/4928; `/precommit` ✅ PASS |
+| Acceptance | Done   | Codex review ✅ Ready after seven rounds on the detector (the regex matchers became one shell-word tokenizer); `--verify-ac` not yet run, hence Candidate Complete |
