@@ -2,7 +2,7 @@
 
 > **Doc class**: Lifecycle — Phase 1 requirements (per `@rules/docs-numbering.md`). Feature-level problem-space analysis. **Not** a task tracking ticket; for per-task progress tracking see `requests/*.md` (created via `/create-request`).
 > **Created**: 2026-09-23
-> **Updated**: 2026-09-24 (maintainer decisions on § 9 Q1, Q2, Q6, run steps, FR-16)
+> **Updated**: 2026-09-24 (maintainer decisions on § 9 Q1, Q2, Q6, run steps, FR-16; goal-mode commit, FR-17)
 > **Tier**: standard
 > **Intent**: [intent-git-autonomy.md](./intent-git-autonomy.md)
 > **Tech Spec**: [2-tech-spec.md](./2-tech-spec.md)
@@ -27,6 +27,12 @@ and `testing-project.md` already do for their parents. What does **not** loosen:
 no-AI-attribution checks, the protected-branch prompts, and the Anchor Register's exception list as
 the closed set of who may push.
 
+Maintainer addition (2026-09-24): while the user has put the session in **goal mode** (Claude Code's
+`/goal`, which keeps the model working until a stated condition holds), the model may **commit on
+its own** — no per-use question — because a goal is exactly the situation where the user has
+delegated "keep going until done" and a menu waiting on a phone stalls the run. The attribution
+guard and every rule this feature adds stay in force for those commits.
+
 ### 5-Why Trace
 
 1. Surface: pop an AskUserQuestion offering `/smart-commit --execute` and `/push-ci`; let
@@ -49,12 +55,13 @@ the closed set of who may push.
 | A user-owned `rules/git-workflow-project.md` that overrides Default-tier git rules (branch naming, commit format, the project's deploy workflow; allowed read-only ops **deferred** — no read-only command is forbidden, see the tech spec § 3.2) under the same Anchor-first contract as the two existing override files | Overriding Anchor Register #4 items through the project file: the forbidden-operation list, the enumerated workflow set, the attribution whitelist, and *removing* a default protected branch (adding one is allowed, FR-7) |
 | The model may proactively ask whether the user wants such an override file when it detects a custom git flow (a merge-based release script, a pipeline trigger, a branch convention the defaults reject) | Executing anything an override does **not** declare, or running a declared deploy step without its per-use approval — the override names the steps, the approval authorizes each run |
 | The out-of-workflow "user-authorized execution" credential stays available for what the menus do not cover | Removing the `/dev/tty` pre-push gate where it is installed, or the `ALLOW_*` attestation contract |
+| While a goal **the user set** is active, the model commits on a feature branch after the gates pass, without a per-use question (FR-17) | Goal-mode push, `/deploy-flow`, or any operation other than commit; a goal-mode commit that skips a gate, the attribution guard, or `/smart-commit`'s runtime validations |
 
 ## 3. Stakeholders
 
 | Stakeholder | Role | Key Concern |
 |-------------|------|-------------|
-| Maintainer (sd0x) | Developer / decision-maker | The Anchor Register's exception list is part of the anchor; loosening must be expressed as a change to *who may invoke* a workflow, never to *what credential authorizes* it |
+| Maintainer (sd0x) | Developer / decision-maker | The Anchor Register's exception list is part of the anchor; loosening must be expressed as a change to *who may invoke* a workflow, never to *what credential authorizes* — except the one credential the maintainer added on 2026-09-24, a user-set goal for commit (FR-17) |
 | Plugin users on feature branches | User | Fewer typed commands; a menu at the moment the work is done; no surprise pushes |
 | Plugin users on `main` / release branches | User | Push stays as today — the protected prompt, the hook, the abort on force; they gain a commit-only menu |
 | Teams with a bespoke deploy flow | User / Operator | A place to write "we merge `develop` into `release/*` and run `scripts/deploy.sh`" that the harness respects instead of flagging |
@@ -97,6 +104,7 @@ the closed set of who may push.
 | FR-14 | The offer is **suppressed** after the user answers `not now` for the current digest, and re-offered only after a new gate pass at a new digest | Should | An offer repeated every turn is nagging — the UX failure the feature exists to remove |
 | FR-15 | The same menu is reachable by a one-word request ("commit", "ship it") | Could | Cheap once FR-1 exists; not required for the goal |
 | FR-16 | Whenever the model or a skill suggests `/smart-commit --execute`, `/push-ci` or `/deploy-flow` as a next step, it is presented as an AskUserQuestion option that invokes the skill on selection — never as a command for the user to copy. An unsolicited suggestion still obeys FR-4 (no push option on a protected branch); only the user's explicit request to push puts `/push-ci` there | Must | The root pain (maintainer 2026-09-24): after a task the model asks "run `/smart-commit --execute`?" in prose, and on a phone the user must copy and paste it |
+| FR-17 | While a goal **the user set** is active — the user typed `/goal <condition>`, or approved a goal the model proposed — the model may run `/smart-commit --execute` **without its per-use AskUserQuestion**, on a feature branch only, once every gate the change classes require reads `pass` at the current digest. Everything else stays: the attribution guard on the same `smart-commit-execute.sh commit` path, sensitive-file exclusion, identity/signing HALTs, the plan printed as a record, never `--ai-co-author`. A `/smart-commit` step that needs the user's judgement (an identity-conflict choice, an ambiguous grouping) still asks. The credential ends when the goal is met, judged impossible or cleared; a goal the model set without the user's approval never counts. Push, `/deploy-flow` and every other operation keep their own approvals. A project may turn it off (`## Goal Commit: off`) | Must | Maintainer decision 2026-09-24. A new credential, so a Register #4 change like FR-10 — the grant block, § Efficacy Boundary and their pins move in the same reviewed change (R7) |
 
 Priority: Must / Should / Could / Won't (MoSCoW)
 
@@ -104,7 +112,7 @@ Priority: Must / Should / Could / Won't (MoSCoW)
 
 | ID | Category | Requirement | Metric |
 |----|----------|-------------|--------|
-| NFR-1 | Security | No new credential: after this feature the set of things that authorize a mutating git operation is **exactly** {workflow AskUserQuestion, `/dev/tty` hook where installed, user message naming the op} — unchanged | `discretion.md` § Efficacy Boundary byte-pin unchanged, or changed only to *name* proactive invocation without adding a credential |
+| NFR-1 | Security | Exactly one new credential: after this feature the set of things that authorize a mutating git operation is {workflow AskUserQuestion, `/dev/tty` hook where installed, user message naming the op, **an active user-set goal — for `/smart-commit --execute` on a feature branch only** (FR-17, maintainer 2026-09-24)} | `discretion.md` § Efficacy Boundary and Register #4 change only to add the goal credential with its scope; a test proves a model-set goal, a protected branch, an open gate and a push each fall back to today's approval |
 | NFR-2 | Security | Attribution-guard coverage is 100 % of commits the harness creates on a menu path (opted-in `run` scripts fall under the run-script risk, tech spec § 3.3 step 3); PR titles and bodies keep their 100 % coverage through `/create-pr` Step 4b (the menu creates no PRs); commits made under user-authorized execution keep today's coverage (hook where installed, rule 3 always) | `test/scripts/commit-msg-guard.test.js`, `smart-commit-execute` tests and `create-pr` sanitization tests pass unchanged; a new test proves the menu path reaches `smart-commit-execute.sh commit` |
 | NFR-3 | Usability | Zero pasted text on the feature-branch happy path: from "gates pass" to "pushed" the user makes ≤ 3 selections (offer, commit plan, push plan) | Counted in the acceptance walkthrough |
 | NFR-4 | Usability | No unsolicited push offer on protected branches; no repeated offer at the same digest; no printed slash command where an option could be offered | Test: 0 push offers on `main`; 1 menu per new passing digest; the reworded skills contain no "run `/smart-commit --execute`" copy-text |
@@ -116,12 +124,13 @@ Priority: Must / Should / Could / Won't (MoSCoW)
 
 | Type | Description | Source |
 |------|-------------|--------|
-| Constraint | Anchor Register #4's exception list is closed: `/push-ci`, `/smart-commit --execute`, `/epic-merge`, `/gh-stack`, user-authorized execution. This feature adds **exactly one** entry — `/deploy-flow`, which runs the declared merge steps and, where the project opts in, its declared scripts (FR-10, maintainer decisions 2026-09-24) — and otherwise changes only who may *invoke* two existing workflows and adds a menu that *reaches* them | `rules/discretion.md` § Anchor Register #4; the grant block in `rules/git-workflow.md` L8–15 is byte-pinned |
+| Constraint | Anchor Register #4's exception list is closed: `/push-ci`, `/smart-commit --execute`, `/epic-merge`, `/gh-stack`, user-authorized execution. This feature adds **exactly one** workflow — `/deploy-flow`, which runs the declared merge steps and, where the project opts in, its declared scripts (FR-10, maintainer decisions 2026-09-24) — and **one** credential for an existing workflow — an active user-set goal for `/smart-commit --execute` (FR-17, 2026-09-24); otherwise it changes only who may *invoke* two existing workflows and adds a menu that *reaches* them | `rules/discretion.md` § Anchor Register #4; the grant block in `rules/git-workflow.md` L8–15 is byte-pinned |
 | Constraint | An AskUserQuestion answer may be auto-approved by session caching, so it is sufficient **only inside** an enumerated workflow. The offer menu is therefore a router, never an approval | `rules/discretion.md` § Efficacy Boundary (byte-pinned); `push-gate-optin` §2.3 |
 | Constraint | Any text change in `discretion.md` § Anchor Register or § Efficacy Boundary, `git-workflow.md` L8–15 / L20–21 / L25, or `push-ci`'s "no exceptions" changes a byte-pin and is an Anchor-tier edit requiring the maintainer's explicit decision | `test/rules/discretion-tiers.test.js`, `test/rules/override-contract.test.js`, `test/skills/push-ci.test.js` |
 | Constraint | Protected set is `main \| master \| develop \| release/*`, read by `pre-push-gate.sh` `is_protected()`, and the `case` arms in `push-ci` and `epic-merge`; two other detectors (`next-step/scripts/analyze.js` L556, `remind` L210) check only `main`/`master` | Survey § 6 |
 | Constraint | The attribution guard is one script (`scripts/commit-msg-guard.sh`) invoked by `smart-commit-execute.sh` in the same process as the commit; `ALLOW_AI_COAUTHOR` is stripped from the environment and re-added only when `--ai-co-author` was passed | `smart-commit-hardening` §3.6 |
 | Constraint | Existing overrides are settings-only scaffolds with a live `Precedence:` preamble; `/install-rules` copies them once and never rewrites (except `--customize --reset`) | `rules/auto-loop-project.md`, `rules/testing-project.md`, `install-rules` § Override Template Copy Contract |
+| Decision | Goal mode authorizes **commit only**, on feature branches only, and only for a goal the user set or approved. Claude Code tells the model by injecting `A session-scoped Stop hook is now active with condition: "…"` when a goal is set; hook input carries no goal field (only `permission_mode`), so detection is behaviour-layer. A goal's origin is `user`, `proposal_approved` or `proposal_direct` — the last is the model setting its own goal without asking, which never counts | Maintainer 2026-09-24; Claude Code 2.1.281 binary (`goal_status` attachment, `recordQueuedGoalOrigin`) and `code.claude.com/docs/en/goal.md` |
 | Decision | "Feature branch" = any real branch name (not detached HEAD) not in the (default ∪ project-added) protected set; no prefix is required | Maintainer, 2026-09-24 (§ 9 Q1) |
 | Assumption | The maintainer's "解除 /push-ci 的連續調用限制" refers to `disable-model-invocation: true` plus the "Auto-triggering" prohibition; no other repeat-call limit exists | Survey § 2 (no cooldown, counter or once-per-session rule found) |
 | Assumption | `git merge` is **not** in the forbidden list today; it stays off (decision 2026-09-24). The new Register #4 entry exists because an opted-in `run` script can push, which the anchor otherwise reserves to enumerated workflows | `rules/git-workflow.md` L9 (forbidden list); maintainer decision 2026-09-24 |
@@ -139,6 +148,7 @@ Priority: Must / Should / Could / Won't (MoSCoW)
 - Signal 7 (FR-9/FR-10): a repo with `scripts/deploy.sh` running `git merge develop` and no override → the model asks once whether to scaffold `git-workflow-project.md`; after the user declares the flow there, `/claude-health` reports it as recognised, the model runs the declared merge only after a per-use approval naming source and target, an undeclared merge is not offered, a merge into a protected branch still meets the protected prompt when the harness pushes it, and under `Run Steps: execute` the script's per-step question names the command and states the run-script risk (tech spec § 3.3 step 3).
 - Signal 8 (FR-12): `grep -rn "must invoke \`/smart-commit --execute\` separately" skills/` returns nothing; the replacement sentence states the two-tier rule.
 - Signal 9 (FR-13): no menu offers `git stash`; "run git stash now" typed by the user still works as today.
+- Signal 10 (FR-17/NFR-1): with a user-typed `/goal` active on `feat/x`, a change whose gates pass is committed with no question, through `smart-commit-execute.sh commit` (an AI trailer still exits 4); the same with an open gate, on `main`, under `## Goal Commit: off`, or with a goal the model set unasked → the ordinary menu/approval; no push happens without `/push-ci`'s own approval; after the goal is met or cleared the next commit asks again.
 
 ## 9. Open Questions
 
@@ -146,15 +156,18 @@ Priority: Must / Should / Could / Won't (MoSCoW)
 - [x] **Anchor wording** — resolved 2026-09-24: removing `disable-model-invocation` from `/push-ci` is approved. The credential (per-use AskUserQuestion) is unchanged and `push-ci.test.js` L612/L617 keep "no exceptions".
 - [x] **Offer placement** — answered by the tech spec § 3.3: the model asks when `review-state.js offer` says so; the Stop hook only prints a reminder line; skill closings follow FR-16.
 - [x] **Override heading table** — answered by the tech spec § 3.2: settings only, protected set is an additions list.
-- [x] **`/smart-commit --execute` invocability** — resolved 2026-09-24: the pain is copy-pasting it; FR-16 makes every suggestion an option. Proactive path: the model does not invoke `/smart-commit --execute` or `/push-ci` unasked — it reaches them through the menu (gated offer or FR-16 suggestion) or the user's explicit request; tech spec § 3.4 carries this as rule text.
+- [x] **`/smart-commit --execute` invocability** — resolved 2026-09-24: the pain is copy-pasting it; FR-16 makes every suggestion an option. Proactive path: outside an active user-set goal (FR-17), the model does not invoke `/smart-commit --execute` or `/push-ci` unasked — it reaches them through the menu (gated offer or FR-16 suggestion) or the user's explicit request; tech spec § 3.4 carries this as rule text.
 - [x] **Deploy flow and `git merge`** — resolved 2026-09-24: the override may authorize running the declared merge step(s), as an Anchor-level new Register #4 exception (FR-10).
 - [x] **Pipeline trigger** — resolved 2026-09-24: the project decides (`## Run Steps: print|execute`); the harness states the run-script risk (tech spec § 3.3 step 3). `git merge` stays off the forbidden list.
 - [x] **Session-caching caveat** — answered by the tech spec § 3.3/§ 4: the menu text states that each workflow asks again. Neither workflow's approval screen shows a caching caveat today — `/push-ci` documents the weakness in its § Defense in Depth (L2), not in its plan — and none is added in v1: the controls are each workflow's per-use approval, the `/dev/tty` gate where installed, and the attribution guard.
 
+- [x] **Goal-mode commit** — decided 2026-09-24: the model may commit on its own while the user's goal is active; attribution guard and this feature's rules stay (FR-17).
+- [ ] **Goal-mode commit on protected branches** — FR-17 assumes feature branches only (a commit-only menu stays on `main`, FR-4). Widening it to protected branches is the maintainer's call.
+
 ## 10. References
 
 - Tech Spec: [2-tech-spec.md](./2-tech-spec.md) — downstream design
-- Request tickets: [`./requests/`](./requests/) — R1–R6, per-task execution tracking
+- Request tickets: [`./requests/`](./requests/) — R1–R7, per-task execution tracking
 - `rules/discretion.md` § Anchor Register #4, § Efficacy Boundary — the closed exception list and the credential rule
 - `rules/git-workflow.md` L8–15 (grant block), L20–21 (protected), L25 (push safety) — byte-pinned by `test/rules/discretion-tiers.test.js`
 - `rules/auto-loop.md` § Override Contract; `rules/testing.md` § Project Customization — the override mechanism to replicate
@@ -163,4 +176,5 @@ Priority: Must / Should / Could / Won't (MoSCoW)
 - `skills/smart-commit/SKILL.md` Step 5c; `skills/smart-commit/scripts/smart-commit-execute.sh`; `scripts/commit-msg-guard.sh` L134, L228–231
 - `skills/feature-dev/SKILL.md` L23–26, `skills/bug-fix/SKILL.md` L22–25, `skills/post-dev-recap/SKILL.md` L50/L212 — AS-6 ban, to stay unchanged
 - `skills/next-step/scripts/analyze.js` L233 (`ready_to_commit`), L556 (`main`/`master`-only detector)
+- `https://code.claude.com/docs/en/goal.md` — `/goal` behaviour, statusline indicator, independence from permission modes
 - `docs/features/push-gate-optin/2-tech-spec.md` §2.3; `docs/features/smart-commit-hardening/2-tech-spec.md` §3.6; `docs/features/auto-loop-autonomy/2-tech-spec.md` L36–44

@@ -9,7 +9,7 @@
 - **Problem**: every mutating git step waits for a typed command or a typed authorization sentence,
   on `main` and on `feat/x` alike. The caution is right for protected branches and out of proportion
   on an attested-unshared feature branch.
-- **Goals** (FR-1…FR-16; FR-15's one-word trigger is a `Could`, deferred with no work item in v1): a menu offer of commit/push on feature branches once gates pass; `/push-ci`
+- **Goals** (FR-1…FR-17; FR-15's one-word trigger is a `Could`, deferred with no work item in v1): a menu offer of commit/push on feature branches once gates pass; `/push-ci`
   model-invocable and repeatable; a third user-owned override `rules/git-workflow-project.md`; a
   declared deploy workflow the model may run under per-step approval; attribution checks
   unchanged; **no suggested command left for the user to copy** (FR-16).
@@ -17,7 +17,8 @@
   prefix rule); `/push-ci` loses `disable-model-invocation`; `/deploy-flow` is a **new Anchor
   Register #4 exception**; `run` steps are the project's choice, with the risk stated; `git merge`
   stays **off** the forbidden list; the pain to remove is the copy-paste of a suggested
-  `/smart-commit --execute` on a phone (FR-16).
+  `/smart-commit --execute` on a phone (FR-16); while a goal the user set is active, the model
+  commits on a feature branch without a per-use question (FR-17, § 3.5).
 - **Scope**: rules, skills, one script, one hook line, tests. No change to `commit-msg-guard.sh`,
   `smart-commit-execute.sh`, `/create-pr` sanitization, or the `ALLOW_*` contract.
 
@@ -27,7 +28,7 @@
 |------|-------|------------------------------|
 | Grant block `rules/git-workflow.md` § Exception | Byte-pinned (`discretion-tiers.test.js` `CANONICAL_AUTHORIZATION_BLOCK`, `AUTHORIZED_GRANTS`, `validateDestructiveContract`) | The `/deploy-flow` grant is an Anchor edit: constants and `AUTHORIZED_GRANTS` change together. The forbidden list itself is unchanged |
 | Register #4 `rules/discretion.md` | Pinned whole (`override-contract.test.js` `CANONICAL_ANCHOR_REGISTER`) | Same edit, mirrored |
-| § Efficacy Boundary | Pinned whole; its generic clause covers "an enumerated workflow that names no stronger mechanism" | **Not edited** — `/deploy-flow` names no stronger mechanism and falls under the generic clause as written |
+| § Efficacy Boundary | Pinned whole; its generic clause covers "an enumerated workflow that names no stronger mechanism" | Not edited for `/deploy-flow` — it names no stronger mechanism and falls under the generic clause as written. **Edited in R7** for the goal-mode commit credential (§ 3.5) |
 | `skills/push-ci/SKILL.md` L4 | `disable-model-invocation: true`; § Prohibited "Auto-triggering this skill"; `test/skills/push-ci.test.js` `SKILL_DIGEST` pins the **whole file** | Removed / reworded; the pinned "no exceptions" line stays; R3 reviews the full skill diff and re-records `SKILL_DIGEST` |
 | Protected set | Hard-coded four times: `pre-push-gate.sh` `is_protected()` (L322), `push-ci` and `epic-merge` `case` arms, `gh-stack` Phase 2 refusal | Needs one resolver that also reads the project additions |
 | Override files | Two, list hard-coded in ~15 places (requirements § 3) | Third file registered in all of them |
@@ -85,6 +86,7 @@ Same header shape as the two existing overrides: a live `Precedence:` paragraph 
 | `## Offer Mode` | Setting — read by § Proactive Offer | `on` (default) · `commit-only` · `off` | Default |
 | `## Deploy Workflow` | Setting — read by `/deploy-flow` | fenced `text` block, one step per line (below) | Default; the steps are only ever run by `/deploy-flow` under its Register #4 entry |
 | `## Run Steps` | Setting — read by `/deploy-flow` | `print` (default) · `execute` | Default. The scaffold's comment states the risk verbatim (§ 3.3 `/deploy-flow` step 3); choosing `execute` is the project's decision |
+| `## Goal Commit` | Setting — read by § 3.5 | `on` (default) · `off` | Default. `off` only narrows: every commit goes back to the menu |
 
 No heading restates a parent `##` heading, so the file carries **settings only** — no section
 replacement is offered (a same-named heading would replace the parent section wholesale under the
@@ -219,7 +221,7 @@ protected pre-approval then applies.
 |------|------|------|
 | `rules/git-workflow.md` § Exception (pinned block) | New `Exception: /deploy-flow skill may run the steps the project's git-workflow-project.md declares — git switch + git merge, and, only where that file sets Run Steps: execute, the declared scripts, which may themselves push — each after explicit per-step user approval via AskUserQuestion naming the step`. `Claude forbidden:` and the `user-authorized execution` line are unchanged | **Anchor** — maintainer-approved 2026-09-24 |
 | `rules/discretion.md` Register #4 | Same workflow added to the enumerated list and to the "exception list is part of the anchor" sentence | **Anchor** |
-| `rules/git-workflow.md` new `## Proactive Offer` | FR-1/FR-4/FR-14/FR-16 as rule text: when `review-state.js offer` says true, ask the menu once; any suggested git workflow is an option, never copy-text; the model never invokes `/smart-commit --execute` or `/push-ci` unasked — only through a menu selection or the user's explicit request; the selection routes, the workflow approves | Default |
+| `rules/git-workflow.md` new `## Proactive Offer` | FR-1/FR-4/FR-14/FR-16 as rule text: when `review-state.js offer` says true, ask the menu once; any suggested git workflow is an option, never copy-text; the model never invokes `/smart-commit --execute` or `/push-ci` unasked — only through a menu selection or the user's explicit request, the one exception being `/smart-commit --execute` under a counting goal (§ 3.5, added in R7); the selection routes, the workflow approves | Default |
 | `rules/git-workflow.md` new `## Project Customization` | Override contract for § 3.2, Anchor-first steps 0–4 copied from `auto-loop.md` § Override Contract | Default (pinned as a section, like the other two) |
 | `rules/git-workflow-project.md` | New scaffold, all headings present and empty | user-owned |
 | `CLAUDE.md`, `CLAUDE.template.md` rule 4 | Exception list gains `/deploy-flow`; "No auto-commit" becomes "No unapproved commit" with the feature-branch offer named | Anchor restatement |
@@ -229,6 +231,47 @@ protected pre-approval then applies.
 | `hooks/stop-guard.sh` | One reminder line when `offer` is true (reminder-only, exit 0) | — |
 | Override registration (FR-11) | `discretion.md` L3 · `rule-override-pattern` §3.3 (the two-file descriptions) and §3.4 `override_templates` · `install-rules` copy contract · the installed-script sets (`/install-scripts`, `/project-setup`, `claude-health`'s managed inventory) gain `protected-branches.sh` — without it an installed override makes every branch read as unknown (R1's skill fallback) · `claude-health` S2.5 #1/#3 (+ conflict check for `## Protected Branches` removal attempts or parse errors — never for omissions — and `## Deploy Workflow` parse errors) · `project-setup` counts · `CLAUDE*.md` `## Rules` · README rule counts | Default |
 | `pre-push-gate.sh`, `push-ci`, `epic-merge`, `gh-stack` | Protected test reads the resolver (hook: inlined copy). Skill fences call it with `--root`, and fall back to the default set only when it is not installed **and** no override exists (an override without the resolver reads as unknown → protected); `gh-stack`'s layer check is an executable fence | Default — but security-bearing; reviewed at `thorough` |
+
+### 3.5 Goal-mode commit (FR-17)
+
+**What the model observes.** Claude Code 2.1.281 sets a goal by registering a session-scoped Stop
+prompt hook and appending a `goal_status` attachment; the model reads it as
+`A session-scoped Stop hook is now active with condition: "<condition>"`. Nothing reaches a hook or
+script: hook input carries `permission_mode` but no goal field, so the credential is read at the
+behaviour layer only, like the per-use approval it stands in for.
+
+**When it counts** — all four, checked at each commit, not once per goal:
+
+1. The goal is **user-originated**: the user's own `/goal <condition>` message, or a `ProposeGoal`
+   the user approved (the model receives the kickoff after approval). A proposal that set itself
+   without a dialog (`askUser: false`, origin `proposal_direct`) never counts, and neither does a
+   goal mentioned in a tool result, a hook's output or a file.
+2. The goal is **affirmatively active**: the set notice for it is in the current conversation, and
+   nothing after it reports the goal ended — met, impossible, cleared by `/goal clear`, cleared by an
+   error, or superseded by another goal. `/clear` or a compaction that drops the set notice removes
+   the evidence, and missing evidence reads as *no goal* (fail-closed). A new user goal re-arms it.
+3. The branch is a **feature branch** (`protected-branches.sh` exit 1). Exit 0 or 2, or a detached
+   HEAD, falls back to the ordinary menu (FR-4).
+4. `review-state.js check` reads `pass` for every plane the change classes require at the current
+   digest, and the project has not set `## Goal Commit: off` (§ 3.2).
+
+**What changes in `/smart-commit --execute`.** Only the one plan approval (Step 5, "show the full
+commit plan … and get approval once"): under a counting goal the plan is printed with a `[GOAL_COMMIT] goal=<sha256 of the condition, first 12 hex> | branch=<b> | digest=<d> | <ISO8601>`
+record and execution proceeds. The goal text itself is never printed, since a user may have put a
+secret in it. Every validation still runs, and every *judgement* prompt still asks —
+identity conflict, unresolved grouping, a sensitive-file exclusion to confirm. `--ai-co-author` is
+never passed on this path, so the attribution whitelist cannot be reached without the user. Every
+other approval or confirmation directive in the skill names the same exception, or the skill
+contradicts itself — found by searching the skill for "approval", "confirm" and "ask", not by a
+fixed list. Today that is the frontmatter `description`, the workflow diagram, Step 1a's
+execute-mode paragraph and mode table, Step 4's grouping confirmation, § Prohibited "No silent
+execution", and the `--execute` row of § Examples.
+
+**Anchor edits (R7, maintainer decision 2026-09-24).** Register #4 and the `git-workflow.md` grant
+block gain the credential with its four conditions; § Efficacy Boundary gains one clause saying the
+per-use AskUserQuestion inside `/smart-commit --execute` is replaced — not bypassed — by an active
+user-set goal on a feature branch; CLAUDE.md rule 4 names it. Each pin is re-recorded in the same
+reviewed change.
 
 ## 4. Risks and Dependencies
 
@@ -240,7 +283,8 @@ protected pre-approval then applies.
 | The run-script risk (§ 3.3 step 3) | Default `print`; `execute` is a per-project opt-in whose scaffold comment and per-step question state the risk; argv invocation, no shell string; the step names the exact command before it runs |
 | A declared merge targets a protected branch | Allowed locally under per-step approval (it is the user's release flow); a push the harness issues goes through `/push-ci`'s protected pre-approval and the hook — unchanged. A push inside an opted-in `run` script is the run-script risk (§ 3.3 step 3) |
 | Offer nags | One per digest; `not now` silences until a new gate pass at a new digest; `## Offer Mode: off` |
-| Anchor pins churn | Register #4 and grant-block pins change in R5 only, citing the maintainer's decision; R3 separately re-records `push-ci`'s whole-file `SKILL_DIGEST` |
+| Goal credential forged or stale | Behaviour-layer only, so the four § 3.5 conditions are rule text re-read at every commit; a model-set goal never counts; the `[GOAL_COMMIT]` record makes each unasked commit auditable; push stays behind `/push-ci`'s own approval, so a wrong local commit costs a `reset` |
+| Anchor pins churn | Register #4 and grant-block pins change in R5 (`/deploy-flow`) and R7 (goal-mode commit, which also edits § Efficacy Boundary) only, each citing the maintainer's decision; R3 separately re-records `push-ci`'s whole-file `SKILL_DIGEST` |
 
 Dependencies: `jq`/`node` already required by the hooks; `git check-ref-format`.
 
@@ -254,8 +298,9 @@ Dependencies: `jq`/`node` already required by the hooks; `git check-ref-format`.
 | R4 | `review-state.js offer`/`offer-shown`, § Proactive Offer, `stop-guard` line, skill rewording to option-not-text | FR-1, FR-2, FR-4, FR-12, FR-14, FR-16 | standard |
 | R5 | Register #4 + grant block + `CLAUDE*.md` rule 4 + `/deploy-flow` skill, registered in `docs/skill-catalog.yml` with the generated READMEs re-verified | FR-10, FR-13 | thorough (Anchor) |
 | R6 | Detect a custom flow and ask once to scaffold the override | FR-9 | standard |
+| R7 | Goal-mode commit: § 3.5 rule text, `/smart-commit` Step 5 branch, `## Goal Commit` setting, Register #4 / grant block / § Efficacy Boundary / rule 4 and their pins | FR-17, NFR-1 | thorough (Anchor) |
 
-Order: R1 → R2 (R2's protected heading needs R1) → R3 ∥ R4 → R5 → R6.
+Order: R1 → R2 (R2's protected heading needs R1) → R3 ∥ R4 → R5 → R6; R7 after R2 and R5 (it shares their setting and their pins).
 
 ## 6. Testing Strategy
 
@@ -266,6 +311,7 @@ Order: R1 → R2 (R2's protected heading needs R1) → R3 ∥ R4 → R5 → R6.
 | Integration | Real temp repos: `/deploy-flow` step parser; merge happy path, conflict → `--abort`, refusal on dirty tree, undeclared step never offered, source or target moved after approval → abort with nothing merged, `release/*` pattern binds only to a user-picked existing branch; `--ff-only` verifies HEAD == SRC_OID with TGT_OID as ancestor and checks no message; the merge read-back ignores a replace ref and an inherited `ALLOW_AI_COAUTHOR`; `Run Steps`: default `print` executes nothing, `execute` runs a step only after its approval and never after a refusal, an invalid mode value is a parse error, arguments arrive as separate argv entries |
 | Contract | `discretion-tiers` and `override-contract` pins updated with the new grant; `validateDestructiveContract` accepts the new `Exception:` line; `push-ci.test.js` "no exceptions" still green and `SKILL_DIGEST` re-recorded after the full-diff review; a new test asserts `push-ci` frontmatter has no `disable-model-invocation` |
 | Guard (both directions) | Menu path reaches `smart-commit-execute.sh commit` (AI trailer → exit 4); `/deploy-flow`'s pre-merge `commit-msg-guard.sh` check passes the fixed template and refuses the step when the guard rejects (mutation proof on that call); a `commit-msg` hook that appends an AI trailer during the merge is caught by the post-merge read-back and stops the flow naming the OID; override omitting `main` → `main` still protected in all four workflows |
+| Goal-mode commit | Contract tests on the rule text for each § 3.5 condition in both directions (user goal → no question; model-set goal, `/goal clear`, protected branch, open gate, `Goal Commit: off` → the ordinary approval); the goal path still reaches `smart-commit-execute.sh commit` (AI trailer → exit 4) and never passes `--ai-co-author` |
 | Carriers | Override count/list agrees with `rules/*-project.md` on disk in every carrier (NFR-5) |
 
 ## 7. Open Questions
@@ -278,3 +324,6 @@ Order: R1 → R2 (R2's protected heading needs R1) → R3 ∥ R4 → R5 → R6.
   `/smart-commit --execute`, worst on a phone. FR-16: any suggested git workflow is an
   AskUserQuestion option that invokes the skill; commit menus are allowed on protected branches
   too (a local commit publishes nothing), push kinds are not.
+- [ ] **Q4 goal-mode commit on protected branches** — § 3.5 condition 3 limits it to feature
+  branches (a local commit on `main` publishes nothing, but an unattended one is harder to spot).
+  Widening it is the maintainer's call.
