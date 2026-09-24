@@ -130,6 +130,11 @@ skills:
     featured: false
     use_when: "Native GitHub stacked PRs via the github/gh-stack extension"
     public: true
+  - command: /deploy-flow
+    category: development
+    featured: false
+    use_when: "Running the release flow a project declares in git-workflow-project.md"
+    public: true
   - command: /merge-prep
     category: development
     featured: false
