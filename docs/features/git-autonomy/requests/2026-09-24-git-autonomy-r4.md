@@ -2,7 +2,7 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md` (created via `/req-analyze`).
 > **Created**: 2026-09-24
-> **Status**: In Progress
+> **Status**: Candidate Complete
 > **Priority**: P0
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) <- Technical detail (primary source)
 > **Requirements**: [1-requirements.md](../1-requirements.md) <- Feature-level problem-space rationale
@@ -44,7 +44,7 @@ The root pain: after a task the model suggests `/smart-commit --execute` in pros
 - [x] A selection after an edit, or after a switch to a protected branch at the same digest, is void and invokes nothing
 - [x] `Offer Mode: commit-only` turns `commit+push` into a commit-only menu; `off` suppresses the offer
 - [x] `grep -rn "must invoke .*/smart-commit --execute.* separately" skills/` returns nothing; the four skills state the menu rule
-- [ ] Walkthrough on a feature branch: gates pass → one menu → "commit and push" → `/smart-commit --execute` plan + approval → `/push-ci` plan + approval, no text typed
+- [x] Walkthrough on a feature branch: gates pass → one menu → "commit and push" → `/smart-commit --execute` plan + approval → `/push-ci` plan + approval, no text typed
 - [x] `stop-guard.sh` reminder line appears only when `offer` is true and never blocks
 
 ## Progress
@@ -54,4 +54,4 @@ The root pain: after a task the model suggests `/smart-commit --execute` in pros
 | Analysis   | Done   | Offer semantics per tech spec § 3.3; review added four ahead-range cases (unknown range, reverted change, rename, merge resolution) and a single-snapshot rule |
 | Development | Done  | `review-state.js offer` / `offer-shown`; `rules/git-workflow.md` § Proactive Offer; `stop-guard.sh` offer line (same timeout ladder); feature-dev, bug-fix, debug, test-deep reworded and granted `AskUserQuestion` + `Skill` |
 | Testing    | Done   | `test/scripts/review-state.test.js` +14 offer cases, every `reason` reachable; stop-hook test expects the offer line then silence after `offer-shown`; `npm test` 4891/4891; `/precommit` ✅ PASS |
-| Acceptance | Pending | Codex review ✅ Ready (rotated thread). The live feature-branch walkthrough (menu → smart-commit → push-ci) is still owed. First pass (2026-09-25, under an active user goal): Goal mode committed without the menu, as § Proactive Offer lets it, then `offer` returned `kind: push`, one menu asked Push · Not now, and the selection was re-validated, recorded with `offer-shown` and invoked `/push-ci` with its own plan and approval — no text typed. The full commit-and-push menu path is walked on the next commit |
+| Acceptance | Done   | Codex review ✅ Ready (rotated thread). Walkthrough done 2026-09-25 on `docs/requests-acceptance`: with every gate passed, `offer` returned `commit+push`; one menu (Commit and push · Commit · Not now) was answered, re-validated and recorded with `offer-shown`; `/smart-commit --execute` showed its plan and asked (commit `d246d21`), then `/push-ci` showed its plan and asked (pushed). No text was typed. An earlier pass the same day ran under an active user goal, where Goal mode committed without the menu and a push-only menu followed; this pass declined Goal mode (a stated deviation) so the AC's full path ran. `--verify-ac` 2026-09-25: 7/7 Complete; AC 3 at Medium-High and AC 6 at Medium — the `offer-shown` state, the commit 35 s later and the push reflog match this record, but the menus and approvals themselves are session facts — hence Candidate Complete |
