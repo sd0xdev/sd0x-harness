@@ -10,7 +10,7 @@
   4. `/claude-health` 提供 safeguard 檢查（v1 為 4 項；R8 起為 6 項，新增 duplicate heading 與 legacy precedence header）
 - **Scope**:
   - v1: 僅 `auto-loop-project.md`（最常客製化的規則）
-  - R8 起: `auto-loop-project.md` 與 `testing-project.md` 皆為已定義的散布路徑（見 § 3.4.1 `override_templates`）
+  - R8 起: `auto-loop-project.md` 與 `testing-project.md` 皆為已定義的散布路徑；git-autonomy R2（2026-09-24）加入 `git-workflow-project.md`（見 § 3.4.1 `override_templates`）
   - 命名慣例 `*-project.md` 保留給未來擴展
 - **Non-goals**:
   - 不修改 smart merge 演算法本身
@@ -125,9 +125,10 @@ replacements: auto-loop.md § Override Contract.
 managed_rules = rules/*.md EXCLUDING *-project.md
 
 # Explicit override template mapping (not suffix-derived from managed_rules)
-# Both distribution paths are defined here (R8): testing-project.md previously had no
-# defined path — it IS copied, same contract as auto-loop-project.md.
-override_templates = { "auto-loop.md": "auto-loop-project.md", "testing.md": "testing-project.md" }
+# Every distribution path is defined here (R8): testing-project.md previously had no
+# defined path — it IS copied, same contract as auto-loop-project.md. git-workflow-project.md
+# joined in git-autonomy R2 (2026-09-24), same contract.
+override_templates = { "auto-loop.md": "auto-loop-project.md", "testing.md": "testing-project.md", "git-workflow.md": "git-workflow-project.md" }
 
 For each (base_rule, project_file) in override_templates:
   if project_file NOT exists in .claude/rules/:
@@ -200,7 +201,7 @@ See `@rules/auto-loop-project.md` for your project's custom auto-loop behavior.
 | LLM ignores precedence instruction | Low | Medium | Explicit **live** header (R8 — a comment-form header never reaches the model at all). For section replacements, the restated section has no overlapping content; for settings, the parent names the slot it reads, so there is nothing to overlap |
 | User edits base instead of project file | Medium | Low | `/claude-health` wrong-layer detection + base redirect comment |
 | Override drift (base updated, project stale) | Medium | Medium | `based_on` hash + health check warning |
-| Scope creep to all rules | Low | Medium | Scope is an **explicit closed mapping**, not a suffix convention: `override_templates` (§ 3.4.1) currently lists `auto-loop.md` and `testing.md` and adding a third is a deliberate edit there. (v1 shipped auto-loop only; R8 added testing.) |
+| Scope creep to all rules | Low | Medium | Scope is an **explicit closed mapping**, not a suffix convention: `override_templates` (§ 3.4.1) currently lists `auto-loop.md`, `testing.md` and `git-workflow.md`, and adding another is a deliberate edit there. (v1 shipped auto-loop only; R8 added testing; git-autonomy R2 added git-workflow.) |
 | Override drift reported against the wrong base | Low | Medium | Check #1 derives the base from the override's own `Based on:` filename — hard-coding one base is what would break as soon as a second template shipped (R8) |
 
 ### Dependencies

@@ -18,5 +18,6 @@
 | `logging` | Structured JSON, no secrets |
 | `context-management` | Data-driven context monitoring (measure before deciding) |
 | `testing-project` | Project-specific testing overrides (user-owned) |
+| `git-workflow-project` | Project-specific git settings: branch naming, commit format, protected-branch additions, offer mode, deploy workflow (user-owned) |
 
 > **Customization**: Edit `auto-loop-project.md` to override auto-loop behavior per project. Plugin updates won't conflict — see [Rule Override Pattern](../docs/features/rule-override-pattern/2-tech-spec.md).

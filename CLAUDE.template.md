@@ -256,6 +256,7 @@ Replace these placeholders with your project values:
 - @rules/docs-writing.md
 - @rules/docs-numbering.md
 - @rules/git-workflow.md
+- @rules/git-workflow-project.md -- Project-specific git overrides (user-owned)
 - @rules/logging.md
 - @rules/self-improvement.md -- Corrected → record → prevent recurrence
 - @rules/context-management.md -- Data-driven context monitoring (measure before deciding)

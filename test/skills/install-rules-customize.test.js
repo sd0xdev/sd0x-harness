@@ -337,7 +337,7 @@ function installOverrideTemplates(srcDir, dstDir, mapping) {
   return log;
 }
 
-const OVERRIDE_TEMPLATES = { 'auto-loop.md': 'auto-loop-project.md', 'testing.md': 'testing-project.md' };
+const OVERRIDE_TEMPLATES = { 'auto-loop.md': 'auto-loop-project.md', 'testing.md': 'testing-project.md', 'git-workflow.md': 'git-workflow-project.md' };
 
 /** The Override Template Copy Contract, whitespace-normalized. Equality against this constant is
  *  the whole guard.
@@ -361,22 +361,23 @@ const OVERRIDE_TEMPLATES = { 'auto-loop.md': 'auto-loop-project.md', 'testing.md
  *  section's body is not something an equality check on this section can see — that is what the
  *  contract's own "**only install or re-install path**" clause and doc review are for. */
 const CANONICAL_CONTRACT =
-  'Both override templates are copied from `rules/` on install when absent (`override_templates` in ' +
-  '`docs/features/rule-override-pattern/2-tech-spec.md` maps `auto-loop.md → auto-loop-project.md` and ' +
-  '`testing.md → testing-project.md`). This is the **only install or re-install path** that writes them — ' +
-  'they are excluded from the managed set above, so no merge, upgrade, or `--force` reaches them. ' +
-  '(The one other writer is the user-invoked `--reset`, below.) ' +
-  'The copy and `--reset` regeneration produce the **live-precedence header** (a live `Precedence:` ' +
-  'paragraph before the first `##` — HTML comments are stripped from model context, so a comment-form ' +
-  'declaration never reaches the model), and stamp `<!-- Based on: <base> @ <hash> -->` with the base ' +
-  "rule's blob hash **at copy time** rather than carrying the template's recorded value, so a fresh " +
-  'install starts at zero drift instead of inheriting whatever hash the shipped template happened to ' +
-  'record. An already-installed `.claude/rules/*-project.md` is user-owned and is **never rewritten by ' +
-  'install or re-install** — including `--force`, which governs the managed set only. The single ' +
-  'exception is `--customize <rule> --reset`, which the user invokes explicitly against a named file to ' +
-  'regenerate it; that is a requested overwrite, not an install-time one. A legacy comment-only header ' +
-  "is therefore *reported* by `/claude-health` S2.5 check #6 and never migrated on the user's behalf — " +
-  '`--reset` is offered as the remedy the user may choose, not an action the install path takes.';
+  'All three override templates are copied from `rules/` on install when absent (`override_templat' +
+  'es` in `docs/features/rule-override-pattern/2-tech-spec.md` maps `auto-loop.md → auto-loop-proj' +
+  'ect.md`, `testing.md → testing-project.md` and `git-workflow.md → git-workflow-project.md`). Th' +
+  'is is the **only install or re-install path** that writes them — they are excluded from the man' +
+  'aged set above, so no merge, upgrade, or `--force` reaches them. (The one other writer is the u' +
+  'ser-invoked `--reset`, below.) The copy and `--reset` regeneration produce the **live-precedenc' +
+  'e header** (a live `Precedence:` paragraph before the first `##` — HTML comments are stripped f' +
+  'rom model context, so a comment-form declaration never reaches the model), and stamp `<!-- Base' +
+  'd on: <base> @ <hash> -->` with the base rule\'s blob hash **at copy time** rather than carrying' +
+  ' the template\'s recorded value, so a fresh install starts at zero drift instead of inheriting w' +
+  'hatever hash the shipped template happened to record. An already-installed `.claude/rules/*-pro' +
+  'ject.md` is user-owned and is **never rewritten by install or re-install** — including `--force' +
+  '`, which governs the managed set only. The single exception is `--customize <rule> --reset`, wh' +
+  'ich the user invokes explicitly against a named file to regenerate it; that is a requested over' +
+  'write, not an install-time one. A legacy comment-only header is therefore *reported* by `/claud' +
+  'e-health` S2.5 check #6 and never migrated on the user\'s behalf — `--reset` is offered as the r' +
+  'emedy the user may choose, not an action the install path takes.';
 
 /** Collapse inline and line-break whitespace so re-wrapping a paragraph is invisible — but reject
  *  indented code first. A paragraph pushed to column 4 renders as a code block: the words are
@@ -447,7 +448,7 @@ test('fresh install in a detached consumer fixture → live header AND Based-on 
       writeFileSync(join(src, projectFile), seeded);
     }
     const log = installOverrideTemplates(src, dst, OVERRIDE_TEMPLATES);
-    assert.deepEqual(log.map((l) => l.action), ['created', 'created']);
+    assert.deepEqual(log.map((l) => l.action), Object.keys(OVERRIDE_TEMPLATES).map(() => 'created'));
     for (const [baseRule, projectFile] of Object.entries(OVERRIDE_TEMPLATES)) {
       const installed = readFileSync(join(dst, projectFile), 'utf8');
       assert.match(installed, /^Precedence: /m, `${projectFile}: fresh install carries the live header`);
@@ -476,7 +477,7 @@ test('shipped /install-rules contract pins both mappings, copy-when-absent, --re
     assert.match(contract, new RegExp(`${base.replace('.', '\\.')}\\s*→\\s*${projectFile.replace('.', '\\.')}`),
       `contract lists the ${base} → ${projectFile} mapping (fixture mapping stays traceable to the shipped text)`);
   }
-  assert.match(contract, /Both override templates are copied from `rules\/` on install when absent/,
+  assert.match(contract, /All three override templates are copied from `rules\/` on install when absent/,
     'contract states absent-target copy behavior (full positive sentence — a negated rewording must fail)');
   assert.match(contract, /`--reset` regeneration produce the \*\*live-precedence header\*\*/,
     'contract states copy and --reset produce the live-precedence header');
@@ -597,7 +598,7 @@ test('the pinned contract rejects every mutation four lexical guards let through
       'the whole section wrapped in a fenced code block'],
     [skill + '\n\n' + heading + '\n\nInstall always overwrites user files.\n',
       'a second copy of the heading, free to contradict the first'],
-    [skill.replace(/^(Both override templates are copied)/m, ' \t$1'),
+    [skill.replace(/^(All three override templates are copied)/m, ' \t$1'),
       'one space plus a tab — column 4, so indented code, but not a match for /^(?:\\t| {4})/'],
   ]) {
     assert.throws(() => normalizeContract(extractContract(mutated)), /assert|Assertion/i, `must reject: ${why}`);
@@ -654,9 +655,10 @@ test('existing installed copy in the fixture → bytes stay identical through a 
     ].join('\n');
     writeFileSync(join(dst, 'auto-loop-project.md'), legacy);
     writeFileSync(join(dst, 'testing-project.md'), legacy.replace(/auto-loop/g, 'testing'));
+    writeFileSync(join(dst, 'git-workflow-project.md'), legacy.replace(/auto-loop/g, 'git-workflow'));
     const before = Object.values(OVERRIDE_TEMPLATES).map((f) => readFileSync(join(dst, f)));
     const log = installOverrideTemplates(src, dst, OVERRIDE_TEMPLATES);
-    assert.deepEqual(log.map((l) => l.action), ['skipped', 'skipped']);
+    assert.deepEqual(log.map((l) => l.action), Object.keys(OVERRIDE_TEMPLATES).map(() => 'skipped'));
     Object.values(OVERRIDE_TEMPLATES).forEach((f, i) => {
       assert.ok(before[i].equals(readFileSync(join(dst, f))), `${f}: installed copy must stay byte-identical`);
     });
