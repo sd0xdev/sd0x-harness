@@ -39,7 +39,7 @@ function readSkill() {
 // The section pins below survive because they give a precise message for the common case; the
 // digest is what makes the claim complete.
 
-const SKILL_DIGEST = "36c53dc14cfe2d428f1328c41a5c3b0107f84db010074cf3536582a09a3796cd";
+const SKILL_DIGEST = "e2025e366bb8443700337a52ca2668ca58872d90c7daa6978df631a936158e19";
 
 function digestOf(text) {
   return createHash('sha256').update(text).digest('hex');
@@ -5191,4 +5191,17 @@ test('the Overwrites line on an unknown reading that printed a tip → names tha
   assert.match(line, /On `unknown-tip` or `unknown-ancestry`[^.]*: that same full object ID followed by `\(topology unverified — <the ASK_REASON word>\)`/,
     'unknown readings with a printed tip must name it');
   assert.doesNotMatch(line, /On every other reading: `nothing/, 'the blanket "nothing" mapping must not return');
+});
+
+test('frontmatter when read → push-ci is model-invocable while /epic-merge is not (git-autonomy R3)', () => {
+  // FR-3: the model may invoke /push-ci — its per-invocation AskUserQuestion stays the credential.
+  // /epic-merge keeps the flag: R3 widens who may invoke /push-ci only. (/gh-stack never carried
+  // it; its per-use approval was already its only gate.)
+  const front = (p) => readFileSync(resolve(__dirname, '../..', p), 'utf8').split('\n---\n')[0];
+  assert.doesNotMatch(front('skills/push-ci/SKILL.md'), /disable-model-invocation/);
+  assert.match(front('skills/epic-merge/SKILL.md'), /disable-model-invocation: true/);
+  const skill = readSkill();
+  assert.match(skill, /Pushing without this invocation's own AskUserQuestion approval/,
+    'the prohibition that replaced "Auto-triggering" names the per-invocation approval');
+  assert.doesNotMatch(skill, /Auto-triggering this skill/);
 });
