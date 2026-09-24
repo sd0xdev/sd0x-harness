@@ -238,3 +238,17 @@ test('AUTO_LOOP_CHECK_TIMEOUT guard: 0 must not disable the bound (timeout 0 / a
     assert.match(src, /\[ "\$_T" -gt 0 \] \|\| _T=10/, `${hook}: strictly-positive timeout guard missing`);
   }
 });
+
+test('stop: a custom git flow with no override → one 🧭 line per session, from the hook input session id', () => {
+  const repo = makeRepo();
+  const home = tmp('rh-home-');
+  execFileSync('git', ['-C', repo, 'switch', '-q', '-c', 'JIRA-77']);
+  const input = (id) => JSON.stringify({ session_id: id, hook_event_name: 'Stop' });
+  const first = runHook(HOOKS.stop, repo, home, { input: input('sess-a') });
+  assert.equal(first.status, 0);
+  assert.match(first.stdout, /🧭 偵測到自訂 git 流程（branch-name）/);
+  assert.doesNotMatch(runHook(HOOKS.stop, repo, home, { input: input('sess-a') }).stdout, /🧭/, 'not twice in one session');
+  assert.doesNotMatch(runHook(HOOKS.stop, repo, home, { input: '{}' }).stdout, /🧭/, 'no session id, no custom-flow line');
+  assert.doesNotMatch(runHook(HOOKS.stop, repo, home, { input: '{"session_id":"x; rm -rf /"}' }).stdout, /🧭/,
+    'an id that is not a plain token is dropped, never passed on');
+});

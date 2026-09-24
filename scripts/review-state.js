@@ -332,6 +332,208 @@ function offerShown(digest) {
   process.stdout.write(`[OFFER_SHOWN] ${digest}\n`);
 }
 
+// --- Custom-flow detection (git-autonomy R6) ----------------------------------------------------
+// When a project releases its own way and has no git override, the model may ask once whether to
+// scaffold one (rules/git-workflow.md § Proactive Offer, "Custom flow"). A fact, never an action:
+// nothing here writes the override.
+
+const DEFAULT_BRANCH_NAMING = /^(?:feat|fix|docs|refactor)\/./;
+const CI_FILES = ['.gitlab-ci.yml', '.circleci/config.yml', 'Jenkinsfile', 'azure-pipelines.yml', 'bitbucket-pipelines.yml'];
+const TRIGGER_RE = /\bgh\s+workflow\s+run\b|\/dispatches\b|circleci\.com\/api\/v2\/project\/[^\s]*\/pipeline|\/trigger\/pipeline\b|\/job\/[^\s]*\/build(?:WithParameters)?\b/;
+
+function readSmall(file) {
+  try {
+    const st = fs.lstatSync(file);
+    if (!st.isFile() || st.size > 256 * 1024) return null;
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+function listFiles(root, rel, depth = 3) {
+  const out = [];
+  let entries;
+  try { entries = fs.readdirSync(path.join(root, rel), { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    const r = path.join(rel, e.name);
+    if (e.isDirectory() && depth > 0 && e.name !== 'node_modules' && !e.name.startsWith('.')) out.push(...listFiles(root, r, depth - 1));
+    else if (e.isFile()) out.push(r);
+  }
+  return out;
+}
+
+// A merge's target is the branch checked out last before it — `git switch|checkout` earlier in the
+// same file, however far back, or a CI `actions/checkout` step's `ref:`. The merge's own argument is
+// the SOURCE and never counts. Git's global options are skipped before the subcommand is read, so
+// `git -c merge.ff=false merge x` is a merge.
+const GIT_OPT_WITH_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env']);
+const SWITCH_OPT_WITH_TARGET = new Set(['-c', '-C', '-b', '-B', '--create', '--force-create', '--orphan']);
+// Shell-style words: quotes group and are removed, so `"release/2026"` is the word release/2026; a
+// word records whether any part of it was quoted. Only an unquoted `git` word starts a command, so
+// `echo "git merge x"` is one quoted word of data.
+function shellWords(stmt) {
+  const words = [];
+  let cur = null;
+  let quote = null;
+  const push = () => { if (cur !== null) words.push(cur); cur = null; };
+  for (let i = 0; i < stmt.length; i++) {
+    const ch = stmt[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      else if (ch === '\\' && quote === '"' && i + 1 < stmt.length) cur.text += stmt[++i];
+      else cur.text += ch;
+    } else if (ch === '"' || ch === "'") {
+      if (cur === null) cur = { text: '', quoted: false };
+      cur.quoted = true;
+      quote = ch;
+    } else if (/\s/.test(ch)) push();
+    else {
+      if (cur === null) cur = { text: '', quoted: false };
+      cur.text += ch;
+    }
+  }
+  push();
+  return words;
+}
+function gitCommand(stmt) {
+  const words = shellWords(stmt);
+  const g = words.findIndex((w) => !w.quoted && (w.text === 'git' || w.text.endsWith('/git')));
+  if (g === -1) return null;
+  const tokens = words.slice(g + 1).map((w) => w.text);
+  let k = 0;
+  while (k < tokens.length && tokens[k].startsWith('-')) {
+    k += GIT_OPT_WITH_VALUE.has(tokens[k]) ? 2 : 1;
+  }
+  if (k >= tokens.length) return null;
+  return { sub: tokens[k], args: tokens.slice(k + 1) };
+}
+function checkoutTarget(args) {
+  for (let k = 0; k < args.length; k++) {
+    if (SWITCH_OPT_WITH_TARGET.has(args[k])) return args[k + 1] || null;
+    if (args[k] === '--') return args[k + 1] || null;
+    if (!args[k].startsWith('-')) return args[k];
+  }
+  return null;
+}
+// A CI checkout step sets the target too: `uses: actions/checkout` followed, inside that step, by
+// `ref: <branch>` (the action's input for the branch, tag or SHA to check out).
+const CI_CHECKOUT_RE = /^\s*-?\s*uses:\s*['"]?actions\/checkout\b/;
+const CI_REF_RE = /^\s*ref:\s*['"]?([^\s'"#]+)/;
+function isProtectedName(name) {
+  return DEFAULT_PROTECTED.some((p) => (p.endsWith('/*') ? name.startsWith(p.slice(0, -1)) : name === p));
+}
+function mergesIntoProtected(text) {
+  let target = null;
+  let inCheckout = false;
+  for (const raw of text.split('\n')) {
+    if (/^\s*(?:#|\/\/)/.test(raw)) continue;
+    if (CI_CHECKOUT_RE.test(raw)) { inCheckout = true; continue; }
+    if (/^\s*-\s/.test(raw)) inCheckout = false; // the next step begins
+    if (inCheckout) {
+      const r = CI_REF_RE.exec(raw);
+      if (r) { target = r[1]; continue; }
+    }
+    for (const stmt of raw.replace(/^\s*-?\s*run:\s*/, '').split(/;|&&|\|\|/)) {
+      const c = gitCommand(stmt);
+      if (!c) continue;
+      if (c.sub === 'switch' || c.sub === 'checkout') {
+        const t = checkoutTarget(c.args);
+        if (t) target = t;
+      } else if (c.sub === 'merge' && target !== null && isProtectedName(target)) return true;
+    }
+  }
+  return false;
+}
+
+function flowSignals(root, branch) {
+  const signals = [];
+  const candidates = [
+    ...listFiles(root, 'scripts'),
+    ...listFiles(root, path.join('.github', 'workflows'), 0),
+    ...CI_FILES,
+  ];
+  for (const rel of candidates) {
+    const text = readSmall(path.join(root, rel));
+    if (text === null) continue;
+    if (mergesIntoProtected(text)) {
+      signals.push({ signal: 'merge-script', file: rel });
+    } else if (rel.startsWith('scripts') && TRIGGER_RE.test(text)) {
+      signals.push({ signal: 'pipeline-trigger', file: rel });
+    }
+  }
+  if (branch && protectedStatus(root, branch) === 1 && !DEFAULT_BRANCH_NAMING.test(branch)) {
+    signals.push({ signal: 'branch-name', branch });
+  }
+  return signals;
+}
+
+// State is one file per fact, each created atomically: `flow-never` for the repo-wide dismissal,
+// `flow-sessions/<id>` for "this session was told". Exclusive creation is the check and the mark in
+// one step, so two Stop hooks racing cannot both print, and neither can erase the other's record.
+function flowNever(dir) {
+  try { fs.lstatSync(path.join(dir, 'flow-never')); return true; } catch { return false; }
+}
+function markSession(dir, session) {
+  fs.mkdirSync(path.join(dir, 'flow-sessions'), { recursive: true });
+  try {
+    fs.writeFileSync(path.join(dir, 'flow-sessions', session), new Date().toISOString(), { flag: 'wx' });
+    return true;
+  } catch (e) {
+    if (e.code === 'EEXIST') return false;
+    throw e;
+  }
+}
+function sessionMarked(dir, session) {
+  try { fs.lstatSync(path.join(dir, 'flow-sessions', session)); return true; } catch { return false; }
+}
+
+// `session` is the Claude Code session id the Stop hook passes; with it the reminder is printed
+// at most once per session, which is recorded when it prints. Without it (a direct call) the answer
+// is never session-gated.
+const SESSION_RE = /^[A-Za-z0-9._-]{1,128}$/;
+
+function flowDetect(format, session) {
+  if (session !== undefined && !SESSION_RE.test(session)) die(`invalid session id "${session}"`);
+  const root = repoRoot();
+  const dir = stateDir(root);
+  const head = gitOut(root, ['symbolic-ref', '--short', '-q', 'HEAD']);
+  const branch = head && head.trim() ? head.trim() : null;
+  const out = (ask, reason, signals = []) => ({ ask, reason, signals });
+  let r;
+  const hasOverride = ['.claude/rules/git-workflow-project.md', 'rules/git-workflow-project.md']
+    .some((f) => { try { fs.lstatSync(path.join(root, f)); return true; } catch { return false; } });
+  if (hasOverride) r = out(false, 'override-present');
+  else if (flowNever(dir)) r = out(false, 'dismissed');
+  else if (session !== undefined && sessionMarked(dir, session)) r = out(false, 'shown-this-session');
+  else {
+    const signals = flowSignals(root, branch);
+    r = signals.length ? out(true, null, signals) : out(false, 'no-signal');
+  }
+  if (format === 'json') {
+    process.stdout.write(`${JSON.stringify(r)}\n`);
+    return;
+  }
+  if (format === 'md') {
+    if (!r.ask) return;
+    // Print only if this call is the one that marked the session: a concurrent Stop hook that got
+    // there first has already printed it.
+    if (session !== undefined && !markSession(dir, session)) return;
+    process.stdout.write(`🧭 偵測到自訂 git 流程（${r.signals.map((x) => x.signal).join(', ')}）且沒有 git-workflow-project.md → 用 AskUserQuestion 問一次是否建立（規則見 rules/git-workflow.md § Proactive Offer）\n`);
+    return;
+  }
+  process.stdout.write(`[FLOW] ask=${r.ask} reason=${r.reason || 'none'} signals=${r.signals.map((s) => s.signal).join(',') || 'none'}\n`);
+}
+
+function flowAnswer(answer) {
+  if (answer !== 'never') die(`invalid answer "${answer}" — valid: never`);
+  const root = repoRoot();
+  const dir = stateDir(root);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'flow-never'), new Date().toISOString());
+  process.stdout.write(`[FLOW_RECORDED] ${answer}\n`);
+}
+
 const [, , cmd, ...args] = process.argv;
 try {
   if (cmd === 'note') {
@@ -346,8 +548,15 @@ try {
     offer(fmt);
   } else if (cmd === 'offer-shown') {
     offerShown(args[0]);
+  } else if (cmd === 'flow-detect') {
+    const fmt = (args.find(a => a.startsWith('--format=')) || '--format=fact').slice('--format='.length);
+    if (!['fact', 'json', 'md'].includes(fmt)) die(`unknown format "${fmt}" — valid: fact, json, md`);
+    const si = args.indexOf('--session');
+    flowDetect(fmt, si === -1 ? undefined : args[si + 1]);
+  } else if (cmd === 'flow-answer') {
+    flowAnswer(args[0]);
   } else {
-    die(`usage: review-state.js note <plane> <pass|fail> | check [--format=md|fact|json] | offer [--format=md|fact|json] | offer-shown <digest>`);
+    die(`usage: review-state.js note <plane> <pass|fail> | check [--format=md|fact|json] | offer [--format=md|fact|json] | offer-shown <digest> | flow-detect [--format=fact|json|md] [--session <id>] | flow-answer never`);
   }
 } catch (e) {
   die(String((e && e.message) || e));

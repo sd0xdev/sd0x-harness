@@ -64,7 +64,10 @@ if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] \
   fi
 fi
 
-cat >/dev/null 2>&1 || true  # drain stdin; nothing in it is inspected
+# stdin: only the session id is read (git-autonomy R6 prints the custom-flow line once per session);
+# anything that is not a plain id is dropped, never passed on.
+_IN=$(cat 2>/dev/null || true)
+_SESSION=$(printf '%s' "$_IN" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9._-]\{1,128\}\)".*/\1/p' | head -n 1)
 
 # The checker lives beside this hook's own copy (plugin: hooks/ + scripts/;
 # installed: .claude/hooks/ + .claude/scripts/).
@@ -97,6 +100,11 @@ if [[ "$_SOURCE" == "state" ]]; then
   # § Proactive Offer). Empty unless `offer` is true; a failure prints nothing and never blocks.
   _OFFER=$(_bounded offer --format=md) || _OFFER=""
   [[ -n "$_OFFER" ]] && printf '%s\n' "$_OFFER"
+  # git-autonomy R6: one line, once per session, when a custom git flow has no override.
+  if [[ -n "$_SESSION" ]]; then
+    _FLOW=$(_bounded flow-detect --format=md --session "$_SESSION") || _FLOW=""
+    [[ -n "$_FLOW" ]] && printf '%s\n' "$_FLOW"
+  fi
   exit 0
 fi
 

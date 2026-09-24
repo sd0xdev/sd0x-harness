@@ -614,3 +614,145 @@ test('offer when an ahead merge commit adds a doc during resolution → doc_revi
   note(repo, home, 'doc_review', 'pass');
   assert.equal(offerJson(repo, home).kind, 'push');
 });
+
+// --- flow-detect / flow-answer (git-autonomy R6) ------------------------------------------------
+
+function flowJson(repo, home) {
+  const r = run(repo, home, ['flow-detect', '--format=json']);
+  assert.equal(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout);
+}
+
+test('flow-detect when a script merges into a release branch → ask, naming the merge-script signal', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'feat/x');
+  mkdirSync(join(repo, 'scripts'));
+  writeFileSync(join(repo, 'scripts', 'release.sh'), '#!/bin/sh\ngit checkout release/2026\ngit merge develop\n');
+  const r = flowJson(repo, tmp('rs-home-'));
+  assert.equal(r.ask, true);
+  assert.deepEqual(r.signals.map((s) => s.signal), ['merge-script']);
+});
+
+test('flow-detect when a script dispatches a pipeline with no merge → pipeline-trigger', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'feat/x');
+  mkdirSync(join(repo, 'scripts'));
+  writeFileSync(join(repo, 'scripts', 'deploy.sh'), '#!/bin/sh\ngh workflow run deploy.yml -f env=staging\n');
+  assert.deepEqual(flowJson(repo, tmp('rs-home-')).signals.map((s) => s.signal), ['pipeline-trigger']);
+});
+
+test('flow-detect when the branch name falls outside the default convention → branch-name', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'JIRA-123-login');
+  const r = flowJson(repo, tmp('rs-home-'));
+  assert.deepEqual([r.ask, r.signals.map((s) => s.signal)], [true, ['branch-name']]);
+  // Ordinary data passes: a conventional feature branch and a protected branch raise nothing.
+  git(repo, 'switch', '-q', '-c', 'feat/login');
+  assert.equal(flowJson(repo, tmp('rs-home-')).reason, 'no-signal');
+});
+
+test('flow-detect with an override present → never asks; never persists; once per session', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'JIRA-9');
+  const home = tmp('rs-home-');
+  const md = (session) => run(repo, home, ['flow-detect', '--format=md', '--session', session]).stdout;
+  assert.match(md('s-1'), /^🧭 /, 'the first check in a session prints the line');
+  assert.equal(md('s-1'), '', 'the same session is not reminded twice');
+  assert.match(md('s-2'), /^🧭 /, 'a new session is reminded again');
+  assert.equal(run(repo, home, ['flow-answer', 'never']).status, 0);
+  assert.equal(flowJson(repo, home).reason, 'dismissed');
+  assert.equal(md('s-3'), '', 'never for this repo holds across sessions');
+  const other = tmp('rs-home-');
+  mkdirSync(join(repo, 'rules'));
+  writeFileSync(join(repo, 'rules', 'git-workflow-project.md'), '# x\n');
+  assert.equal(flowJson(repo, other).reason, 'override-present');
+  assert.equal(run(repo, home, ['flow-answer', 'asked']).status, 1, 'only never is recorded');
+  assert.equal(run(repo, home, ['flow-detect', '--format=md', '--session', 'bad id']).status, 1, 'a malformed session id is refused');
+});
+
+test('flow-detect when a protected name is mentioned away from the merge → no merge-script signal', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'feat/x');
+  mkdirSync(join(repo, 'scripts'));
+  writeFileSync(join(repo, 'scripts', 'integrate.sh'),
+    '#!/bin/sh\ngit switch feat/integration\n\n\n\ngit merge topic\n# main is released elsewhere\n');
+  assert.equal(flowJson(repo, tmp('rs-home-')).reason, 'no-signal');
+});
+
+test('flow-detect merge target → the branch checked out last, not the merge source, at any distance', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'feat/x');
+  mkdirSync(join(repo, 'scripts'));
+  const home = tmp('rs-home-');
+  // The merge SOURCE is protected, the target is not → no signal.
+  writeFileSync(join(repo, 'scripts', 'a.sh'), '#!/bin/sh\ngit switch feat/x\ngit merge develop\n');
+  assert.equal(flowJson(repo, home).reason, 'no-signal');
+  // The target is checked out several commands before the merge → signal.
+  writeFileSync(join(repo, 'scripts', 'a.sh'), '#!/bin/sh\ngit checkout -q release/2026\nnpm ci\nnpm test\nnpm run build\ngit merge topic\n');
+  assert.deepEqual(flowJson(repo, home).signals.map((x) => x.signal), ['merge-script']);
+});
+
+test('flow-detect in two concurrent sessions → each is reminded once, neither twice', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'JIRA-5');
+  const home = tmp('rs-home-');
+  const md = (id) => run(repo, home, ['flow-detect', '--format=md', '--session', id]).stdout;
+  assert.match(md('A'), /^🧭 /);
+  assert.match(md('B'), /^🧭 /);
+  assert.equal(md('A'), '', 'session A is not reminded again after B was');
+  assert.equal(md('B'), '');
+});
+
+test('flow-detect merge target from a CI checkout ref → merge-script signal', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'feat/x');
+  mkdirSync(join(repo, '.github', 'workflows'), { recursive: true });
+  writeFileSync(join(repo, '.github', 'workflows', 'release.yml'), [
+    'jobs:', '  release:', '    steps:', '      - uses: actions/checkout@v4', '        with:',
+    '          ref: release/2026', '      - run: git merge develop', ''].join('\n'));
+  assert.deepEqual(flowJson(repo, tmp('rs-home-')).signals.map((x) => x.signal), ['merge-script']);
+  // …and a checkout of a non-protected ref is no signal.
+  writeFileSync(join(repo, '.github', 'workflows', 'release.yml'), [
+    'jobs:', '  it:', '    steps:', '      - uses: actions/checkout@v4', '        with:',
+    '          ref: feat/integration', '      - run: git merge develop', ''].join('\n'));
+  assert.equal(flowJson(repo, tmp('rs-home-')).reason, 'no-signal');
+});
+
+test('flow-detect racing Stop hooks for one session → exactly one prints (exclusive marker)', async () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'JIRA-6');
+  const home = tmp('rs-home-');
+  const { spawn } = require('node:child_process');
+  const once = () => new Promise((res) => {
+    const c = spawn('node', [SCRIPT, 'flow-detect', '--format=md', '--session', 'race'], { cwd: repo, env: { ...process.env, HOME: home } });
+    let out = ''; c.stdout.on('data', (d) => { out += d; }); c.on('close', () => res(out));
+  });
+  const outs = await Promise.all(Array.from({ length: 6 }, once));
+  assert.equal(outs.filter((o) => o.startsWith('🧭')).length, 1, 'one reminder, however many hooks raced');
+  assert.equal(run(repo, home, ['flow-answer', 'never']).status, 0);
+  assert.equal(flowJson(repo, home).reason, 'dismissed', 'never survives beside the session markers');
+});
+
+test('flow-detect when git global options precede merge → still a merge; quoted text is never a merge', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'feat/x');
+  mkdirSync(join(repo, 'scripts'));
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'scripts', 'r.sh'), '#!/bin/sh\ngit switch release/2026\ngit -c merge.ff=false merge develop\n');
+  assert.deepEqual(flowJson(repo, home).signals.map((x) => x.signal), ['merge-script']);
+  writeFileSync(join(repo, 'scripts', 'r.sh'), '#!/bin/sh\ngit switch release/2026\necho "git merge develop"\n');
+  assert.equal(flowJson(repo, home).reason, 'no-signal', 'an echoed command is data');
+  writeFileSync(join(repo, 'scripts', 'r.sh'), '#!/bin/sh\ngit checkout -b release/2026.10 origin/develop && git merge topic\n');
+  assert.deepEqual(flowJson(repo, home).signals.map((x) => x.signal), ['merge-script'], '-b names the target');
+});
+
+test('flow-detect when checkout targets are quoted → read as the branch, and a later non-protected switch clears it', () => {
+  const repo = makeRepo();
+  git(repo, 'switch', '-q', '-c', 'feat/x');
+  mkdirSync(join(repo, 'scripts'));
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'scripts', 'r.sh'), '#!/bin/sh\ngit switch "release/2026"\ngit merge develop\n');
+  assert.deepEqual(flowJson(repo, home).signals.map((x) => x.signal), ['merge-script']);
+  writeFileSync(join(repo, 'scripts', 'r.sh'), "#!/bin/sh\ngit checkout main; git switch 'feat/x'; git merge topic\n");
+  assert.equal(flowJson(repo, home).reason, 'no-signal', 'the quoted feat/x is the current target');
+});

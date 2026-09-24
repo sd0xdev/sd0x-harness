@@ -56,6 +56,13 @@ asks its own approval.
   user's explicit request to push puts `/push-ci` on a protected branch into a menu.
 - **Never unasked**: do not invoke `/smart-commit --execute` or `/push-ci` except through a menu
   selection or the user's explicit request.
+- **Custom flow**: the Stop hook runs `review-state.js flow-detect` and prints a `🧭` line, at most
+  once per session, when the project has no git override and a script or CI file merges into a
+  release/protected branch, a script triggers a pipeline, or the current branch name falls outside
+  the default convention. When that line appears, ask once with AskUserQuestion: Scaffold · Not now
+  · Never for this repo. Scaffold invokes `/install-rules --customize git-workflow --reset`, which
+  creates `git-workflow-project.md` from the template; Never runs `review-state.js flow-answer never`.
+  Nothing writes the override except the scaffold the user picked.
 
 ## Project Customization
 
