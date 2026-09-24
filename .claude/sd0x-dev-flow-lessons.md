@@ -369,3 +369,11 @@ Recurring corrections, recorded so the class stops repeating. Format and rules: 
 - **Correct approach**: `Bash(run_in_background: true)` 啟動、**不 redirect**（stderr 留在面板）；Monitor 只讀 `progress.json`、只在狀態改變時通知（started / 每 5 分鐘 / 卡住 120 秒 / 結束），用契約裡那段 watcher 腳本，`P` 寫成字面路徑。
 - **Prevention**: `hooks/pre-bash-codex-launch-guard.sh`（PreToolUse Bash）會以 exit 2 擋下未帶 `run_in_background: true`、或含 `>`／`|`／`nohup`／結尾 `&` 的 `codex-exec.js start|resume` 指令並印出正確啟動方式；使用者問「為什麼看不到日誌」仍是行為層訊號。
 - **Source**: 2026-09-23 — gh-stack-native 後續，使用者指出面板無輸出。
+
+### L20 — compaction 後 goal 是否有效，要看最新的 goal 狀態與來源，不是看摘要裡有沒有通知
+
+- **Context**: git-autonomy Goal mode（FR-17）上線後，第一次在長對話中跨過 compaction 繼續 goal。
+- **Error pattern**: 把 `git-workflow.md` § Proactive Offer 條件 2 的「Evidence lost to `/clear` or compaction reads as no goal」讀成「compaction 之後就等於沒有 goal」，於是放棄 goal-mode commit、改回選單詢問。但 Claude Code 在 compaction 後會重新注入 `goal_status`（`sentinel: true`、`met: false`）附件，goal 在當下的 context 裡仍有肯定證據——證據沒有遺失，是我沒去找。
+- **Correct approach**: compaction 不等於證據遺失，但單一標記也不等於 goal 仍有效。每次 goal-mode commit 前，都要把 § Proactive Offer「Goal mode」四個條件重新檢查一遍：(1) **來源**——goal 是使用者自己的 `/goal` 訊息，或是使用者核准的提案；(2) **最新狀態**——看**最後一個** `goal_status`（必要時到 session transcript 的 jsonl 找 `"type":"goal_status"` 和 `/goal` 指令），它的條件文字要和使用者設定的一致、`met: false`，且之後沒有任何回報 goal 已結束的訊息：met、impossible、`/goal clear`、因錯誤被清除（Claude Code 會印出警告），或被新的 goal 取代。以 `docs/features/git-autonomy/2-tech-spec.md` 中「When it counts」條件 2 的清單為準，不要自己縮減。compaction 後重新注入的 sentinel 是證據的一部分，不是全部；(3) `review-state.js goal-commit` 只檢查 gate 和分支，不能用來代替 (1)、(2)。
+- **Prevention**: 訊號是 compaction 摘要提到「user set a goal」，但我準備依「沒有 goal」的判斷行事——這時必須先照上面 (1)(2) 查最新的 goal 狀態與來源。使用者說「goal 一直存在」也是同一個訊號。
+- **Source**: 2026-09-25 — instruction-budget R3 收尾，使用者指出 goal 仍有效。
