@@ -227,11 +227,26 @@ if [[ -z "$BRANCH" ]] || [[ "$BRANCH" = "HEAD" ]]; then
   : "${SD0X_PUSH_CI_REFUSED:?refusing — no branch name could be derived in Phase 0}"
 fi
 
-# 2. Protected branch detection
-# If main, master, develop, or release/* → warn + AskUserQuestion pre-approval
-# (do NOT hard-abort; let user decide) — EXCEPT when --force-with-lease was passed:
-# that combination hard-aborts, because force push to shared branches is prohibited
-# (rules/git-workflow.md § Prohibited) and no approval can authorize it
+# 2. Protected branch detection — PROTECTED is reported below as yes / no / unknown.
+# yes or unknown → warn + AskUserQuestion pre-approval (do NOT hard-abort; let user decide) —
+# EXCEPT when --force-with-lease was passed: that combination hard-aborts, because force push
+# to shared branches is prohibited (rules/git-workflow.md § Prohibited) and no approval can
+# authorize it.
+# Protected-set resolution (git-autonomy R1): the default set plus the project's additions in
+# git-workflow-project.md, answered by scripts/protected-branches.sh — 1 is the only "not
+# protected"; 0 and 2 (unknown) both refuse. Without the resolver installed, an override file on
+# disk means the answer is unknown; with none, the default set is the whole answer.
+PB_ROOT=$(/usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git rev-parse --show-toplevel) || PB_ROOT=
+PB_SCRIPT="$PB_ROOT/.claude/scripts/protected-branches.sh"
+[[ -r "$PB_SCRIPT" ]] || PB_SCRIPT="$PB_ROOT/scripts/protected-branches.sh"
+if [[ -z "$PB_ROOT" ]]; then PB_STATUS=2
+elif [[ -r "$PB_SCRIPT" ]]; then
+  if /bin/bash -p -- "$PB_SCRIPT" --root "$PB_ROOT" -- "$BRANCH"; then PB_STATUS=0; else PB_STATUS=$?; fi
+elif [[ -e "$PB_ROOT/.claude/rules/git-workflow-project.md" || -L "$PB_ROOT/.claude/rules/git-workflow-project.md" \
+   || -e "$PB_ROOT/rules/git-workflow-project.md" || -L "$PB_ROOT/rules/git-workflow-project.md" ]]; then PB_STATUS=2
+else case "$BRANCH" in main|master|develop|release/*) PB_STATUS=0 ;; *) PB_STATUS=1 ;; esac
+fi
+case "$PB_STATUS" in 0) PROTECTED=yes ;; 1) PROTECTED=no ;; *) PROTECTED=unknown ;; esac
 
 # 3. Remote exists. The status is CAPTURED and acted on, not discarded: this line used to
 # run bare with `>/dev/null 2>&1`, so a failing `ls-remote` left `$?` for the next command
@@ -553,8 +568,8 @@ if [[ -n "$PUSH_RECEIVEPACK" ]]; then PUSH_RECEIVEPACK_SET=yes; fi
 # whose name contains a slash (`error importing function definition for '/usr/bin/printf'`,
 # measured). If `/usr/bin/printf` is missing the fence prints no report at all, and that is the
 # correct failure: **a run with no report line is `unknown`, and unknown asks.**
-/usr/bin/printf 'BRANCH=[%s]\nSET_UPSTREAM=[%s]\nFORCE_WITH_LEASE=[%s]\nHEAD_SHA=[%s]\nPUSH_GATE=[%s]\nPUSH_URLS_SAFE=[%s]\nPUSH_URLS_DIGEST=[%s]\nPUSH_RECEIVEPACK_SET=[%s]\n' \
-  "$BRANCH" "$SET_UPSTREAM" "$FORCE_WITH_LEASE" "$HEAD_SHA" "$PUSH_GATE" "$PUSH_URLS_SAFE" "$PUSH_URLS_DIGEST" \
+/usr/bin/printf 'BRANCH=[%s]\nPROTECTED=[%s]\nSET_UPSTREAM=[%s]\nFORCE_WITH_LEASE=[%s]\nHEAD_SHA=[%s]\nPUSH_GATE=[%s]\nPUSH_URLS_SAFE=[%s]\nPUSH_URLS_DIGEST=[%s]\nPUSH_RECEIVEPACK_SET=[%s]\n' \
+  "$BRANCH" "$PROTECTED" "$SET_UPSTREAM" "$FORCE_WITH_LEASE" "$HEAD_SHA" "$PUSH_GATE" "$PUSH_URLS_SAFE" "$PUSH_URLS_DIGEST" \
     "$PUSH_RECEIVEPACK_SET"
 ```
 
@@ -582,7 +597,7 @@ A push URL may carry `user:token@`, so the raw value never leaves the shell — 
 
 **Protected branch pre-approval flow** — advisory where the terminal hook is installed, and the authorization itself where it is not:
 
-When branch is `main`, `master`, `develop`, or `release/*`:
+When Phase 0 reports `PROTECTED=[yes]` or `PROTECTED=[unknown]` — the default set (`main`, `master`, `develop`, `release/*`) plus any branch the project added in `git-workflow-project.md`, with an unreadable override read as protected:
 
 0. **`--force-with-lease` hard-aborts here — no question is asked.** Force push to
    shared branches is prohibited (`rules/git-workflow.md` § Prohibited), and this
@@ -993,14 +1008,24 @@ fi
 # ⛔ Protected × force-with-lease is prohibited (rules/git-workflow.md: force push to
 # shared branches). Phase 0 already hard-aborted this combination; re-assert it here
 # so no approval path — cached, mis-run, or otherwise — can reach a prohibited push.
-case "$BRANCH" in
-  main|master|develop|release/*)
-    if [[ "$FORCE_WITH_LEASE" == "true" ]]; then
-      echo "⛔ --force-with-lease targets protected branch '$BRANCH' — force push to shared branches is prohibited" >&2
-      readonly PUSH_BLOCKED=1; exit 1
-    fi
-    ;;
-esac
+# Protected-set resolution (git-autonomy R1): the default set plus the project's additions in
+# git-workflow-project.md, answered by scripts/protected-branches.sh — 1 is the only "not
+# protected"; 0 and 2 (unknown) both refuse. Without the resolver installed, an override file on
+# disk means the answer is unknown; with none, the default set is the whole answer.
+PB_ROOT=$(/usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git rev-parse --show-toplevel) || PB_ROOT=
+PB_SCRIPT="$PB_ROOT/.claude/scripts/protected-branches.sh"
+[[ -r "$PB_SCRIPT" ]] || PB_SCRIPT="$PB_ROOT/scripts/protected-branches.sh"
+if [[ -z "$PB_ROOT" ]]; then PB_STATUS=2
+elif [[ -r "$PB_SCRIPT" ]]; then
+  if /bin/bash -p -- "$PB_SCRIPT" --root "$PB_ROOT" -- "$BRANCH"; then PB_STATUS=0; else PB_STATUS=$?; fi
+elif [[ -e "$PB_ROOT/.claude/rules/git-workflow-project.md" || -L "$PB_ROOT/.claude/rules/git-workflow-project.md" \
+   || -e "$PB_ROOT/rules/git-workflow-project.md" || -L "$PB_ROOT/rules/git-workflow-project.md" ]]; then PB_STATUS=2
+else case "$BRANCH" in main|master|develop|release/*) PB_STATUS=0 ;; *) PB_STATUS=1 ;; esac
+fi
+if [[ "$PB_STATUS" != 1 ]] && [[ "$FORCE_WITH_LEASE" == "true" ]]; then
+  echo "⛔ --force-with-lease targets protected branch '$BRANCH' (resolver status $PB_STATUS) — force push to shared branches is prohibited" >&2
+  readonly PUSH_BLOCKED=1; exit 1
+fi
 # The PLAN_BRANCH comparison answers "which branch", not "which commit" — and once the approval
 # and the push are separated in time those are different questions. A commit made on the same branch
 # between Phase 1 and here passes the name comparison unchanged, and the push then publishes work
