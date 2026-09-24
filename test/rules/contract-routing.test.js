@@ -47,6 +47,16 @@ const CONTRACTS = [
     minHeadings: 11,
   },
   {
+    // instruction-budget R2: the Codex prompt contract, loaded before a review dispatch; its
+    // always-loaded core is rules/codex-invocation.md, which keeps every heading other files cite.
+    path: 'skills/codex-code-review/references/codex-invocation-contract.md',
+    activatedBy: ['rules/codex-invocation.md', 'skills/codex-code-review/SKILL.md'],
+    headings: ['Which dispatches this file governs', 'Required in every first-dispatch prompt',
+      'Prohibited patterns', 'Judgement-over-evidence exception', 'Verification dispatch exception',
+      'Loop review exception'],
+    minHeadings: 6,
+  },
+  {
     path: 'skills/codex-code-review/references/loop-diagnostics.md',
     activatedBy: ['rules/auto-loop.md', 'skills/codex-code-review/SKILL.md'],
     headings: ['Stall Detection', 'Cap Diagnostic Protocol',

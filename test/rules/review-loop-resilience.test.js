@@ -15,7 +15,7 @@ const root = resolve(__dirname, '../..');
 const read = (p) => readFileSync(resolve(root, p), 'utf8');
 
 const autoLoop = read('rules/auto-loop.md');
-const codexInvocation = read('rules/codex-invocation.md');
+const codexInvocation = read('skills/codex-code-review/references/codex-invocation-contract.md');
 const reviewCommon = read('skills/codex-code-review/references/review-common.md');
 const codeSkill = read('skills/codex-code-review/SKILL.md');
 const scaffold = read('rules/auto-loop-project.md');
