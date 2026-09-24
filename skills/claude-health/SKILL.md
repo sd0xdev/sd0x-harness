@@ -1,7 +1,7 @@
 ---
 name: claude-health
 description: "Claude Code config health check + plugin sync. Use when: auditing .claude/ structure, checking naming, verifying hook setup, detecting plugin version drift, syncing installed assets. Not for: skill quality (use skill-health-check), code review (use codex-code-review). Output: health report + fix recommendations."
-allowed-tools: Read, Grep, Glob, Bash(ls:*), Bash(find:*), Bash(wc:*), Bash(du:*), Bash(rm:*), Bash(git:*)
+allowed-tools: Read, Grep, Glob, Bash(ls:*), Bash(find:*), Bash(wc:*), Bash(du:*), Bash(rm:*), Bash(git:*), Bash(/bin/bash:*)
 context: fork
 ---
 
@@ -176,20 +176,21 @@ plugin_hash    = git hash-object --no-filters <plugin-path>  # source of truth
 |----------|-----------|--------------|-------|
 | Rules | `.claude/rules/*.md` | `rules/*.md` | `auto-loop.md`, `codex-invocation.md`, `fix-all-issues.md`, `framework.md`, `testing.md`, `security.md`, `git-workflow.md`, `logging.md`, `docs-writing.md`, `docs-numbering.md`, `self-improvement.md`, `context-management.md` |
 | Hooks | `.claude/hooks/*.sh` | `hooks/*.sh` | `pre-edit-guard.sh`, `pre-bash-codex-launch-guard.sh`, `post-edit-format.sh`, `post-skill-auto-loop.sh`, `post-compact-auto-loop.sh`, `stop-guard.sh`, `user-prompt-review-guard.sh` |
-| Scripts | `.claude/scripts/` | `scripts/` | `precommit-runner.js`, `verify-runner.js`, `review-state.js`, `dep-audit.sh`, `commit-msg-guard.sh`, `pre-push-gate.sh`, `lib/utils.js`, `lib/tree-digest.js` |
+| Scripts | `.claude/scripts/` | `scripts/` | `precommit-runner.js`, `verify-runner.js`, `review-state.js`, `dep-audit.sh`, `commit-msg-guard.sh`, `pre-push-gate.sh`, `protected-branches.sh`, `lib/utils.js`, `lib/tree-digest.js` |
 
 #### S2.5: Override Safeguard Checks
 
-6 checks for project override files (e.g., `auto-loop-project.md`):
+7 checks for project override files (e.g., `auto-loop-project.md`):
 
 | # | Check | Severity | Detection | Recommendation |
 |---|-------|----------|-----------|----------------|
-| 1 | Override drift | P2 | `based_on` hash comment in project file vs the hash of **the base file that comment names** (derived, never hard-coded — both `auto-loop-project.md` and `testing-project.md` ship) — **only when the override file has active content**; a scaffold with every section still commented out has no overrides to review, so drift is not reported | "Base `<rule>` updated since override authored; review your overrides" |
+| 1 | Override drift | P2 | `based_on` hash comment in project file vs the hash of **the base file that comment names** (derived, never hard-coded — `auto-loop-project.md`, `testing-project.md` and `git-workflow-project.md` all ship) — **only when the override file has active content**; a scaffold with every section still commented out has no overrides to review, so drift is not reported | "Base `<rule>` updated since override authored; review your overrides" |
 | 2 | Policy contradiction | P1 | An overridden section omits a required check command that the **same section** of the base rule contains | "Override drops a required check command its base section carries" |
-| 3 | Missing reference or base | P1 | For **each** shipped override file (`auto-loop-project.md`, `testing-project.md`): `.claude/CLAUDE.md` has `@rules/<file>` but the file is missing, OR the file exists but is not referenced, OR the file exists but the base rule its `Based on:` comment names is missing from `.claude/rules/` | `/install-rules` to recreate the missing file or base, or add the reference |
+| 3 | Missing reference or base | P1 | For **each** shipped override file (`auto-loop-project.md`, `testing-project.md`, `git-workflow-project.md`): `.claude/CLAUDE.md` has `@rules/<file>` but the file is missing, OR the file exists but is not referenced, OR the file exists but the base rule its `Based on:` comment names is missing from `.claude/rules/` | `/install-rules` to recreate the missing file or base, or add the reference |
 | 4 | Wrong-layer edit | P2 | Base `auto-loop.md` has `LOCAL_MODIFIED`, `CONFLICT`, or `LEGACY` state while project override exists | "Move customization to auto-loop-project.md" |
 | 5 | Duplicate heading | P2 | Override file has multiple active `## <heading>` with same text | "Keep one, remove duplicates. Last occurrence takes effect." |
 | 6 | Legacy precedence header | P2 | Precedence declaration exists only inside an HTML comment (`<!-- Precedence:` present, no live `Precedence:` line before the first `##`) — HTML comments are stripped from model context (R8), so the declaration never reaches its only reader | "Header predates the live-precedence contract; migrate the precedence line to live text by hand or regenerate via `/install-rules --customize <rule> --reset`. This check is **read-only** — it never edits the user-owned file" |
+| 7 | Git override conflict | P1 / P2 | `git-workflow-project.md` only. **P1** whenever the file exists, active content or not — two empty duplicate `## Protected Branches` headings are already a parse error: when `/bin/bash -p -- <resolver> --root <repo> --list` exits 2, where `<resolver>` is the **plugin install's** copy — `${CLAUDE_PLUGIN_ROOT}/scripts/protected-branches.sh` when that variable is set and its real path lies outside the audited repository, else `~/.claude/plugins/**/sd0x-dev-flow/scripts/protected-branches.sh` (one match) — **never** a copy inside the audited repository (`.claude/scripts/`, `scripts/`, `node_modules/`), because this check is read-only and the repository controls those files; no plugin install found → execute nothing and report check #7 as not run (P2), while S2 still classifies the local copy by hash — a removal attempt (`- !main`), a malformed bullet or a duplicate heading in `## Protected Branches`, which makes every branch read as protected; an **omitted** default is never reported, since the set only widens. **P2**, active content only, when a `## Deploy Workflow` line matches neither `merge <source> -> <target> [--no-ff\|--ff-only]` nor `run <path> [args…]` with every token in `^[A-Za-z0-9._/@:=+,-]+$`, or when `## Offer Mode` / `## Run Steps` carries a value outside `on\|commit-only\|off` / `print\|execute` | "Fix the named line; until then the protected set reads every branch as protected / the deploy block is ignored / the setting keeps its default" |
 
 **Policy contradiction detection**: For each `## <heading>` section the override restates, extract the backticked check commands (`/codex-review-fast`, `/codex-review-doc`, `/precommit`) from the **same-heading section of the base `auto-loop.md`** and require the restated section to keep every one of them. A verbatim copy therefore never flags; only a restatement that *drops* a command its base section carries is P1. (The base's Auto-Trigger table was retired by R3 — code/doc routing now lives in the unheaded terminal-invariant paragraph, which the exact-`##`-heading override mechanism cannot restate, so routing itself is not overridable and is out of this check's scope.) No restated section → check passes vacuously.
 
@@ -309,7 +310,7 @@ Applied to both: settings.json and settings.local.json
 - [ ] Sync: S1-S3 checks executed (when scope includes sync)
 - [ ] Each check has clear ✅/⛔ status
 - [ ] P1 issues have specific fix commands
-- [ ] S2 classification covers every file in the managed inventory above (27 today: 12 rules, 7 hooks, 8 scripts)
+- [ ] S2 classification covers every file in the managed inventory above (28 today: 12 rules, 7 hooks, 9 scripts)
 - [ ] Fix delegation uses targeted file names (not `--all`)
 
 ## References

@@ -29,7 +29,7 @@ Full control plane on Claude Code. Skills-only distribution for Codex CLI and ot
 /project-setup
 ```
 
-One command auto-detects framework, package manager, database, entrypoints, and scripts. Installs a subset of rules and hooks; the full plugin bundles 16 rules + 7 hooks. Use `--lite` to only configure CLAUDE.md (skip rules/hooks).
+One command auto-detects framework, package manager, database, entrypoints, and scripts. Installs a subset of rules and hooks; the full plugin bundles 17 rules + 7 hooks. Use `--lite` to only configure CLAUDE.md (skip rules/hooks).
 
 ```bash
 # Codex CLI / Cursor / Windsurf / Aider — skills only
@@ -341,7 +341,7 @@ Real-world scenarios showing which skills to combine and in what order.
 | Skills | 100 public (100 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | Agents | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | Hooks | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
-| Rules | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
+| Rules | 17 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
 | Scripts | 24 | precommit runner, verify runner, review-state CLI, dep audit, namespace hint, skill runner, commit-msg guard, pre-push gate, protected-branch resolver, build-codex-artifacts, resolve-feature (node entrypoint + shell shim + CLI), classify-docs, detect-scope, migration-audit, migrate-hook-lightweighting, security-redact, readme-catalog, check-doc-links, resolve-review-profile, codex-exec adapter |
 <!-- END:WHATS-INCLUDED-COUNT -->
 
@@ -514,7 +514,7 @@ Skills load on-demand. Idle skills cost zero tokens.
 
 ## Rules & Hooks
 
-16 rules + 7 hooks. The rules are tiered contracts: `discretion.md` resolves every instruction in the 13 plugin-managed rule files to exactly one of Anchor / Default / Guidance, and the 2 user-owned override files resolve Anchor-first under their parent rules. The hook set is 4 advisory reminder hooks plus an auto-formatter and two blocking guards. The reminder roles differ per hook: the Stop and post-compact hooks render owed-gate reminders from the digest-bound state (`review-state.js`), the prompt hook prints the `[AUTO_LOOP_STATE]` fact line, the post-skill hook prints a static gate-order line, and the post-compact hook also re-injects the git baseline; the review layer never blocks — pre-edit-guard still blocks sensitive-path edits (a security guard; it needs `jq` and does not fire without it), pre-bash-codex-launch-guard blocks a Codex dispatch launched with its progress redirected away from the task panel, and the hard gates live at the git level (commit-msg-guard, installed by `/codex-setup init`; pre-push-gate, opt-in).
+17 rules + 7 hooks. The rules are tiered contracts: `discretion.md` resolves every instruction in the 13 plugin-managed rule files to exactly one of Anchor / Default / Guidance, and the 3 user-owned override files resolve Anchor-first under their parent rules. The hook set is 4 advisory reminder hooks plus an auto-formatter and two blocking guards. The reminder roles differ per hook: the Stop and post-compact hooks render owed-gate reminders from the digest-bound state (`review-state.js`), the prompt hook prints the `[AUTO_LOOP_STATE]` fact line, the post-skill hook prints a static gate-order line, and the post-compact hook also re-injects the git baseline; the review layer never blocks — pre-edit-guard still blocks sensitive-path edits (a security guard; it needs `jq` and does not fire without it), pre-bash-codex-launch-guard blocks a Codex dispatch launched with its progress redirected away from the task panel, and the hard gates live at the git level (commit-msg-guard, installed by `/codex-setup init`; pre-push-gate, opt-in).
 
 > **Customization**: Edit `auto-loop-project.md` to override auto-loop behavior per project. Plugin updates won't conflict — see [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md).
 
@@ -536,7 +536,7 @@ Run `/project-setup` to auto-detect and configure all placeholders, or manually 
 | `{BUILD_COMMAND}` | Build command | yarn build |
 | `{TYPECHECK_COMMAND}` | Type checking | yarn typecheck |
 
-Overrides resolve **Anchor-first**: user-owned override files (`auto-loop-project.md`, `testing-project.md`) customize Default- and Guidance-tier behavior only — no project override can downgrade an entry in the Anchor Register, and an attempt is reported as a conflict rather than honoured.
+Overrides resolve **Anchor-first**: user-owned override files (`auto-loop-project.md`, `testing-project.md`, `git-workflow-project.md`) customize Default- and Guidance-tier behavior only — no project override can downgrade an entry in the Anchor Register, and an attempt is reported as a conflict rather than honoured.
 
 ## Showcase: Multi-Agent Research
 

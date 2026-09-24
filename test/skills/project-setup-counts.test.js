@@ -13,27 +13,29 @@ const { resolve } = require('node:path');
 const root = resolve(__dirname, '../..');
 const setup = readFileSync(resolve(root, 'skills/project-setup/SKILL.md'), 'utf8');
 
-// User-owned override templates are the only rules/*.md files that are not plugin-managed.
-const OVERRIDE_TEMPLATES = ['auto-loop-project.md', 'testing-project.md'];
+// User-owned override templates are the only rules/*.md files that are not plugin-managed; the
+// set is read from disk (`*-project.md`), so adding a template turns every stale count red.
+const KNOWN_TEMPLATES = ['auto-loop-project.md', 'git-workflow-project.md', 'testing-project.md'];
 const allRules = readdirSync(resolve(root, 'rules')).filter((f) => f.endsWith('.md')).sort();
+const OVERRIDE_TEMPLATES = allRules.filter((f) => f.endsWith('-project.md'));
 const managed = allRules.filter((f) => !OVERRIDE_TEMPLATES.includes(f));
 const M = managed.length;
-const TOTAL = M + OVERRIDE_TEMPLATES.length;
+const O = OVERRIDE_TEMPLATES.length;
+const TOTAL = M + O;
 
-test('rules directory when enumerated → the override set is exactly the two known templates', () => {
-  for (const f of OVERRIDE_TEMPLATES) {
-    assert.ok(allRules.includes(f), `expected override template missing from rules/: ${f}`);
-  }
+test('rules directory when enumerated → the override set is exactly the known templates', () => {
+  assert.deepEqual(OVERRIDE_TEMPLATES, KNOWN_TEMPLATES,
+    'the *-project.md set on disk changed — register the template in every carrier, then update this list');
   assert.ok(M >= 13, `managed rule count collapsed unexpectedly: ${M}`);
 });
 
 test('project-setup counts when claimed → all five sites carry the derived managed/total counts', () => {
   const sites = [
-    `copy ${M} managed rules + 2 override templates`,
+    `copy ${M} managed rules + ${O} override templates`,
     `Copy all ${M} managed rules:`,
-    `(${TOTAL} \`@rules/\` references (${M} managed + 2 override templates)`,
-    `✅ ${M}/${M} managed rules + 2 override templates`,
-    `contains ${TOTAL} \`.md\` files (${M} managed + 2 override templates)`,
+    `(${TOTAL} \`@rules/\` references (${M} managed + ${O} override templates)`,
+    `✅ ${M}/${M} managed rules + ${O} override templates`,
+    `contains ${TOTAL} \`.md\` files (${M} managed + ${O} override templates)`,
   ];
   for (const s of sites) {
     assert.ok(setup.includes(s), `project-setup count site out of sync with rules/ (expected "${s}")`);
@@ -60,9 +62,10 @@ test('stale counts when scanned → no leftover pre-change claim survives anywhe
     new RegExp(`Copy all ${M - 1} managed rules`),
     new RegExp(`✅ ${M - 1}/${M - 1} managed rules`),
     new RegExp(`contains ${TOTAL - 1} \`\\.md\` files`),
+    new RegExp(`\\+ ${O - 1} override templates`),
   ];
-  assert.ok(stale[0].test(`copy ${M - 1} managed rules + 2 override templates`), 'guard fixture: stale wording must be caught');
-  assert.ok(!stale[0].test(`copy ${M} managed rules + 2 override templates`), 'current wording must pass');
+  assert.ok(stale[0].test(`copy ${M - 1} managed rules + ${O} override templates`), 'guard fixture: stale wording must be caught');
+  assert.ok(!stale[0].test(`copy ${M} managed rules + ${O} override templates`), 'current wording must pass');
   for (const p of stale) {
     assert.ok(!p.test(setup), `stale count survives in project-setup: ${p}`);
   }
