@@ -67,7 +67,7 @@ read the reference; `discretion-tiers.test.js` keeps its baseline row for the re
 
 ### 3.3 Budget check (R3)
 
-`scripts/instruction-budget.js [--root <repo>] [--home <dir>] [--limit <n>] [--format=json|md]`
+`scripts/instruction-budget.js [--root <repo>] [--home <dir>] [--per-file <n>] [--plugin-root <dir>] [--format=json|md]`
 reproduces the launch accounting:
 
 1. Collect memory files: `~/.claude/CLAUDE.md`, `~/.claude/rules/**/*.md`, `<repo>/CLAUDE.md`,
@@ -76,26 +76,30 @@ reproduces the launch accounting:
    2.1.281's own test (`s.every(g => g === "**")`): a list mixing `**` with a narrower glob is still
    path-scoped and not loaded at launch; only an all-`**` or empty list is unconditional.
 3. Follow `@path` imports from each kept file (relative to it, `~/` to home; outside fenced code;
-   depth ≤ 5), deduping by real path.
+   depth ≤ 5), breadth-first so each file is reached by its shortest route, deduping by real path.
 4. Limits come from one model-dependent input, the per-file limit (`--per-file`, default 150,000 —
    the value observed in the reported session; 2.1.281 computes it as `max(40000, window × 0.05 × k)`).
    The total limit is derived exactly as 2.1.281 does: `max(120000, per-file)`. A file over the
    per-file limit is reported on its own and left out of the sum. Both values are estimates of a
    model-dependent number, and the output says so.
 5. Report the total, the derived limit, the three largest
-   files, the plugin's share (files whose basename is a plugin rule or `CLAUDE.md` sections the
-   template ships), and every `.claude/rules/` file whose name matches `lessons|archive|log|history`
+   files, the plugin's share by provenance (with `--plugin-root`: a `.claude/rules/` file the install
+   manifest lists, whose content equals the plugin's copy, or that is a shipped override template,
+   plus the shipped `CLAUDE.template.md` at its source size as an estimate for `.claude/CLAUDE.md`),
+   and every `.claude/rules/` file whose name matches `lessons|archive|log|history`
    with the fix: move it out of `rules/` (the lessons log lives at `.claude/sd0x-dev-flow-lessons.md`)
    or give it `paths:`.
 
 `/claude-health` gains `### Instruction Budget Module` **after** `### Fix Tiers` (outside the pinned
-S1–S3 region), running the script and reporting P2 when over the limit or when a lessons file is in
-`rules/`. The script is copied by `/install-scripts` like every `scripts/*.js`.
+S1–S3 region), running the **plugin install's** copy of the script — never one inside the audited
+repository, which this read-only check must not execute — and reporting P2 when over the limit, a
+file over the per-file limit, or a lessons file in `rules/`.
 
 **Ceiling (FR-8)**: `test/scripts/instruction-budget.test.js` builds a fresh-install fixture from
-`rules/` and `CLAUDE.template.md` and asserts the plugin's always-loaded share is at most **80,000**
-characters. After R1 and R2 the measured share is about 75,000; NFR-3's 60,000 target needs the
-`rules-residency` kernel work and is recorded there, not forced here.
+`rules/` and `CLAUDE.template.md` and asserts its always-loaded total is at most **90,000**
+characters. Measured after R1 and R2: 89,472 — 73,818 from the resident rules, the rest from the
+shipped `CLAUDE.template.md` (the first estimate of ~75,000 left the template out). NFR-3's 60,000
+target needs the `rules-residency` kernel work and is recorded there, not forced here.
 
 ## 4. Risks and Dependencies
 
@@ -121,7 +125,7 @@ Order: R1 → R2 → R3 (the ceiling measures what R1 and R2 leave).
 |-------|------|
 | Unit | `instruction-budget.js` over fixtures: path-scoped excluded, `paths: "**"` included, `@` import followed and deduped, over-limit file reported and left out, lessons file flagged |
 | Contract | The four rules carry the § 3.1 globs; the template never `@`-imports them; health #3 wording; the reference's headings pinned in `CONTRACTS`; the resident file keeps every cited heading |
-| Ceiling | Fresh-install fixture ≤ 80,000 characters |
+| Ceiling | Fresh-install fixture ≤ 90,000 characters |
 
 ## 7. Open Questions
 
