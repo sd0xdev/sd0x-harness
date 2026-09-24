@@ -451,6 +451,42 @@ test('offer when a required plane is open → gates-open, and a doc-only change 
   assert.equal(docOnly.offer, true, 'doc-only work needs doc_review alone');
 });
 
+test('offer --deferred after a goal-time commit left the digest shown → the held push is offered once more', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 7;\n');
+  passAll(repo, home);
+  const shownAt = offerJson(repo, home).digest;
+  assert.equal(run(repo, home, ['offer-shown', shownAt]).status, 0);
+  git(repo, 'commit', '-q', '-am', 'goal-time commit');
+  const plain = offerJson(repo, home);
+  assert.deepEqual([plain.offer, plain.reason, plain.digest], [false, 'already-offered', shownAt], 'the marker still silences the ordinary offer');
+  const r = run(repo, home, ['offer', '--deferred', '--format=json']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual([JSON.parse(r.stdout).offer, JSON.parse(r.stdout).kind], [true, 'push']);
+  // Shown once as the deferred menu → that marker silences the deferred check at this digest too.
+  assert.equal(run(repo, home, ['offer-shown', '--deferred', shownAt]).status, 0);
+  const second = JSON.parse(run(repo, home, ['offer', '--deferred', '--format=json']).stdout);
+  assert.deepEqual([second.offer, second.reason], [false, 'already-offered'], 'the deferred menu is offered once');
+});
+
+test('offer --deferred on a protected branch or with an open gate → still no push kind', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  git(repo, 'switch', '-q', '-c', 'main');
+  git(repo, 'push', '-q', '-u', 'origin', 'main');
+  writeFileSync(join(repo, 'a.js'), 'const a = 8;\n');
+  passAll(repo, home);
+  git(repo, 'commit', '-q', '-am', 'ahead on main');
+  const onMain = JSON.parse(run(repo, home, ['offer', '--deferred', '--format=json']).stdout);
+  assert.deepEqual([onMain.offer, onMain.reason], [false, 'protected'], 'deferred skips the shown marker only');
+  writeFileSync(join(repo, 'a.js'), 'const a = 9;\n');
+  const open = JSON.parse(run(repo, home, ['offer', '--deferred', '--format=json']).stdout);
+  assert.deepEqual([open.offer, open.reason], [false, 'gates-open']);
+  const bad = run(repo, home, ['offer', '--defered']);
+  assert.notEqual(bad.status, 0, 'a misspelled flag is refused, never read as a plain offer');
+});
+
 test('offer on a protected branch → commit-only menu with push_dropped, push-only work → protected', () => {
   const repo = makeRepo(); // default branch of `git init` in the fixture
   git(repo, 'branch', '-M', 'main');

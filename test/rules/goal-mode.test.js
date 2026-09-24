@@ -29,6 +29,8 @@ const CLAUSES = {
   'the record hashes the goal': '`[GOAL_COMMIT] goal=<first 12 hex of git hash-object of the condition>',
   'never the goal text': 'never the goal text',
   'push and deploy keep their approvals': 'Pushes, `/deploy-flow` and every other operation keep their own approvals',
+  'the push menu waits for the goal': 'while a user goal is active (Goal mode conditions 1–2) the commit follows Goal mode (else a commit-only menu), and no push menu is offered until the goal ends, then once as the deferred menu',
+  'the deferred menu keeps its own marker end to end': 'The deferred menu adds `--deferred` to each `offer`/`offer-shown` call',
   'commits only': 'the one exception is Goal mode, below, and it covers commits only',
   '## Goal Commit off narrows': '| `## Goal Commit` | Setting — `on` (default) · `off`, read by `review-state.js goal-commit`',
 };

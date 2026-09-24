@@ -34,9 +34,9 @@ a command (git-autonomy FR-1, FR-4, FR-14, FR-16). This section is Default tier;
 to ask and *how* to present the choice, and grants nothing — the workflow a selection invokes still
 asks its own approval.
 
-- **When**: `node <scripts>/review-state.js offer --format=json` returns `offer: true` — unless Goal
-  mode (below) holds, which takes precedence for the commit: commit without the menu, and offer a
-  menu only for what is left (a push, which always asks). It already
+- **When**: `node <scripts>/review-state.js offer --format=json` returns `offer: true` — while a user goal
+  is active (Goal mode conditions 1–2) the commit follows Goal mode (else a commit-only menu), and no push menu is offered
+  until the goal ends, then once as the deferred menu. It already
   applies every condition — required gates passed at the current digest, a real branch, no push
   kind on a protected branch, the project's `## Offer Mode`, and once per passing digest. Do not
   re-derive them; do not offer when it returns `false`.
@@ -48,7 +48,7 @@ asks its own approval.
   picked option; (2) run `review-state.js offer-shown <digest>` with the digest the menu was shown
   for, whatever was chosen, `Not now` included; (3) invoke a valid selection. An invalid one is void
   and nothing is invoked. Recording before validating would make every selection read
-  `already-offered`.
+  `already-offered`. The deferred menu adds `--deferred` to each `offer`/`offer-shown` call.
   A valid pick invokes, through the Skill tool: Commit → `/smart-commit --execute`; Commit and
   push → `/smart-commit --execute`, then `/push-ci`; Push → `/push-ci` alone.
 - **Never text to copy**: whenever you would suggest `/smart-commit --execute`, `/push-ci` or

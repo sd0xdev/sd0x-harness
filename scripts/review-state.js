@@ -250,16 +250,24 @@ function combinedDigest(tree) {
   return `sha256:${crypto.createHash('sha256').update(parts.join('\n')).digest('hex')}`;
 }
 
-function readShown(dir) {
+// Two markers, one per menu: `offer.json` for the ordinary menu, `offer-deferred.json` for the one
+// push menu a user goal held back — so each is shown once per digest and neither swallows the other.
+const shownFile = (deferred) => (deferred ? 'offer-deferred.json' : 'offer.json');
+
+function readShown(dir, deferred = false) {
   try {
-    const j = JSON.parse(fs.readFileSync(path.join(dir, 'offer.json'), 'utf8'));
+    const j = JSON.parse(fs.readFileSync(path.join(dir, shownFile(deferred)), 'utf8'));
     return typeof j.digest === 'string' ? j.digest : null;
   } catch {
     return null;
   }
 }
 
-function computeOffer() {
+// `deferred` (git-autonomy, user direction 2026-09-25): the one push menu held back while a user goal
+// ran is offered when the goal ends, and the ordinary once-per-digest marker must not swallow it — a
+// commit made during the goal leaves the reviewed digest unchanged. It reads its OWN marker instead,
+// so it too is shown once per digest; every gate, protected-branch and Offer Mode check still applies.
+function computeOffer({ deferred = false } = {}) {
   // One snapshot: the gate verdicts and the digest the offer reports come from the same tree read,
   // so passes earned at one digest can never be paired with another.
   const { planes, root, tree } = computeCheck();
@@ -291,7 +299,8 @@ function computeOffer() {
   const required = [...content].flatMap((c) => PLANES_BY_CONTENT[c]);
   if (required.some((p) => !planes[p].passed)) return out(false, 'none', 'gates-open');
 
-  if (digest === null || readShown(stateDir(root)) === digest) return out(false, 'none', 'already-offered');
+  if (digest === null) return out(false, 'none', 'already-offered');
+  if (readShown(stateDir(root), deferred) === digest) return out(false, 'none', 'already-offered');
 
   // One label per dropped push, most specific first: the project's setting, then the branch, then
   // an unknown ahead range.
@@ -309,8 +318,8 @@ function computeOffer() {
   return out(true, kind, null, { push_dropped: pushDropped });
 }
 
-function offer(format) {
-  const r = computeOffer();
+function offer(format, opts) {
+  const r = computeOffer(opts);
   if (format === 'json') {
     process.stdout.write(`${JSON.stringify(r)}\n`);
     return;
@@ -325,12 +334,12 @@ function offer(format) {
   process.stdout.write(`[OFFER] offer=${r.offer} kind=${r.kind} reason=${r.reason || 'none'} branch=${r.branch || '-'} push_dropped=${r.push_dropped || 'none'}\n`);
 }
 
-function offerShown(digest) {
+function offerShown(digest, deferred = false) {
   if (!/^sha256:[0-9a-f]{64}$/.test(digest || '')) die(`invalid digest "${digest}" — pass the digest the offer reported`);
   const root = repoRoot();
   const dir = stateDir(root);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'offer.json'), `${JSON.stringify({ digest, time: new Date().toISOString() })}\n`);
+  fs.writeFileSync(path.join(dir, shownFile(deferred)), `${JSON.stringify({ digest, time: new Date().toISOString() })}\n`);
   process.stdout.write(`[OFFER_SHOWN] ${digest}\n`);
 }
 
@@ -570,9 +579,13 @@ try {
   } else if (cmd === 'offer') {
     const fmt = (args.find(a => a.startsWith('--format=')) || '--format=fact').slice('--format='.length);
     if (!['md', 'fact', 'json'].includes(fmt)) die(`unknown format "${fmt}" — valid: md, fact, json`);
-    offer(fmt);
+    const unknown = args.filter((a) => !a.startsWith('--format=') && a !== '--deferred');
+    if (unknown.length) die(`unknown argument "${unknown[0]}" — valid: --format=<md|fact|json>, --deferred`);
+    offer(fmt, { deferred: args.includes('--deferred') });
   } else if (cmd === 'offer-shown') {
-    offerShown(args[0]);
+    const rest = args.filter((a) => a !== '--deferred');
+    if (rest.length !== 1) die('usage: offer-shown [--deferred] <digest>');
+    offerShown(rest[0], args.includes('--deferred'));
   } else if (cmd === 'goal-commit') {
     const fmt = (args.find(a => a.startsWith('--format=')) || '--format=fact').slice('--format='.length);
     if (!['fact', 'json'].includes(fmt)) die(`unknown format "${fmt}" — valid: fact, json`);

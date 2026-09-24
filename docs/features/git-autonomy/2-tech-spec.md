@@ -52,18 +52,18 @@ sequenceDiagram
     RS->>PB: is <branch> protected?
     PB-->>RS: exit 0 protected / 1 not / 2 unreadable (→ protected)
     RS-->>M: {offer:true|false, reason, kind}
-    alt Goal mode holds (§ 3.5) — checked first, it takes precedence for the commit
-        M->>SC: invoke → plan printed with a [GOAL_COMMIT] record, no menu, no approval question
-        M->>RS: offer again — a fresh result, computed after the commit
-        opt the fresh offer is true with kind push
-            M->>U: AskUserQuestion — push / not now (only what the fresh result allows)
-            M->>RS: on push: offer again — same digest, branch, kind?
-            M->>RS: offer-shown <digest> — whatever was chosen
-            opt push picked and still offered
-                M->>PC: invoke → its own plan + approval
+    alt a user goal is active (§ 3.5 conditions 1–2) — checked first
+        alt Goal mode holds for the commit (conditions 3–4)
+            M->>SC: invoke → plan printed with a [GOAL_COMMIT] record, no menu, no approval question
+        else it does not (e.g. `Goal Commit: off`, an allowance declined) and offer has a commit kind
+            M->>U: AskUserQuestion — commit / not now (commit-only: the push option is withheld)
+            M->>RS: offer again → offer-shown <digest>, as in the ordinary branch below
+            opt commit picked and still offered
+                M->>SC: invoke → its own plan + approval
             end
         end
-    else offer:true (Goal mode does not hold)
+        Note over M,U: no push menu while the goal runs, whatever offer says (a clean tree after a<br/>goal-mode commit still reads kind push); when the goal ends, offer the push once via offer --deferred<br/>and record it with offer-shown --deferred
+    else offer:true (no active user goal)
         M->>U: AskUserQuestion — commit / commit and push / not now
         U-->>M: selection (router, never the credential)
         opt a workflow was picked
@@ -317,7 +317,21 @@ Conditions 3 and 4 are one call, `review-state.js goal-commit --format=json` →
 `disabled` · `gates-open`); a protected branch answers `ok: true` with `needs_branch_allowance: true`.
 Conditions 1 and 2 are behaviour-layer only — no hook input carries the goal. When all four hold,
 Goal mode takes precedence over the offer menu for the commit (`rules/git-workflow.md` § Proactive
-Offer); a push still goes through the menu and `/push-ci`'s own approval.
+Offer); a push still goes through the menu and `/push-ci`'s own approval, but the menu **waits for
+the goal** (user direction 2026-09-25): the deferral keys on the goal being active (conditions 1–2),
+not on Goal mode holding for a commit — after a goal-mode commit the tree is clean, `goal-commit`
+reads `nothing-to-do` and `offer` reads `kind: push` while the goal still runs. So while it runs no
+push is offered unasked, and once the goal ends — Claude Code reports it met, or it is cleared,
+impossible or replaced — the push is offered once, through `review-state.js offer --deferred` and recorded with `offer-shown --deferred`. The
+deferred menu has a marker of its own (`offer-deferred.json` beside `offer.json`), so it is shown
+once per digest and the ordinary marker cannot suppress it. Its answer path is the ordinary one
+(`offer` again → `offer-shown` → invoke) with `--deferred` on every call — re-validating against the
+ordinary marker would void the pick, and recording `Not now` there would leave the deferred menu
+armed: a commit made during the goal leaves the reviewed digest
+unchanged, so a commit-only menu shown mid-goal (or a push menu the user dismissed) would otherwise
+read `already-offered` and swallow the one offer the goal was holding. Every gate, protected-branch
+and Offer Mode check still applies to it. A push the user asks for mid-goal still runs
+through `/push-ci` and its approval.
 
 **What changes in `/smart-commit --execute`.** Only the one plan approval (Step 5, "show the full
 commit plan … and get approval once"): under a counting goal the plan is printed with a `[GOAL_COMMIT] goal=<first 12 hex of git hash-object --stdin of the condition> | branch=<b> | digest=<d> | <ISO8601>`
