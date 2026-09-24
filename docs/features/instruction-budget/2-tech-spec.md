@@ -49,7 +49,8 @@ counts become "13 `@rules/` imports + 4 path-scoped references".
 
 ### 3.2 Codex prompt contract on demand (R2)
 
-The full text moves to `skills/codex-code-review/references/codex-invocation.md`, registered in
+The full text moves to `skills/codex-code-review/references/codex-invocation-contract.md` (named apart
+from the rule it serves), registered in
 `contract-routing.test.js` `CONTRACTS` (activated by `rules/codex-invocation.md` and
 `skills/codex-code-review/SKILL.md`). `rules/codex-invocation.md` becomes the resident core:
 

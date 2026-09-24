@@ -33,4 +33,4 @@ Tech spec § 3.1. A path-scoped rule is not loaded at launch, unless a `CLAUDE.m
 | Analysis   | Done   | Globs per tech spec § 3.1; root `CLAUDE.md` keeps its `@` lines (this repo has no `.claude/rules/`) |
 | Development | Done  | Four rules carry `paths:`; `CLAUDE.template.md` names them in plain text; `/claude-health` S2.5 #3 accepts that and flags an `@` import of a path-scoped template (P2); `/project-setup` counts and backfill use the plain form and rewrite a legacy `@` line |
 | Testing    | Done   | `test/rules/path-scoped-rules.test.js` (globs, no `@` import, resident rules unscoped); install fixture keeps the frontmatter; carrier and count tests accept plain references; `npm test` 4939/4939; `/precommit` ✅ PASS |
-| Acceptance | Done   | Codex review ✅ Ready (backfill P2 fixed on the spot); `--verify-ac` not yet run, hence Candidate Complete |
+| Acceptance | Done   | Codex review ✅ Ready (backfill P2 fixed on the spot); `--verify-ac` 2026-09-25: 5/5 Complete; AC 4 at Medium-High (the frontmatter copy is tested for `testing-project.md`, the one path-scoped rule that goes through the override-template path), hence Candidate Complete |
