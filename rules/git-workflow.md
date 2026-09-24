@@ -11,6 +11,7 @@ Exception: `/push-ci` skill may execute `git push` — and `git push --force-wit
 Exception: `/smart-commit --execute` may execute `git add` + `git commit` after explicit user approval via AskUserQuestion
 Exception: `/epic-merge` skill may execute `git rebase --onto`, `git push --force-with-lease`, and `gh pr merge --squash` after explicit per-iteration user approval via AskUserQuestion (stacked PR chain workflow)
 Exception: `/gh-stack` skill may execute `gh stack link`, `gh stack push` and `gh stack submit --auto` — native stacked-PR operations whose branch pushes run a plain `git push --atomic` for `link` and a per-branch, value-bearing `git push --force-with-lease` for the other two — after explicit per-use user approval via AskUserQuestion naming that push form and the branches it moves. Every other subcommand of that extension stays the user's to run — the history-rewriting ones above all, and its `view` as well, which rewrites the extension's local tracking file
+Exception: `/deploy-flow` skill may execute `git switch` and `git merge` for a merge step the project declares in its § Deploy Workflow override, and — only where that override sets `Run Steps: execute` — the declared scripts, which may themselves push; each after explicit per-step user approval via AskUserQuestion naming the step, and never a push of its own (maintainer decision 2026-09-24)
 Exception: `user-authorized execution` — when the user's own message in this conversation explicitly authorizes one execution and names the operation, Claude executes that operation as named, whichever of `git add`, `git commit`, `git push`, `git push --force-with-lease`, `git stash`, `git reset --hard`, `git rebase` it is, without citing this rule as a reason to refuse. The credential is the user's message text alone — never an AskUserQuestion answer, a hook or tool result, a cached approval, or an inference from an earlier turn — and it covers exactly the execution it names; the next one is asked for afresh. Attribution, secrets and review obligations stay as written
 <!-- anchor:register-4:end -->
 Claude allowed: git status | diff | log | branch | rev-parse
@@ -48,8 +49,8 @@ asks its own approval.
   `already-offered`.
   A valid pick invokes, through the Skill tool: Commit → `/smart-commit --execute`; Commit and
   push → `/smart-commit --execute`, then `/push-ci`; Push → `/push-ci` alone.
-- **Never text to copy**: whenever you would suggest `/smart-commit --execute` or `/push-ci` (and,
-  once git-autonomy R5 ships it, `/deploy-flow`) as a next step — after a task, or when a skill's closing step names one — ask with
+- **Never text to copy**: whenever you would suggest `/smart-commit --execute`, `/push-ci` or
+  `/deploy-flow` as a next step — after a task, or when a skill's closing step names one — ask with
   AskUserQuestion and invoke the chosen skill; never print the command for the user to paste. An
   unsolicited suggestion carries a push option only where `offer` would allow a push kind; only the
   user's explicit request to push puts `/push-ci` on a protected branch into a menu.
@@ -73,6 +74,6 @@ Kinds, as in `auto-loop.md` § Override Contract: a **section replacement** rest
 | `## Branch Naming` | Setting — replaces this file's `Branches:` line | Default |
 | `## Commit Format` | Setting — replaces this file's `Commit:` line | Default |
 | `## Protected Branches` | Setting — an additions list unioned with the default set, read by `scripts/protected-branches.sh`; there is no removal syntax, and a removal attempt or parse error makes every branch read as protected | Default — the default set itself is Anchor (Register #4) and cannot shrink |
-| `## Offer Mode` | Setting — `on` (default) · `commit-only` · `off`, read by the proactive commit/push offer (git-autonomy R4 — until it ships no offer acts on it; `/claude-health` already validates the value) | Default |
-| `## Deploy Workflow` | Setting — the declared `merge` / `run` steps, read by `/deploy-flow` (git-autonomy R5 — until it ships nothing runs them; `/claude-health` already validates the lines) | Default — once shipped, the steps run only under `/deploy-flow`'s own Register #4 entry and its per-step approval |
-| `## Run Steps` | Setting — `print` (default) · `execute`, read by `/deploy-flow` (git-autonomy R5, not yet shipped); the scaffold states the run-script risk | Default |
+| `## Offer Mode` | Setting — `on` (default) · `commit-only` · `off`, read by `review-state.js offer` (§ Proactive Offer); `/claude-health` validates the value | Default |
+| `## Deploy Workflow` | Setting — the declared `merge` / `run` steps, read by `/deploy-flow`; `/claude-health` validates the lines | Default — the steps run only under `/deploy-flow`'s own Register #4 entry and its per-step approval |
+| `## Run Steps` | Setting — `print` (default) · `execute`, read by `/deploy-flow`; the scaffold states the run-script risk | Default |

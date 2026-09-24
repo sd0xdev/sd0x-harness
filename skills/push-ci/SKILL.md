@@ -17,12 +17,12 @@ Push to remote with user approval, then monitor CI run until completion.
 ⚠️ The second is /epic-merge (--force-with-lease for stacked PR chains, per-iteration AskUserQuestion gate).
 ⚠️ The third is /gh-stack, which pushes through `gh stack link|push|submit --auto` — a plain `--atomic` push for link, a per-branch `--force-with-lease` for the other two (per-use AskUserQuestion gate). It never pushes a branch directly.
 ⚠️ This skill may also use --force-with-lease, but only when the caller passes the flag — and NEVER onto a protected branch; bare --force is forbidden everywhere.
-⚠️ /deploy-flow (git-autonomy R5, not yet shipped) will never run git push itself; a declared `run` step under `Run Steps: execute` may push on its own, outside this skill — the project's opted-in, stated risk.
+⚠️ /deploy-flow never runs git push itself; a declared `run` step under `Run Steps: execute` may push on its own, outside this skill — the project's opted-in, stated risk.
 ⚠️ All other skills and rules MUST output push commands only (not execute).
 ⚠️ Push REQUIRES explicit user approval via AskUserQuestion — no exceptions.
 ```
 
-| Rule | This Skill | `/epic-merge` | `/gh-stack` | `/deploy-flow` (R5, not yet shipped) | All Other Skills |
+| Rule | This Skill | `/epic-merge` | `/gh-stack` | `/deploy-flow` | All Other Skills |
 |------|-----------|---------------|-------------|----------------|------------------|
 | `git push` | Execute (after user approval) | Forbidden (uses `--force-with-lease` only) | Never directly — only as what `gh stack link` runs underneath (`--atomic`, no force), after a per-use AskUserQuestion naming that form | Never itself; a `run` step under `Run Steps: execute` may push outside this skill (run-script risk) | Forbidden (output only) |
 | `git push --force` | Forbidden | Forbidden | Forbidden | Forbidden | Forbidden |

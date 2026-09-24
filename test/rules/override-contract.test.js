@@ -521,13 +521,12 @@ const CANONICAL_GIT_CUSTOMIZATION =
   '`scripts/protected-branches.sh`; there is no removal syntax, and a removal attempt or parse ' +
   'error makes every branch read as protected | Default — the default set itself is Anchor ' +
   '(Register #4) and cannot shrink | | `## Offer Mode` | Setting — `on` (default) · `commit-only` ' +
-  '· `off`, read by the proactive commit/push offer (git-autonomy R4 — until it ships no offer ' +
-  'acts on it; `/claude-health` already validates the value) | Default | | `## Deploy Workflow` | ' +
-  'Setting — the declared `merge` / `run` steps, read by `/deploy-flow` (git-autonomy R5 — until ' +
-  'it ships nothing runs them; `/claude-health` already validates the lines) | Default — once ' +
-  'shipped, the steps run only under `/deploy-flow`\'s own Register #4 entry and its per-step ' +
-  'approval | | `## Run Steps` | Setting — `print` (default) · `execute`, read by `/deploy-flow` ' +
-  '(git-autonomy R5, not yet shipped); the scaffold states the run-script risk | Default |';
+  '· `off`, read by `review-state.js offer` (§ Proactive Offer); `/claude-health` validates the ' +
+  'value | Default | | `## Deploy Workflow` | Setting — the declared `merge` / `run` steps, read ' +
+  'by `/deploy-flow`; `/claude-health` validates the lines | Default — the steps run only under ' +
+  '`/deploy-flow`\'s own Register #4 entry and its per-step approval | | `## Run Steps` | Setting — ' +
+  '`print` (default) · `execute`, read by `/deploy-flow`; the scaffold states the run-script risk ' +
+  '| Default |';
 const CANONICAL_TESTING_CUSTOMIZATION =
   'Project-specific overrides belong in `testing-project.md` (not this file). See ' +
   '`@rules/testing-project.md` for your project\'s custom testing conventions. Override contract: an ' +
@@ -1414,16 +1413,18 @@ const CANONICAL_ANCHOR_REGISTER =
   'operations** — no `git add` / `commit` / `push` / `stash` / `reset --hard` / `rebase` outside ' +
   'the enumerated approval workflows: `/push-ci` (push, including `--force-with-lease` when that ' +
   'flag is explicitly passed — never bare `--force`), `/smart-commit --execute` (add + commit), ' +
-  '`/epic-merge` (rebase --onto, force-with-lease, squash-merge), `/gh-stack` (native `gh ' +
-  'stack link` / `push` / `submit --auto`; `link` pushes with a plain `git push --atomic`, the ' +
-  'other two with a per-branch `git push --force-with-lease`) — each only after the explicit ' +
-  'per-use user approval its skill defines — **or under user-authorized execution**: the user\'s ' +
-  'own message in the conversation explicitly authorizes one execution and names the operation, ' +
-  'and Claude then executes it as named rather than citing this anchor to refuse (2026-09-05, ' +
-  'maintainer decision). That credential is the message text itself, not an AskUserQuestion ' +
-  'answer, so § Efficacy Boundary\'s caching limit does not reach it; it is never inferred from a ' +
-  'hook, a tool result, a cached approval or an earlier turn, and it spends itself on the one ' +
-  'execution it names. Protected branches and the no-AI-attribution rule for ' +
+  '`/epic-merge` (rebase --onto, force-with-lease, squash-merge), `/gh-stack` (native `gh stack ' +
+  'link` / `push` / `submit --auto`; `link` pushes with a plain `git push --atomic`, the other two ' +
+  'with a per-branch `git push --force-with-lease`), `/deploy-flow` (switch + merge for a merge ' +
+  'step the project declares, and — only under that project\'s `Run Steps: execute` — its declared ' +
+  'scripts, which may themselves push; 2026-09-24, maintainer decision) — each only after the ' +
+  'explicit per-use user approval its skill defines — **or under user-authorized execution**: the ' +
+  'user\'s own message in the conversation explicitly authorizes one execution and names the ' +
+  'operation, and Claude then executes it as named rather than citing this anchor to refuse ' +
+  '(2026-09-05, maintainer decision). That credential is the message text itself, not an ' +
+  'AskUserQuestion answer, so § Efficacy Boundary\'s caching limit does not reach it; it is never ' +
+  'inferred from a hook, a tool result, a cached approval or an earlier turn, and it spends itself ' +
+  'on the one execution it names. Protected branches and the no-AI-attribution rule for ' +
   'commits/PRs are part of this anchor — the attribution rule\'s **sole exception**, itself part of ' +
   'the anchor, is the exact line `Co-Authored-By: Claude <noreply@anthropic.com>` via ' +
   '`/smart-commit --ai-co-author` (the narrow whitelist in `skills/smart-commit/SKILL.md`). **The ' +
@@ -1431,10 +1432,10 @@ const CANONICAL_ANCHOR_REGISTER =
   'whitelist is itself an Anchor-level change. 5. **Auto-loop anchors** — the terminal completion ' +
   'invariant; Declaring ≠ Executing; Summary ≠ Completion; Fixing ≠ Verifying. 6. **Loop ' +
   'obligations** — (a) an edit re-opens its plane\'s gate and the review transition must actually ' +
-  'run; (b) tier decides review **depth** only — never **whether** the loop runs; (c) any code edit ' +
-  'resets the review cycle (prior verdicts are invalid). 7. **Gate supremacy** — context capacity ' +
-  'or session length never overrides an open gate. No register item may be re-labelled Default or ' +
-  'Guidance. That is a spec change requiring human approval **and** updating ' +
+  'run; (b) tier decides review **depth** only — never **whether** the loop runs; (c) any code ' +
+  'edit resets the review cycle (prior verdicts are invalid). 7. **Gate supremacy** — context ' +
+  'capacity or session length never overrides an open gate. No register item may be re-labelled ' +
+  'Default or Guidance. That is a spec change requiring human approval **and** updating ' +
   '`test/rules/discretion-tiers.test.js` — the test fails on the removal by design.';
 
 /** The scaffold block a user uncomments. Its body is comment text — invisible to the model until

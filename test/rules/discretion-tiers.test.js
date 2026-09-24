@@ -711,6 +711,11 @@ const CANONICAL_AUTHORIZATION_BLOCK = [
   // visibly. Everything the extension does to local history (`rebase`, `sync`, `modify`) sits
   // outside the grant, and that boundary is what a widening here would move.
   "Exception: `/gh-stack` skill may execute `gh stack link`, `gh stack push` and `gh stack submit --auto` — native stacked-PR operations whose branch pushes run a plain `git push --atomic` for `link` and a per-branch, value-bearing `git push --force-with-lease` for the other two — after explicit per-use user approval via AskUserQuestion naming that push form and the branches it moves. Every other subcommand of that extension stays the user's to run — the history-rewriting ones above all, and its `view` as well, which rewrites the extension's local tracking file",
+  // The sixth workflow (2026-09-24, maintainer decision, git-autonomy R5) runs a project's declared
+  // release: `git switch` + `git merge` for a declared merge step, and — only under the project's
+  // opted-in `Run Steps: execute` — its declared scripts, which may push on their own (the stated
+  // run-script risk). It never pushes itself, which is why no push span appears in its line.
+  "Exception: `/deploy-flow` skill may execute `git switch` and `git merge` for a merge step the project declares in its § Deploy Workflow override, and — only where that override sets `Run Steps: execute` — the declared scripts, which may themselves push; each after explicit per-step user approval via AskUserQuestion naming the step, and never a push of its own (maintainer decision 2026-09-24)",
   // The fifth grant (2026-09-05, maintainer decision) is keyed to a credential rather than a
   // skill: the user's own message text authorizing one named execution. It is pinned like the
   // other three so that the conditions — own message, one execution, operation named, never
@@ -762,6 +767,7 @@ const AUTHORIZED_GRANTS = [
   ['/smart-commit --execute', ['git add', 'git commit']],
   ['/epic-merge', ['git rebase --onto', 'git push --force-with-lease', 'gh pr merge --squash']],
   ['/gh-stack', ['gh stack link', 'gh stack push', 'gh stack submit --auto', 'git push --atomic', 'git push --force-with-lease']],
+  ['/deploy-flow', ['git switch', 'git merge']],
   ['user-authorized execution', ['git add', 'git commit', 'git push', 'git push --force-with-lease', 'git stash', 'git reset --hard', 'git rebase']],
 ];
 
