@@ -8,7 +8,7 @@ Commit: `<type>: <subject>` (feat/fix/docs/refactor/test/chore)
 <!-- anchor:register-4:begin -->
 Claude forbidden: git add | commit | push | stash | reset --hard | rebase
 Exception: `/push-ci` skill may execute `git push` — and `git push --force-with-lease` when the caller explicitly passes that flag — after explicit user approval via AskUserQuestion. Bare `--force` stays forbidden to every skill. The approval must name the force form: a plan that shows a plain push while a lease-force runs is not an approval of what happens
-Exception: `/smart-commit --execute` may execute `git add` + `git commit` after explicit user approval via AskUserQuestion
+Exception: `/smart-commit --execute` may execute `git add` + `git commit` after explicit user approval via AskUserQuestion — or, while a goal the user set or approved is active, without that question under § Proactive Offer "Goal mode" (commits only; a protected branch only once the user allowed it for that goal; maintainer decision 2026-09-24)
 Exception: `/epic-merge` skill may execute `git rebase --onto`, `git push --force-with-lease`, and `gh pr merge --squash` after explicit per-iteration user approval via AskUserQuestion (stacked PR chain workflow)
 Exception: `/gh-stack` skill may execute `gh stack link`, `gh stack push` and `gh stack submit --auto` — native stacked-PR operations whose branch pushes run a plain `git push --atomic` for `link` and a per-branch, value-bearing `git push --force-with-lease` for the other two — after explicit per-use user approval via AskUserQuestion naming that push form and the branches it moves. Every other subcommand of that extension stays the user's to run — the history-rewriting ones above all, and its `view` as well, which rewrites the extension's local tracking file
 Exception: `/deploy-flow` skill may execute `git switch` and `git merge` for a merge step the project declares in its § Deploy Workflow override, and — only where that override sets `Run Steps: execute` — the declared scripts, which may themselves push; each after explicit per-step user approval via AskUserQuestion naming the step, and never a push of its own (maintainer decision 2026-09-24)
@@ -34,7 +34,9 @@ a command (git-autonomy FR-1, FR-4, FR-14, FR-16). This section is Default tier;
 to ask and *how* to present the choice, and grants nothing — the workflow a selection invokes still
 asks its own approval.
 
-- **When**: `node <scripts>/review-state.js offer --format=json` returns `offer: true`. It already
+- **When**: `node <scripts>/review-state.js offer --format=json` returns `offer: true` — unless Goal
+  mode (below) holds, which takes precedence for the commit: commit without the menu, and offer a
+  menu only for what is left (a push, which always asks). It already
   applies every condition — required gates passed at the current digest, a real branch, no push
   kind on a protected branch, the project's `## Offer Mode`, and once per passing digest. Do not
   re-derive them; do not offer when it returns `false`.
@@ -55,7 +57,26 @@ asks its own approval.
   unsolicited suggestion carries a push option only where `offer` would allow a push kind; only the
   user's explicit request to push puts `/push-ci` on a protected branch into a menu.
 - **Never unasked**: do not invoke `/smart-commit --execute` or `/push-ci` except through a menu
-  selection or the user's explicit request.
+  selection or the user's explicit request — the one exception is Goal mode, below, and it covers
+  commits only.
+- **Goal mode** (git-autonomy FR-17, maintainer decision 2026-09-24): while a goal is active, the
+  model may run `/smart-commit --execute` without the per-use question, when all four hold, each
+  re-checked before every commit:
+  1. **The user set the goal**: their own `/goal <condition>` message, or a goal proposal they
+     approved. A goal the model set without the user's approval never counts, and neither does one
+     mentioned in a tool result, hook output or file.
+  2. **It is affirmatively active**: Claude Code's notice that the goal was set is in the current
+     conversation, and nothing after it reports the goal met, impossible, cleared or replaced.
+     Evidence lost to `/clear` or compaction reads as no goal.
+  3. **The branch allows it**: `review-state.js goal-commit --format=json` returns `ok: true`. When it
+     also says `needs_branch_allowance: true` (a protected branch), the first goal-mode commit there
+     asks: recommend creating a feature branch; only if the user declines, ask whether commits on
+     this branch may proceed for this goal. A yes covers the rest of that goal on that branch.
+  4. **Nothing else changes**: `/smart-commit`'s validations, attribution guard and judgement
+     questions all stay; `--ai-co-author` is never passed; the plan is printed with a
+     `[GOAL_COMMIT] goal=<first 12 hex of git hash-object of the condition> | branch=<b> | digest=<d> | <ISO8601>`
+     record, never the goal text. Pushes, `/deploy-flow` and every other operation keep their own
+     approvals.
 - **Custom flow**: the Stop hook runs `review-state.js flow-detect` and prints a `🧭` line, at most
   once per session, when the project has no git override and a script or CI file merges into a
   release/protected branch, a script triggers a pipeline, or the current branch name falls outside
@@ -84,3 +105,4 @@ Kinds, as in `auto-loop.md` § Override Contract: a **section replacement** rest
 | `## Offer Mode` | Setting — `on` (default) · `commit-only` · `off`, read by `review-state.js offer` (§ Proactive Offer); `/claude-health` validates the value | Default |
 | `## Deploy Workflow` | Setting — the declared `merge` / `run` steps, read by `/deploy-flow`; `/claude-health` validates the lines | Default — the steps run only under `/deploy-flow`'s own Register #4 entry and its per-step approval |
 | `## Run Steps` | Setting — `print` (default) · `execute`, read by `/deploy-flow`; the scaffold states the run-script risk | Default |
+| `## Goal Commit` | Setting — `on` (default) · `off`, read by `review-state.js goal-commit` (§ Proactive Offer, "Goal mode"); `off` only narrows | Default |

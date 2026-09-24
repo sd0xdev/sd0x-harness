@@ -526,7 +526,8 @@ const CANONICAL_GIT_CUSTOMIZATION =
   'by `/deploy-flow`; `/claude-health` validates the lines | Default — the steps run only under ' +
   '`/deploy-flow`\'s own Register #4 entry and its per-step approval | | `## Run Steps` | Setting — ' +
   '`print` (default) · `execute`, read by `/deploy-flow`; the scaffold states the run-script risk ' +
-  '| Default |';
+  '| Default | | `## Goal Commit` | Setting — `on` (default) · `off`, read by `review-state.js ' +
+  'goal-commit` (§ Proactive Offer, "Goal mode"); `off` only narrows | Default |';
 const CANONICAL_TESTING_CUSTOMIZATION =
   'Project-specific overrides belong in `testing-project.md` (not this file). See ' +
   '`@rules/testing-project.md` for your project\'s custom testing conventions. Override contract: an ' +
@@ -1412,31 +1413,34 @@ const CANONICAL_ANCHOR_REGISTER =
   '`thorough` whatever tier is configured — overrides included (R8). 4. **Destructive git ' +
   'operations** — no `git add` / `commit` / `push` / `stash` / `reset --hard` / `rebase` outside ' +
   'the enumerated approval workflows: `/push-ci` (push, including `--force-with-lease` when that ' +
-  'flag is explicitly passed — never bare `--force`), `/smart-commit --execute` (add + commit), ' +
-  '`/epic-merge` (rebase --onto, force-with-lease, squash-merge), `/gh-stack` (native `gh stack ' +
-  'link` / `push` / `submit --auto`; `link` pushes with a plain `git push --atomic`, the other two ' +
-  'with a per-branch `git push --force-with-lease`), `/deploy-flow` (switch + merge for a merge ' +
-  'step the project declares, and — only under that project\'s `Run Steps: execute` — its declared ' +
-  'scripts, which may themselves push; 2026-09-24, maintainer decision) — each only after the ' +
-  'explicit per-use user approval its skill defines — **or under user-authorized execution**: the ' +
-  'user\'s own message in the conversation explicitly authorizes one execution and names the ' +
-  'operation, and Claude then executes it as named rather than citing this anchor to refuse ' +
-  '(2026-09-05, maintainer decision). That credential is the message text itself, not an ' +
-  'AskUserQuestion answer, so § Efficacy Boundary\'s caching limit does not reach it; it is never ' +
-  'inferred from a hook, a tool result, a cached approval or an earlier turn, and it spends itself ' +
-  'on the one execution it names. Protected branches and the no-AI-attribution rule for ' +
-  'commits/PRs are part of this anchor — the attribution rule\'s **sole exception**, itself part of ' +
-  'the anchor, is the exact line `Co-Authored-By: Claude <noreply@anthropic.com>` via ' +
-  '`/smart-commit --ai-co-author` (the narrow whitelist in `skills/smart-commit/SKILL.md`). **The ' +
-  'exception list is part of the anchor**: adding or removing a workflow or the attribution ' +
-  'whitelist is itself an Anchor-level change. 5. **Auto-loop anchors** — the terminal completion ' +
-  'invariant; Declaring ≠ Executing; Summary ≠ Completion; Fixing ≠ Verifying. 6. **Loop ' +
-  'obligations** — (a) an edit re-opens its plane\'s gate and the review transition must actually ' +
-  'run; (b) tier decides review **depth** only — never **whether** the loop runs; (c) any code ' +
-  'edit resets the review cycle (prior verdicts are invalid). 7. **Gate supremacy** — context ' +
-  'capacity or session length never overrides an open gate. No register item may be re-labelled ' +
-  'Default or Guidance. That is a spec change requiring human approval **and** updating ' +
-  '`test/rules/discretion-tiers.test.js` — the test fails on the removal by design.';
+  'flag is explicitly passed — never bare `--force`), `/smart-commit --execute` (add + commit; ' +
+  'while a goal the user set or approved is active, without its per-use question under ' +
+  '`git-workflow.md` § Proactive Offer "Goal mode" — commits only, 2026-09-24, maintainer ' +
+  'decision), `/epic-merge` (rebase --onto, force-with-lease, squash-merge), `/gh-stack` (native ' +
+  '`gh stack link` / `push` / `submit --auto`; `link` pushes with a plain `git push --atomic`, the ' +
+  'other two with a per-branch `git push --force-with-lease`), `/deploy-flow` (switch + merge for ' +
+  'a merge step the project declares, and — only under that project\'s `Run Steps: execute` — its ' +
+  'declared scripts, which may themselves push; 2026-09-24, maintainer decision) — each only after ' +
+  'the explicit per-use user approval its skill defines (for `/smart-commit --execute`, or under ' +
+  'the goal credential above) — **or under user-authorized execution**: the user\'s own message in ' +
+  'the conversation explicitly authorizes one execution and names the operation, and Claude then ' +
+  'executes it as named rather than citing this anchor to refuse (2026-09-05, maintainer ' +
+  'decision). That credential is the message text itself, not an AskUserQuestion answer, so § ' +
+  'Efficacy Boundary\'s caching limit does not reach it; it is never inferred from a hook, a tool ' +
+  'result, a cached approval or an earlier turn, and it spends itself on the one execution it ' +
+  'names. Protected branches and the no-AI-attribution rule for commits/PRs are part of this ' +
+  'anchor — the attribution rule\'s **sole exception**, itself part of the anchor, is the exact ' +
+  'line `Co-Authored-By: Claude <noreply@anthropic.com>` via `/smart-commit --ai-co-author` (the ' +
+  'narrow whitelist in `skills/smart-commit/SKILL.md`). **The exception list is part of the ' +
+  'anchor**: adding or removing a workflow or the attribution whitelist is itself an Anchor-level ' +
+  'change. 5. **Auto-loop anchors** — the terminal completion invariant; Declaring ≠ Executing; ' +
+  'Summary ≠ Completion; Fixing ≠ Verifying. 6. **Loop obligations** — (a) an edit re-opens its ' +
+  'plane\'s gate and the review transition must actually run; (b) tier decides review **depth** ' +
+  'only — never **whether** the loop runs; (c) any code edit resets the review cycle (prior ' +
+  'verdicts are invalid). 7. **Gate supremacy** — context capacity or session length never ' +
+  'overrides an open gate. No register item may be re-labelled Default or Guidance. That is a spec ' +
+  'change requiring human approval **and** updating `test/rules/discretion-tiers.test.js` — the ' +
+  'test fails on the removal by design.';
 
 /** The scaffold block a user uncomments. Its body is comment text — invisible to the model until
  *  activated — so the structural gate cannot police it and only equality can. */
@@ -1709,13 +1713,14 @@ test('git-workflow mapping table when parsed → covers preamble plus every temp
     '`## Offer Mode`',
     '`## Deploy Workflow`',
     '`## Run Steps`',
+    '`## Goal Commit`',
   ], 'the mapping is closed: exactly these rows, in template order');
   for (const [heading, kind, tier] of rows) {
     assert.match(tier, /^Default/, `${heading}: baseline tier must be Default`);
     if (heading !== 'preamble (synthetic section)') assert.match(kind, /^Setting/, `${heading}: the scaffold is settings-only`);
   }
   const tplHeadings = templateHeadings(gitTpl);
-  assert.deepEqual(tplHeadings, ['Branch Naming', 'Commit Format', 'Protected Branches', 'Offer Mode', 'Deploy Workflow', 'Run Steps'],
+  assert.deepEqual(tplHeadings, ['Branch Naming', 'Commit Format', 'Protected Branches', 'Offer Mode', 'Deploy Workflow', 'Run Steps', 'Goal Commit'],
     'template heading inventory drifted — update the mapping table AND this test together');
   // A setting has no same-named parent section; restating one would silently become a section replacement.
   for (const h of tplHeadings) {

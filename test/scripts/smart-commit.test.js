@@ -2330,3 +2330,27 @@ test('control: the retirement note itself may name session_commit_scope as histo
   assert.match(src, /retired with the state\s+machine that wrote it/,
     'the mention must be the retirement note, not a live read instruction');
 });
+
+test('Goal mode when read → every approval directive names the exception, and the credential stays narrow', () => {
+  // git-autonomy R7: the goal credential widens who may skip the plan approval, never what runs.
+  // Each approval or confirmation directive must name the exception, or the skill contradicts itself.
+  const src = readFileSync(skillPath, 'utf8');
+  const directives = [
+    /requires user approval, except under a user-set goal/,                 // frontmatter description
+    /Confirm\/adjust \(Goal mode: printed with a \[GOAL_COMMIT\] record, not asked\)/, // workflow diagram
+    /with user approval via AskUserQuestion — or, under § Goal mode, without it/,     // Step 1a table
+    /The one exception to asking is § Goal mode below/,                     // Step 1a paragraph
+    /Show grouping plan and ask user to confirm\. Under § Goal mode, show it and do not ask\./, // Step 4
+    /get approval once — under § Goal mode, print the plan with its `\[GOAL_COMMIT\]` record instead/, // Step 5c
+    /No silent execution[^\n]*except under § Goal mode/,                    // Prohibited
+    /the user confirming that plan is the\s+selection decision — under § Goal mode the printed plan is/, // Step 3 selection
+    /appears in the confirmed plan \(under § Goal mode, the printed plan\)/, // Prohibited: plan filter
+  ];
+  for (const re of directives) assert.match(src, re, `directive missing its Goal mode exception: ${re}`);
+  const section = src.slice(src.indexOf('### Goal mode (git-autonomy FR-17)'), src.indexOf('**1b. Learn Commit Style**'));
+  assert.match(section, /goal \*\*the user\*\* set or approved/);
+  assert.match(section, /The goal text itself is never printed/);
+  assert.match(section, /`--ai-co-author` is never passed on\s+this path/);
+  assert.match(section, /every \*\*judgement\*\* question/);
+  assert.match(section, /needs_branch_allowance: true/);
+});
