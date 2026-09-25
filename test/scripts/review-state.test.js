@@ -13,6 +13,7 @@ const {
   symlinkSync,
   existsSync,
   readdirSync,
+  chmodSync,
 } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
@@ -555,6 +556,59 @@ test('offer under Offer Mode off → disabled; commit-only → commit menu; comm
   const c = offerJson(repo, home);
   assert.deepEqual([c.offer, c.kind, c.push_dropped], [true, 'commit', 'commit-only']);
 });
+
+// A git override that exists but cannot be read answers each setting's narrowing value, the way
+// protected-branches.sh answers 2 for the same file — never the permissive default (tech spec
+// task 10, requests/2026-09-25-override-setting-fail-closed.md). A directory at the override path
+// is the unreadable case: portable, and unlike chmod 000 it stays unreadable when tests run as root.
+test('offer and goal-commit when the selected override cannot be read → disabled; readable → parsed', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 41;\n');
+  passAll(repo, home);
+  assert.equal(offerJson(repo, home).offer, true, 'no override file → the default applies');
+  mkdirSync(join(repo, 'rules', 'git-workflow-project.md'), { recursive: true });
+  assert.deepEqual([offerJson(repo, home).offer, offerJson(repo, home).reason], [false, 'disabled']);
+  assert.equal(goalJson(repo, home).reason, 'disabled');
+  rmSync(join(repo, 'rules', 'git-workflow-project.md'), { recursive: true });
+  writeOverride(repo, '# x\n\n## Offer Mode\n\non\n\n## Goal Commit\n\non\n');
+  passAll(repo, home);
+  assert.equal(offerJson(repo, home).offer, true, 'the same path readable → its values are parsed');
+  assert.equal(goalJson(repo, home).ok, true);
+});
+
+test('offer when the higher override is a dangling symlink → disabled, never the lower file', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeOverride(repo, '# x\n\n## Offer Mode\n\non\n');
+  mkdirSync(join(repo, '.claude', 'rules'), { recursive: true });
+  symlinkSync('/nonexistent/git-workflow-project.md', join(repo, '.claude', 'rules', 'git-workflow-project.md'));
+  writeFileSync(join(repo, 'a.js'), 'const a = 42;\n');
+  passAll(repo, home);
+  assert.deepEqual([offerJson(repo, home).offer, offerJson(repo, home).reason], [false, 'disabled']);
+});
+
+// Existence that cannot be decided is not absence: an untraversable `.claude/rules/` makes lstat
+// fail with EACCES, and reading that as "no higher file" would select the lower one. Skipped as
+// root, where the mode bits do not stop the lookup.
+test('offer and goal-commit when the higher override directory cannot be traversed → disabled, never the lower file',
+  { skip: process.getuid && process.getuid() === 0 }, () => {
+    const repo = makeRemoteRepo();
+    const home = tmp('rs-home-');
+    writeOverride(repo, '# x\n\n## Offer Mode\n\non\n\n## Goal Commit\n\non\n');
+    const dir = join(repo, '.claude', 'rules');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(repo, 'a.js'), 'const a = 43;\n');
+    passAll(repo, home);
+    assert.equal(offerJson(repo, home).offer, true, 'with the higher directory traversable, the lower file is read');
+    chmodSync(dir, 0o000);
+    try {
+      assert.deepEqual([offerJson(repo, home).offer, offerJson(repo, home).reason], [false, 'disabled']);
+      assert.equal(goalJson(repo, home).reason, 'disabled');
+    } finally {
+      chmodSync(dir, 0o755);
+    }
+  });
 
 test('offer on a detached HEAD → detached; offer-shown refuses a malformed digest', () => {
   const repo = makeRepo();

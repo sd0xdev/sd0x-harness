@@ -179,6 +179,27 @@ function gitOut(root, argv) {
   }
 }
 
+// The project's git override: the first candidate that EXISTS (lstat, so a dangling symlink
+// counts), never falling back past it — the same candidate order and no-fallback rule as
+// protected-branches.sh. Stricter than that script's `[ -e ] || [ -L ]` test: only ENOENT /
+// ENOTDIR mean "absent" here, and any other lstat error (an untraversable directory, say) leaves
+// existence unknown, which must not fall through to a lower file. The shell half is deferred
+// (docs/features/rules-residency/requests/2026-09-25-override-setting-fail-closed.md). Returns null
+// when neither candidate exists, { path } for the selected file, or { unknown: true }.
+function selectOverride(root) {
+  for (const rel of ['.claude/rules/git-workflow-project.md', 'rules/git-workflow-project.md']) {
+    const p = path.join(root, rel);
+    try {
+      fs.lstatSync(p);
+      return { path: p };
+    } catch (e) {
+      if (e.code === 'ENOENT' || e.code === 'ENOTDIR') continue;
+      return { unknown: true };
+    }
+  }
+  return null;
+}
+
 // The protected-set answer, fail-closed: 0 protected · 1 not · 2 unknown (treated as protected).
 // The resolver ships beside this file (plugin: scripts/, installed: .claude/scripts/).
 function protectedStatus(root, branch) {
@@ -191,29 +212,29 @@ function protectedStatus(root, branch) {
       return e.status === 1 ? 1 : 2;
     }
   }
-  const override = ['.claude/rules/git-workflow-project.md', 'rules/git-workflow-project.md']
-    .some((f) => { try { fs.lstatSync(path.join(root, f)); return true; } catch { return false; } });
-  if (override) return 2; // an override exists but nothing can read it
+  if (selectOverride(root)) return 2; // an override exists, or may, but nothing here can read it
   return DEFAULT_PROTECTED.some((p) => (p.endsWith('/*') ? branch.startsWith(p.slice(0, -1)) : branch === p)) ? 0 : 1;
 }
 
-// A bare-value setting from the project's git override: the first live (non-comment) value line
-// under `## <heading>`. Absent file, heading or value → the default; an unrecognised value also reads
-// as the default (the /claude-health check #7 reports it) — these settings only ever narrow.
-function overrideSetting(root, heading, allowed, dflt) {
-  for (const f of ['.claude/rules/git-workflow-project.md', 'rules/git-workflow-project.md']) {
-    let text;
-    try { text = fs.readFileSync(path.join(root, f), 'utf8'); } catch { continue; }
-    const live = text.replace(/<!--[\s\S]*?-->/g, '');
-    const esc = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const m = new RegExp(`^##[ \\t]+${esc}[ \\t]*$([\\s\\S]*?)(?=^##[ \\t]|(?![\\s\\S]))`, 'm').exec(live);
-    if (!m) return dflt;
-    const value = m[1].split('\n').map((l) => l.trim()).find((l) => l.length > 0);
-    return allowed.includes(value) ? value : dflt;
-  }
-  return dflt;
+// A bare-value setting from the project's git override (selectOverride): the first live
+// (non-comment) value line under `## <heading>`. No file, heading or value → the default; an
+// unrecognised value also reads as the default (the /claude-health check #7 reports it). A selected
+// file that cannot be read, or an override whose existence cannot be decided, answers `closed`,
+// the setting's narrowing value: these settings only ever narrow, so the default would fail open.
+function overrideSetting(root, heading, allowed, dflt, closed) {
+  const sel = selectOverride(root);
+  if (!sel) return dflt;
+  if (sel.unknown) return closed;
+  let text;
+  try { text = fs.readFileSync(sel.path, 'utf8'); } catch { return closed; }
+  const live = text.replace(/<!--[\s\S]*?-->/g, '');
+  const esc = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = new RegExp(`^##[ \\t]+${esc}[ \\t]*$([\\s\\S]*?)(?=^##[ \\t]|(?![\\s\\S]))`, 'm').exec(live);
+  if (!m) return dflt;
+  const value = m[1].split('\n').map((l) => l.trim()).find((l) => l.length > 0);
+  return allowed.includes(value) ? value : dflt;
 }
-const offerMode = (root) => overrideSetting(root, 'Offer Mode', ['on', 'commit-only', 'off'], 'on');
+const offerMode = (root) => overrideSetting(root, 'Offer Mode', ['on', 'commit-only', 'off'], 'on', 'off');
 
 // Files the push kind would publish: commits ahead of the upstream, or of the default branch's
 // merge-base when there is none. null = cannot tell, which never yields a push kind.
@@ -359,7 +380,7 @@ function goalCommit(format) {
   const dirty = ['code', 'doc'].filter((p) => tree.planes[p].partial || tree.planes[p].dirty.length > 0);
   if (!branch) r = out(false, 'detached');
   else if (!dirty.length) r = out(false, 'nothing-to-do');
-  else if (overrideSetting(root, 'Goal Commit', ['on', 'off'], 'on') === 'off') r = out(false, 'disabled');
+  else if (overrideSetting(root, 'Goal Commit', ['on', 'off'], 'on', 'off') === 'off') r = out(false, 'disabled');
   else if (dirty.flatMap((c) => PLANES_BY_CONTENT[c]).some((p) => !planes[p].passed)) r = out(false, 'gates-open');
   else r = out(true, null, { needs_branch_allowance: protectedStatus(root, branch) !== 1 });
   if (format === 'json') process.stdout.write(`${JSON.stringify(r)}\n`);
