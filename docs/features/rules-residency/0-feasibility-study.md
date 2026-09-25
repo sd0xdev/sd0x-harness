@@ -184,10 +184,10 @@ The third row is an explicit exception, recorded rather than claimed away: where
 
 ## 8. Open Questions
 
-- [ ] File a request for the `review-state.js overrideSetting` fail-open (unreadable `git-workflow-project.md` → defaults, so `Offer Mode: off` reads as `on`), with a regression test; independent of this migration.
-- [ ] Plugin-free installs (§ 7 consequence): should `/install-rules` also install the push authorization contract where the trigger can find it, or does 5.0 accept that a user-authorized push stops there? Decide before task 1 fixes the contract's path.
+- [x] File a request for the `review-state.js overrideSetting` fail-open (unreadable `git-workflow-project.md` → defaults, so `Offer Mode: off` reads as `on`), with a regression test; independent of this migration. Filed 2026-09-25 as [requests/2026-09-25-override-setting-fail-closed.md](./requests/2026-09-25-override-setting-fail-closed.md) (tech spec task 10), fixed on this branch.
+- [x] Plugin-free installs (§ 7 consequence): should `/install-rules` also install the push authorization contract where the trigger can find it, or does 5.0 accept that a user-authorized push stops there? Decided 2026-09-25: not handled; the migration guide states it (tech spec task 9 (f)).
 - [ ] Exact wording of the resident compact core and its character cost (target ≤ ~0.6k across the three stubs), measured in task 3.
-- [ ] `/project-setup`'s fixed rule list, installation counts and `path-scoped-rules.test.js` gain the new rule; confirm the installed placement is never `@`-imported.
+- [x] Plan how `/project-setup`'s fixed rule list, installation counts and `path-scoped-rules.test.js` gain the new rule, and how the installed placement stays un-`@`-imported. Planning decided 2026-09-25: assigned to tech spec task 1; the implementation lands with that task.
 - [ ] The post-5.0 git-guard experiment: population, operational definition of "governed action without a preceding successful Read", and targeted no-skill cases.
 
 ## 9. Next Steps

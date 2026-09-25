@@ -232,8 +232,8 @@ output extension for `procedure_hint`.
 
 | # | Task | Size | Depends on |
 |---|---|---|---|
-| 1 | Create canonical on-demand contracts (move, don't copy): push authorization, scope, review-loop/stall, testing, docs | M | — |
-| 2 | Point skills at contracts; add routing tests (skill → required references) | M | 1 |
+| 1 | Create canonical on-demand contracts (move, don't copy): push authorization, scope, review-loop/stall, testing, docs, and `rules/override-contract.md` (§ 3.4) — path-scoped, picked up by `/install-rules`' `*.md` enumeration (it is not a `*-project.md`, so the managed-set exclusion does not apply), added to `/project-setup`'s fixed rule list, covered by `path-scoped-rules.test.js` including a check that nothing `@`-imports it; the three parent override headings become stubs carrying the compact core and a Read pointer; `override-contract.test.js` is re-pointed to the canonical file with every check it has today | M | — |
+| 2 | Point skills at contracts: each governed workflow's **first step Reads its contract and stops when the Read fails** (§ 3.2); register every contract in `contract-routing.test.js` with its activation sources, including the override contract and its three stubs; add FR-6 tests that remove a contract and show the governed workflow refuses | M | 1 |
 | 3 | Compact resident kernel: rewrite `CLAUDE.md`, `auto-loop.md`, `discretion.md`, `git-workflow.md`, `security.md`, scope guard; add trigger table; carry the temporary canary-staging duty as a manifest-marked temporary block; delete `framework.md`, merge `fix-all-issues.md`; remove every `@` import of a path-scoped rule from this repository's own `CLAUDE.md` — today `testing.md`, `testing-project.md`, `docs-writing.md` and `docs-numbering.md`, in rule 5 and in the § Rules list — so the dev checkout loads the same resident set as the rendered template, with a test that pins `CLAUDE.md` the way `path-scoped-rules.test.js` pins the template | L | 1, 2 (Anchor-migration approval granted 2026-09-25) |
 | 4 | Dual-budget test + residency manifest + placement rule | S | 3 |
 | 5 | Hook `procedure_hint` (fact-conditioned only) | S | 1 |
@@ -242,11 +242,12 @@ output extension for `procedure_hint`.
 | 8a | Install the temporary staging duty on the **current** layer (own gated change: one resident line naming the duty + staging path), then log 20 baseline changes | M | — |
 | 8b | Land the prepared kernel change | — | 3–6, 8a |
 | 8c | Candidate cohort + decision per § 6; then freeze/import candidate records and **remove the staging duty** in a separately gated, non-cohort cleanup change | M | 8b |
-| 9 | `CHANGELOG.md` 5.0.0 entry with a migration guide, following the 3.0.0 precedent: (a) a 4.x → 5.0 comparison — what left residency and where each piece now lives; (b) no `*-project.md` edit is required; (c) the model line — 5.0 recommends Claude Opus 5.5 or later; (d) the 3.0 line is marked deprecated, suitable only for models before Claude Opus 4.8, and the 3.0.0 historical section keeps that mark; (e) **delivery** — `CHANGELOG.md` is today outside the npm package (`package.json` `files`) and unread by `.github/workflows/release.yml`, which builds the release body from commit subjects, so the task also adds `CHANGELOG.md` to `files` and makes the workflow append the 5.0.0 migration section (or a link to it) to the generated release body, verified by `npm pack --dry-run` listing the file and the published release page carrying the guide | S | 8c reads ship |
+| 9 | `CHANGELOG.md` 5.0.0 entry with a migration guide, following the 3.0.0 precedent: (a) a 4.x → 5.0 comparison — what left residency and where each piece now lives; (b) no `*-project.md` edit is required; (c) the model line — 5.0 recommends Claude Opus 5.5 or later; (d) the 3.0 line is marked deprecated, suitable only for models before Claude Opus 4.8, and the 3.0.0 historical section keeps that mark; (e) **delivery** — `CHANGELOG.md` is today outside the npm package (`package.json` `files`) and unread by `.github/workflows/release.yml`, which builds the release body from commit subjects, so the task also adds `CHANGELOG.md` to `files` and makes the workflow append the 5.0.0 migration section (or a link to it) to the generated release body, verified by `npm pack --dry-run` listing the file and the published release page carrying the guide; (f) **installs without the plugin** — rules copied by `/install-rules` with the plugin not loaded get no push authorization contract, so a user-authorized push there stops at the trigger's failed Read (FR-6). Maintainer decision 2026-09-25: this case is not handled beyond stating it in the guide | S | 8c reads ship |
+| 10 | Make `review-state.js` `overrideSetting` fail closed: a selected override file that cannot be read answers each setting's most restrictive value (`Offer Mode` → `off`, `Goal Commit` → `off`) instead of the default, matching `protected-branches.sh` for that case. `review-state.js` also treats an override whose existence cannot be decided (an `lstat` error other than `ENOENT`/`ENOTDIR`) the same way; the shell guards do not — their `[ -e ] \|\| [ -L ]` test reads that case as absent, and fixing them is deferred as a mechanical-guard change. `protectedStatus`'s fallback shares the same selection; regression test in both directions ([request](./requests/2026-09-25-override-setting-fail-closed.md)). Independent of the migration; lands on this branch (maintainer decision 2026-09-25) | S | — |
 
 Suggested tickets: one per row 1–2 (movement), one covering 3–4+6 (the kernel change, single
-reviewed unit), one for 5, one for 8, one for 9. 5.0.0 is released only after 8c reads ship and
-task 9 lands.
+reviewed unit), one for 5, one for 8, one for 9, one for 10. 5.0.0 is released only after 8c reads
+ship and task 9 lands.
 
 ## 6. Testing Strategy
 
@@ -254,6 +255,12 @@ task 9 lands.
   skill loads the authorization contract; every review skill loads loop+scope+dispatch contracts;
   doc/test skills load theirs); digest pins on kernel units; executable fixture tests for every
   executable claim; negative controls per guard.
+- **Fail-closed contracts (FR-6)**: per governed workflow, a test removes the contract and shows
+  the workflow refuses before acting; `override-contract.test.js` keeps its live-text, Anchor
+  supremacy, mapping and unknown-heading checks against the canonical file. The no-skill case —
+  an ad-hoc session that meets a trigger with the contract missing — is **demonstrated** with a
+  headless `claude -p` probe in an isolated repository, the way instruction-budget measured
+  path-scoped loading, and reported as behaviour observed, never as a guarantee a hook supplies.
 - **Canary (non-inferiority)** — executable protocol:
   - **Metrics artifact — two stages, so recording cannot invalidate what it records.** A record
     written into the repo at change close would move the code-plane digest (`tree-digest.js`
@@ -313,3 +320,8 @@ task 9 lands.
 3. `procedure_hint` shape: extend `[AUTO_LOOP_STATE]` line vs. second fact line — decide in task 5.
 4. Whether `docs-numbering.md`'s mechanical taxonomy half stays resident for `doc-classifier.js`
    parity, or moves with the rest — decide during task 1 by checking what the classifier reads.
+5. ~~Installs without the plugin: install the push authorization contract with the rules?~~
+   **Resolved 2026-09-25**: not handled. A user-authorized push there stops at the failed Read;
+   task 9 (f) states it in the migration guide.
+6. Exact wording and character cost of the compact override core in the three stubs (target
+   ≤ ~0.6k together) — measured in task 3.

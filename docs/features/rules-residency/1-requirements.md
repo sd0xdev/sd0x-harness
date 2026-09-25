@@ -4,7 +4,7 @@
 > **Created**: 2026-09-25
 > **Updated**: 2026-09-25
 > **Tier**: standard
-> **Tech Spec**: [Link](./2-tech-spec.md)
+> **Tech Spec**: [2-tech-spec.md](./2-tech-spec.md)
 > **Request tickets**: See [`requests/`](./requests/) for per-task execution tracking
 > **Intent**: [intent-rules-residency.md](./intent-rules-residency.md)
 
