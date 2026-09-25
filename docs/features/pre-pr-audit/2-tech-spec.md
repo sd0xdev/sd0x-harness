@@ -126,11 +126,11 @@ Force `⛔ PR-Blocked` regardless of score：
 | Override | Condition | Source |
 |----------|-----------|--------|
 | Precommit stale | State file shows precommit not passed after latest edit | Auto-loop state |
-| Policy breach: prohibited domain | Security/data-integrity/regression AC uses manual exception | `@rules/testing.md` Exception Rules |
-| Policy breach: cap exceeded | Exception count exceeds AC-count-based cap | `@rules/testing.md` Exception Rules |
-| Policy breach: expired exception | Manual exception past expiry date | `@rules/testing.md` Exception Rules |
-| Policy breach: invalid reason | Exception uses non-enum reason class | `@rules/testing.md` Exception Rules |
-| Policy breach: unverified | Exception lacks Codex `VALID_EXCEPTION` verdict | `@rules/testing.md` Exception Rules |
+| Policy breach: prohibited domain | Security/data-integrity/regression AC uses manual exception | `rules/testing.md` § Evidence Model |
+| Policy breach: cap exceeded | Exception count exceeds AC-count-based cap | `skills/test-review/references/testing-contract.md` § Evidence Model |
+| Policy breach: expired exception | Manual exception past expiry date | `skills/test-review/references/testing-contract.md` § Evidence Model |
+| Policy breach: invalid reason | Exception uses non-enum reason class | `skills/test-review/references/testing-contract.md` § Evidence Model |
+| Policy breach: unverified | Exception lacks Codex `VALID_EXCEPTION` verdict | `skills/test-review/references/testing-contract.md` § Evidence Model |
 | Evidence stale | Artifacts HEAD SHA ≠ current HEAD | Freshness check |
 | Critical untested | `/risk-assess` HIGH+ on files with zero test coverage | Risk-to-Test Alignment |
 
