@@ -2,7 +2,7 @@
 
 > **Current behavior authority**: Yes
 > **Doc role**: Current authority
-> **Requirements**: [1-requirements.md](./1-requirements.md) · **Intent**: [intent-rules-residency.md](./intent-rules-residency.md)
+> **Requirements**: [1-requirements.md](./1-requirements.md) · **Feasibility**: [0-feasibility-study.md](./0-feasibility-study.md) § 7 (trigger carriers and override placement, decided 2026-09-25; folded into § 3.2–§ 3.4 below) · **Intent**: [intent-rules-residency.md](./intent-rules-residency.md)
 
 > Restructure the rules layer around **residency**: a budgeted resident activation kernel,
 > on-demand canonical contracts, mechanical carriers for exact-and-dangerous behaviour, and an
@@ -68,7 +68,8 @@ flowchart TD
     K --> K4["Semantic trigger table\nsituation → contract"]
     K4 -->|ad-hoc work| C["On-demand canonical contracts\nskills/*/references/"]
     S["Skills"] -->|tested reference edges| C
-    H["Hooks"] -->|"fact-conditioned procedure_hint\n(reminders, never decisions)"| C
+    H["Hooks"] -->|"fact-conditioned procedure_hint\n(reminders; § 3.3)"| C
+    H -.->|"deny on a mechanical fact only\n(required contract missing; never a verdict)"| C
     C --> C1["review-loop / stall / cap diagnostics"]
     C --> C2["scope contract (fields, breaker, dispositions)"]
     C --> C3["push authorization topology"]
@@ -103,7 +104,7 @@ plugin-managed `rules/*.md` (every `*-project.md` excluded — see item 7):
    fails closed, no repo-wide helper sweeps, out-of-scope critical → human exit.
 6. **Semantic trigger table** — the ad-hoc activation kernel:
 
-| Situation observed | Load |
+| Situation observed | Read first — stop the governed action if the Read fails |
 |---|---|
 | First or rotated Codex dispatch | independent-dispatch contract |
 | First review report, or any blocking verdict | review-loop contract |
@@ -112,6 +113,12 @@ plugin-managed `rules/*.md` (every `*-project.md` excluded — see item 7):
 | Git mutation intent | push/git authorization contract |
 | Test or AC work | testing contract |
 | Feature-document work | documentation contract |
+| Interpreting, auditing or editing a `*-project.md` override | override resolution contract (`rules/override-contract.md`) |
+
+Each row names its canonical file in the residency manifest. The instruction is an actual Read of
+that file as the first step, and a failed Read stops the governed action (FR-6) — the shape
+`rules/codex-invocation.md` already uses for the Codex prompt contract ([0-feasibility-study.md](./0-feasibility-study.md)
+§ 7, Q1-C). Skills make the same Read their first step, pinned by routing tests.
 
 **7.** **User-owned project settings are not kernel content.** The `*-project.md` files are the
 plugin user's customization space. The migration never modifies, strips or re-heads any of them.
@@ -132,17 +139,28 @@ candidate only after that removal ([1-requirements.md](./1-requirements.md) FR-4
 2. **Skills** — each mutating/reviewing skill lists its required contracts; routing tests pin the
    skill→contract edges.
 3. **Hooks** — `[AUTO_LOOP_STATE]` gains an optional `procedure_hint=<contract,…>` field derived
-   from mechanical facts only (e.g. `rounds≥3` → review-loop,stall). Hooks never diagnose,
-   classify, or block; `rounds` remains a floor, not a semantic stall verdict.
+   from mechanical facts only (e.g. `rounds≥3` → review-loop,stall). A hook may **deny** a
+   recognisable tool call on a mechanical fact — a required contract file missing — with a reason
+   naming the contract and the route to retry. Hooks never diagnose, classify, interpret a verdict
+   or grant git authorization, and `rounds` remains a floor, not a semantic stall verdict. A
+   denial is a bounded refusal, not a guarantee: a timed-out or crashing command hook does not
+   block (Claude Code hooks reference). A PreToolUse git-mutation guard is optional hardening for
+   a separately measured post-5.0 change, not part of the kernel change
+   ([0-feasibility-study.md](./0-feasibility-study.md) § 7).
 
 ### 3.4 Two-carrier principle and destinations
 
 Every critical policy = one compact resident semantic rule + one behaviourally independent carrier
-(mechanical guard or workflow-loaded exact contract). No third resident paraphrase. Moves:
+(mechanical guard or workflow-loaded exact contract). No third resident paraphrase. One recorded
+exception: an ad-hoc git mutation — lawful only as a user-authorized execution — has the resident
+Anchor rule and a behavioural Read, and an independent carrier only where the opt-in
+`commit-msg-guard.sh` / `pre-push-gate.sh` hooks are installed ([0-feasibility-study.md](./0-feasibility-study.md)
+§ 5.5). Moves:
 
 | Content | Destination |
 |---|---|
-| Review fallback, rotation, stall/cap diagnostics, override parsing | `skills/codex-code-review/references/` |
+| Review fallback, rotation, stall/cap diagnostics | `skills/codex-code-review/references/` |
+| Override resolution tables (`auto-loop.md` § Override Contract, `testing.md` and `git-workflow.md` § Project Customization) | `rules/override-contract.md`, one canonical path-scoped rule (`paths: [".claude/rules/*-project.md"]`) that `/install-rules` installs beside the user-owned files. Each parent keeps its heading as a live stub with the compact core — Anchor-first; the closed list of 16 shipped settings and the one section replacement; an exact parent heading is a replacement; an unknown heading fails closed to Default and is reported; user files are never edited — and a Read pointer, so links from installed `*-project.md` files keep resolving |
 | Push authorization topology (the 7,493-char line + Efficacy narrative) and the § Proactive Offer / Goal mode procedure | `skills/push-ci/references/authorization-contract.md`, loaded by every git-mutating skill (§ 6) |
 | Scope field normalization, gate derivation, breaker counters, dispositions | `skills/codex-code-review/references/scope-contract.md` |
 | Test pyramid/naming/evidence caps (non-anchor rows) | `skills/test-review/references/` + feature/bug skills |
