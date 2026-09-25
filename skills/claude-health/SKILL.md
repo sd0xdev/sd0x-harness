@@ -170,13 +170,15 @@ plugin_hash    = git hash-object --no-filters <plugin-path>  # source of truth
 | `LEGACY` | manifest_hash is null, local exists | P2 | `LEGACY` |
 | `MANIFEST_GAP` | manifest category key missing | P2 | N/A |
 | `TOMBSTONED` | manifest `deleted: true`, local missing | ✅ | `SKIP_DELETED` |
+| `RETIRED` | name on `/install-rules`' retired list, plugin file absent, local exists | P2 | Retired (remove when unmodified, keep when modified) |
 
 **Managed inventory** (hardcoded):
 
 | Category | Local Path | Plugin Source | Files |
 |----------|-----------|--------------|-------|
-| Rules | `.claude/rules/*.md` | `rules/*.md` | `auto-loop.md`, `codex-invocation.md`, `fix-all-issues.md`, `framework.md`, `testing.md`, `security.md`, `git-workflow.md`, `logging.md`, `docs-writing.md`, `docs-numbering.md`, `self-improvement.md`, `context-management.md`, `discretion.md`, `scope-discipline.md`, `override-contract.md` |
+| Rules | `.claude/rules/*.md` | `rules/*.md` | `auto-loop.md`, `codex-invocation.md`, `testing.md`, `security.md`, `git-workflow.md`, `logging.md`, `docs-writing.md`, `docs-numbering.md`, `self-improvement.md`, `context-management.md`, `discretion.md`, `scope-discipline.md`, `override-contract.md` |
 | Hooks | `.claude/hooks/*.sh` | `hooks/*.sh` | `pre-edit-guard.sh`, `pre-bash-codex-launch-guard.sh`, `post-edit-format.sh`, `post-skill-auto-loop.sh`, `post-compact-auto-loop.sh`, `stop-guard.sh`, `user-prompt-review-guard.sh` |
+| Retired rules | `.claude/rules/*.md` | — (no longer shipped) | Every name on `/install-rules`' Retired table — today `fix-all-issues.md`, `framework.md`. Classified `RETIRED` when the local file exists, `TOMBSTONED` when the manifest marks it deleted, and nothing when neither |
 | Scripts | `.claude/scripts/` | `scripts/` | `precommit-runner.js`, `verify-runner.js`, `review-state.js`, `dep-audit.sh`, `commit-msg-guard.sh`, `pre-push-gate.sh`, `protected-branches.sh`, `lib/utils.js`, `lib/tree-digest.js` |
 
 #### S2.5: Override Safeguard Checks
@@ -347,7 +349,7 @@ note rather than guessing a total.
 - [ ] Budget: B1-B3 reported, or the skip note printed (when scope is `budget` or `all`)
 - [ ] Each check has clear ✅/⛔ status
 - [ ] P1 issues have specific fix commands
-- [ ] S2 classification covers every file in the managed inventory above (31 today: 15 rules, 7 hooks, 9 scripts)
+- [ ] S2 classification covers every file in the managed inventory above (29 today: 13 rules, 7 hooks, 9 scripts)
 - [ ] Fix delegation uses targeted file names (not `--all`)
 
 ## References

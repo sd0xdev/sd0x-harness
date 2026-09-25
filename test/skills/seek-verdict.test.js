@@ -344,8 +344,9 @@ test('S3: All reference files exist', () => {
   }
 });
 
-test('S6: fix-all-issues.md has DISMISS_VERDICT exception', () => {
-  const content = readFileSync(resolve(root, 'rules/fix-all-issues.md'), 'utf8');
+test('S6: the fix obligation (scope-contract.md § Fix Obligation) has DISMISS_VERDICT exception', () => {
+  const contract = readFileSync(resolve(root, 'skills/codex-code-review/references/scope-contract.md'), 'utf8');
+  const content = contract.slice(contract.indexOf('\n## Fix Obligation\n'));
   assert.ok(
     content.includes('[DISMISS_VERDICT]'),
     'fix-all-issues.md missing [DISMISS_VERDICT] exception'

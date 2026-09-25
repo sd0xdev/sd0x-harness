@@ -264,8 +264,10 @@ stale at once — so quoting the sentence is the form that survives an edit. Bot
 shared by all of them. Fixing defect 1 here only, while the other ten keep the broken spelling,
 would diverge one skill from a project-wide convention as a side effect of a security refactor: an
 architecture decision made unilaterally under cover of unrelated work, and one that would still
-leave defect 2 in place. Per `rules/fix-all-issues.md` § Exceptions ("Beyond current scope — needs
-architecture-level change: report and log it, do not silently drop it"), both are recorded here and
+leave defect 2 in place. Per the rule in force at the time — `fix-all-issues.md`, since retired — its Exceptions table
+("Beyond current scope — needs architecture-level change: report and log it, do not silently drop
+it"; the table now lives in `skills/codex-code-review/references/scope-contract.md` § Fix
+Obligation), both are recorded here and
 the consequence is stated in SKILL.md, so a fallback in a consuming project is not misread as a
 broken installation.
 
@@ -492,7 +494,7 @@ copied from had not solved anything: `signing` carried both defects untouched, w
 rather than leaving this paragraph's earlier claim standing.
 
 This was a **pre-existing** defect, inherited from the fences. It is fixed here rather than logged
-because `rules/fix-all-issues.md` names "pre-existing" as an excuse the rule exists to ban, and
+because `rules/auto-loop.md` § Fix Obligation names "pre-existing" as an excuse the rule exists to ban, and
 because this change is what made it a contract.
 
 ### 10.1 The sentinel has to be unforgeable, not merely present
@@ -1618,9 +1620,11 @@ the flag cluster with parameter expansion (`${var#declare -}`, `${var%% *}`), an
 an imported shell function can influence the verdict. Finding #2 is logged here rather than fixed:
 `commit-msg-guard.sh`, `run-skill.sh`, and `sanitize-pr-content.sh` are outside this feature's file
 set and were, at review time, concurrently modified by a different change on the same branch —
-touching them here risked a conflicting edit on files this round does not own. Per
-`rules/fix-all-issues.md`'s "beyond current scope" exception, it is recorded rather than silently
-dropped; porting the same `builtin declare`/`case` guard into those three files, ideally from one
+touching them here risked a conflicting edit on files this round does not own. Per the rule in
+force at the time — the retired `fix-all-issues.md`'s "beyond current scope" exception — it is recorded
+rather than silently dropped. (That rule has since merged into
+`skills/codex-code-review/references/scope-contract.md` § Fix Obligation, under which an
+out-of-scope P0 routes to human exit E1 instead; this paragraph records what that round did.) Porting the same `builtin declare`/`case` guard into those three files, ideally from one
 shared preamble instead of five independent copies, is the follow-up. Finding #3's comment was
 reworded to match `smart-commit-inspect.sh`'s already-correct wording (stage 1 pins only
 `fsmonitor`, stage 2 pins both). Finding #4's function now fails fast on `[ "$#" -eq 0 ]` before
