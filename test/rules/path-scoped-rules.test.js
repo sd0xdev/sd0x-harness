@@ -49,8 +49,24 @@ test('CLAUDE.template.md ## Rules → never @-imports a path-scoped rule, and na
   assert.match('- @rules/testing.md -- Test pyramid', /@rules\/testing\.md/);
 });
 
-// This checkout's own CLAUDE.md still @-imports four path-scoped rules until task 3 removes them;
-// the override contract must never join them, or it loads at launch in the dev checkout.
+/** Path-scoped rules a CLAUDE file @-imports anywhere in its live text — each one loads at launch. */
+function importedScoped(text) {
+  return Object.keys(SCOPED).filter((file) => new RegExp(`@rules/${file.replace('.', '\\.')}\\b`).test(liveText(text)));
+}
+
+// rules-residency task 3: this checkout's own CLAUDE.md @-imported four path-scoped rules (rule 5 and
+// § Rules), so the dev checkout loaded a larger resident set than a rendered install. Both carriers
+// are pinned now, over the whole file rather than one section, since rule 5 imported one too.
+test('CLAUDE.md and CLAUDE.template.md → @-import no path-scoped rule anywhere', () => {
+  for (const file of ['CLAUDE.md', 'CLAUDE.template.md']) {
+    assert.deepEqual(importedScoped(read(file)), [], `${file} @-imports a path-scoped rule`);
+  }
+  // Negative control through the same reader: rule 5's old wording is caught.
+  assert.deepEqual(importedScoped('5. Conventions: @rules/testing.md; overrides: @rules/testing-project.md'),
+    ['testing.md', 'testing-project.md']);
+});
+
+// The override contract must never be imported either, or it loads at launch in the dev checkout.
 test('CLAUDE.md and CLAUDE.template.md → never @-import rules/override-contract.md', () => {
   const importLine = /@rules\/override-contract\.md\b/;
   for (const file of ['CLAUDE.md', 'CLAUDE.template.md']) {
