@@ -118,7 +118,14 @@ plugin-managed `rules/*.md` (every `*-project.md` excluded — see item 7):
 Each row names its canonical file in the residency manifest. The instruction is an actual Read of
 that file as the first step, and a failed Read stops the governed action (FR-6) — the shape
 `rules/codex-invocation.md` already uses for the Codex prompt contract ([0-feasibility-study.md](./0-feasibility-study.md)
-§ 7, Q1-C). Skills make the same Read their first step, pinned by routing tests.
+§ 7, Q1-C). Skills make the same Read their first step, pinned by routing tests. The table ships
+as § Contract Triggers in `CLAUDE.template.md` and this repository's `CLAUDE.md`, followed by the
+placement rule (§ 3.5). Its `skills/…` paths exist only inside the plugin install, so they resolve
+against the plugin root that the `namespace-hint` SessionStart hook prints as `Plugin root:` (matcher
+`startup|clear|compact`; a resumed transcript already carries the line). Where no such line is in
+context, the template names a fallback: the directory holding `skills/push-ci/SKILL.md` under
+`~/.claude/plugins/`. `test/rules/residency-budget.test.js` runs the hook inside a rendered install
+and checks every contract path the install names can be found under the printed root.
 
 **7.** **User-owned project settings are not kernel content.** The `*-project.md` files are the
 plugin user's customization space. The migration never modifies, strips or re-heads any of them.
@@ -127,10 +134,11 @@ launch exactly as the user left them; they count toward the total resident measu
 toward the plugin-managed budget. A path-scoped one (`testing-project.md`) loads only when a
 matching file is read and is outside every resident measure — in a **rendered install**, where
 `CLAUDE.template.md` never `@`-imports it (pinned by `test/rules/path-scoped-rules.test.js`).
-This repository's own `CLAUDE.md` still `@`-imports it today (rule 5 and the § Rules list), along
-with the three other path-scoped rules `testing.md`, `docs-writing.md` and `docs-numbering.md`, so
-here all four are resident until task 3 removes every such import; the canary in § 6 measures the
-candidate only after that removal ([1-requirements.md](./1-requirements.md) FR-4, § 7).
+Task 3 removed this repository's own `@` imports of it and of the three other path-scoped rules
+(`testing.md`, `docs-writing.md`, `docs-numbering.md`); `CLAUDE.md` now names each in plain text
+with when to Read it, so the checkout loads the same resident set as a rendered install (pinned for
+both files by `test/rules/path-scoped-rules.test.js`). The canary in § 6 measures the candidate on
+that set ([1-requirements.md](./1-requirements.md) FR-4, § 7).
 
 ### 3.3 Three-path activation
 
@@ -182,8 +190,11 @@ scope contract; duplicate anchor restatements in `CLAUDE.md` reduced to the sing
 
 - **Dual budget test**: the plugin-managed resident set (the rendered `CLAUDE.md` template +
   transitively imported plugin rules without `paths:`, excluding every `*-project.md`) ≤ 50,000
-  characters, measured on a rendered fresh install, AND ≤ a physical-line ceiling that task 4
-  fixes from the landed kernel. The user-owned resident set (the `*-project.md` files
+  characters, measured on a rendered fresh install, AND ≤ 600 physical lines (fixed by task 4 from
+  the landed kernel's 581). The install is rendered the way `/project-setup` writes it — one
+  ecosystem block per render, every ecosystem measured, placeholders filled with representative
+  values — and measured through `scripts/instruction-budget.js`
+  (`test/rules/residency-budget.test.js`). The user-owned resident set (the `*-project.md` files
   without `paths:`) is reported separately and never rejected; the total is reported alongside
   both, and a path-scoped override is in none of the three
   ([1-requirements.md](./1-requirements.md) § 7). The 50,000 target is the maintainer's
@@ -193,9 +204,10 @@ scope contract; duplicate anchor restatements in `CLAUDE.md` reduced to the sing
   an irreversible/security/attribution/secret/gate-supremacy failure mode that cannot wait for a
   reference load. Over-budget additions must displace or compress. A genuinely new Anchor takes a
   human-approved exception (budget must not outrank safety).
-- **Residency manifest**: per resident block — owner, tier, pre-activation justification,
-  canonical detail reference, line/character contribution, mechanical carrier if any.
-  Test-verified.
+- **Residency manifest** (`docs/features/rules-residency/residency-manifest.json`): per resident
+  block — owner, tier, pre-activation justification, canonical detail reference, line/character
+  contribution, mechanical carrier if any. The temporary canary block (task 8a) is listed with
+  `removed_by: task 8c`. The budget test fails on an unlisted, duplicated or stale entry.
 
 ### 3.6 Test policy for the migrated layer
 
@@ -203,18 +215,22 @@ Adversarial observation from the 2026-08-28 review session, unpersisted as a sta
 record: claim-keyed semantic tests were the failure class — paraphrase-plus-decoy and equal-length
 in-fence edits passed them — while digest pins and executable tests survived. The surviving
 artifacts (`test/skills/create-request-scan.test.js`'s header and commit `6bbc589`) record the
-resulting executable-test philosophy, not the specific experiments. Task 6 **must** persist a
-minimal reproduction alongside the re-pinning so this policy rests on a committed record.
-Therefore:
+resulting executable-test philosophy, not the specific experiments. Task 6 persisted a minimal
+reproduction beside the re-pinning, in `test/rules/kernel-digests.test.js`: a paraphrase plus a
+decoy, and an equal-length edit inside a fence, each passing the phrase or live-text check it
+targets and failing the digest. Code review added a third — a duplicate heading, which a name-keyed
+digest map silently overwrote until `unitDigests()` refused duplicates. Therefore:
 
 - Compact resident kernel: **exact digest pins** per stable contract unit (small + rarely edited ⇒
   hash churn is proportionate friction, not the old chore).
 - Executable claims (regexes, recipes, commands): **executable fixture tests**.
 - Claim-keyed semantic assertions: supplemental diagnostics only, never the authorizing guard.
 - Every guard ships with a negative control (reversed contract + plausible decoy must fail).
-- Existing pinned Anchors (`discretion-tiers.test.js` et al.) stay unchanged until task 3 lands
-  the approved Anchor migration (approved 2026-09-25); compaction and re-pinning land as one
-  reviewed specification change.
+- Existing pinned Anchors (`discretion-tiers.test.js` et al.) are unchanged by task 3: the Anchor
+  Register, `security.md`, `logging.md` and `git-workflow.md`'s Anchor sections are byte-identical;
+  compaction and re-pinning landed as one reviewed change. The kernel's digest pins cover the
+  preamble and each `##` section of every plugin-managed resident rule, the whole template and this
+  checkout's § Contract Triggers.
 
 ## 4. Risks and Dependencies
 
@@ -327,7 +343,7 @@ ship and task 9 lands.
    replacement wording still goes to the maintainer inside task 3's reviewed change.
 2. ~~Exact byte ceiling: 40,000 is ~10K tokens by heuristic; confirm or tune after task 3 lands.~~
    **Resolved 2026-09-25**: the target is ≤ 50,000 characters of plugin-managed resident text on a
-   rendered fresh install (§ 3.5); task 4 fixes the paired line ceiling from the landed kernel.
+   rendered fresh install (§ 3.5); task 4 fixed the paired line ceiling at 600.
 3. ~~`procedure_hint` shape: extend `[AUTO_LOOP_STATE]` line vs. second fact line — decide in task 5.~~
    **Resolved 2026-09-25 (task 5)**: an optional field on the existing line, § 3.3 item 3.
 4. Whether `docs-numbering.md`'s mechanical taxonomy half stays resident for `doc-classifier.js`
@@ -335,5 +351,8 @@ ship and task 9 lands.
 5. ~~Installs without the plugin: install the push authorization contract with the rules?~~
    **Resolved 2026-09-25**: not handled. A user-authorized push there stops at the failed Read;
    task 9 (f) states it in the migration guide.
-6. Exact wording and character cost of the compact override core in the three stubs (target
-   ≤ ~0.6k together) — measured in task 3.
+6. ~~Exact wording and character cost of the compact override core in the three stubs (target
+   ≤ ~0.6k together) — measured in task 3.~~ **Measured 2026-09-25 (task 3)**: 1,069 + 1,141 +
+   1,238 = 3,448 characters, of which 2,210 are resident (`testing.md` is path-scoped). The target is
+   not met: each stub must name its closed heading list, Anchor supremacy, the fail-closed rule, both
+   Read locations and the stop, which costs about 1.1k per stub. The 50,000 budget holds regardless.
