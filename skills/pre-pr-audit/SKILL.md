@@ -140,14 +140,19 @@ Output report per `references/output-template.md`. Include:
 
 ### Hard-Fail Overrides (force ⛔ regardless of score)
 
+Before the four exception checks sourced from the testing contract, Read `@skills/test-review/references/testing-contract.md`; if that Read fails,
+stop the audit before scoring and report that no readiness verdict can be given — never emit a
+`PR-Ready`, `PR-Caution` or `PR-Blocked` sentinel with the hard-fail checks unrun, and never judge
+an exception from memory.
+
 | Override | Condition | Source |
 |----------|-----------|--------|
 | Precommit stale | Not passed after latest edit | Auto-loop state |
-| Prohibited domain exception | Security/data-integrity/regression AC uses manual exception | `@rules/testing.md` |
-| Exception cap exceeded | Exception count > AC-count-based cap | `@rules/testing.md` |
-| Expired exception | Past ISO 8601 expiry date | `@rules/testing.md` |
-| Invalid reason class | Non-enum reason in exception | `@rules/testing.md` |
-| Unverified exception | No Codex `VALID_EXCEPTION` verdict | `@rules/testing.md` |
+| Prohibited domain exception | Security/data-integrity/regression AC uses manual exception | `rules/testing.md` § Evidence Model |
+| Exception cap exceeded | Exception count > AC-count-based cap | `@skills/test-review/references/testing-contract.md` § Evidence Model |
+| Expired exception | Past ISO 8601 expiry date | `@skills/test-review/references/testing-contract.md` § Evidence Model |
+| Invalid reason class | Non-enum reason in exception | `@skills/test-review/references/testing-contract.md` § Evidence Model |
+| Unverified exception | No Codex `VALID_EXCEPTION` verdict | `@skills/test-review/references/testing-contract.md` § Evidence Model |
 | Evidence stale | Artifacts HEAD SHA ≠ current HEAD | Freshness check |
 | Critical untested | `/risk-assess` HIGH+ on zero-coverage files | Risk alignment |
 
@@ -173,7 +178,8 @@ See `references/scoring-model.md` for formulas. Summary:
 
 - `references/scoring-model.md` — Scoring formulas, weights, confidence caps
 - `references/output-template.md` — Report format, JSON schema, sentinel strings
-- `@rules/testing.md` — Evidence model + exception policy (hard-fail source)
+- `@skills/test-review/references/testing-contract.md` — exception gates, caps and expiry (hard-fail source)
+- `@rules/testing.md` — evidence core and the domains that never take an exception (hard-fail source)
 - `@rules/testing-project.md` — Project-specific overrides
 
 ## Examples

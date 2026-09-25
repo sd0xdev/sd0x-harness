@@ -47,27 +47,17 @@ consumers resolve that exact name; a wildcard scan only surfaces strays or ambig
 
 ## Size Limit — 500 Lines
 
-**Scope: the feature documents this file governs** — everything under `docs/features/`. It is not a
-line budget for `.md` files at large. **Functional documents are out of scope entirely** (see Exempt
-below): a functional document is an *instruction surface* — it is loaded as a unit and executed, not
-read section by section, so length costs nothing the way it costs a reader who scrolls, and there is
-no numbered-subfolder shape to split it into. Compressing one to stay under a limit that never
-applied to it removes information for no benefit — which is the failure this paragraph exists to
-prevent.
+**Scope: prose feature documents under `docs/features/`** — not `.md` files at large. Functional
+documents are exempt: `skills/**` with their `references/`, `agents/`, `commands/`, `@`-loaded
+`rules/*.md`, templates, generated files, fixtures, and any file that is one unsplittable table.
+The test is the role, not the directory — a file loaded and acted on as a whole has no line budget.
 
-**What this rule is actually against is bloat** — the tech spec or requirements doc that keeps
-absorbing sections until no one reads it end to end. 500 lines is the *signal* that a prose document
-has probably reached that point, not a mechanical trigger: **the model judges the individual file**.
-A 550-line spec whose sections are genuinely one argument may stand (state the call and the reason);
-a 350-line doc already sprawling across unrelated concerns is better addressed early. What is not a
-judgment call: letting a lifecycle doc grow unbounded because the fix is work, or compressing away
-live information to duck under a number.
+500 lines is a **signal the model judges per file**, not a mechanical trigger: the target is bloat,
+the tech spec or requirements doc no one reads end to end. A coherent long doc may stand with the
+reason stated. Never let a lifecycle doc grow unbounded because the fix is work, and never compress
+away live information to duck under the number.
 
 ### Prune first, then merge, then split
-
-Three remedies, in this order. Splitting was once the only one named here, and it is the only one
-that leaves the total unchanged — a corpus can only grow under a rule whose sole answer to "too
-long" is "put it in more files".
 
 | Order | Remedy | Applies when | What it costs |
 |-------|--------|--------------|---------------|
@@ -92,43 +82,12 @@ in it going out of date is the record working, and pruning it destroys the only 
 
 Measure with `wc -l`. Lines, not bytes — that is what the reader scrolls.
 
-**Splitting is a manual edit — no skill does it for you.** `/update-docs` syncs docs against code and `/doc-refactor` condenses one file; neither moves sections into a subfolder or rewrites inbound links. The shape to produce:
-
-```
-docs/features/<feature>/2-tech-spec/
-├── 2-tech-spec.md        # Main: canonical filename, keeps §-structure, links to subs
-├── 1-<sub-topic>.md      # Subs: numbered from 1, no lifecycle meaning
-└── 2-<sub-topic>.md
-```
-
-Three constraints, each with a parser behind it: the main file keeps the **canonical filename** (`doc-classifier.js` sets `is_canonical` only on an exact match); the folder keeps the **lifecycle prefix** (`_inferParentType` resolves a directory by its `^[0-4]-`, so no taxonomy entry is needed); and sub-file numbers restart at 1 because the parent's type overrides theirs — `3-core-logic.md` inside `2-tech-spec/` must not leak as a phase-3 architecture doc.
-
-**A move breaks links in both directions, and only one of them is visible from outside.** Inbound
-links break silently, so finish the job: `grep -rn '<old-filename>' docs/ skills/ rules/ scripts/ test/` and repoint every hit — the path gains one directory level, so a sibling `./2-tech-spec.md` becomes `./2-tech-spec/2-tech-spec.md` and a `../` reference gains a `../`. Scripts that hard-code the old path count too. **Then the other direction**: every relative link *inside* the moved file has shifted by the same amount, and those fail just as silently — verify each one resolves rather than eyeballing it:
-
-```bash
-grep -o '](\.[^)]*)' <moved-file> | sed 's/^](//;s/)$//' | while read -r l; do
-  [ -e "$(dirname <moved-file>)/$l" ] || echo "DEAD $l"
-done
-```
-
-Then run `/codex-review-doc` on the result.
-
-**Cut at the section that dominates**, not at an arbitrary line count. Usually one `##` section carries most of the file, and its `###` boundaries are the natural sub-documents. A split landing mid-argument is worse than the long file.
-
-**Exempt — functional documents**, i.e. every `.md` that is an instruction surface rather than a
-document someone reads:
-
-| Exempt | Why |
-|--------|-----|
-| `skills/**` — `SKILL.md` and its bundled `references/*.md` | Loaded as a unit by the dispatcher; a reference is pulled in whole by the skill that owns it |
-| `agents/*.md`, `commands/*.md` | Same — a system prompt or command body, not a document |
-| `rules/*.md` loaded via `@` | Splitting adds import hops without reducing what loads — reduce the content instead |
-| Templates, generated files and fixtures | Their length is dictated by what they generate or fix |
-| Any file that is one unsplittable table | No cut point exists that is not mid-argument |
-
-The test is *not* the directory but the role: if the file is loaded and acted on as a whole, the
-limit does not apply. `docs/**` prose is the thing it does apply to.
+Before a split — the folder shape, the three parser constraints it must keep, repointing links in
+both directions, and where to cut — and before claiming a file is exempt on grounds the list above
+does not settle, Read `skills/doc-review/references/documentation-contract.md` in the sd0x-dev-flow
+plugin (the `doc-review` skill's own `references/`): § Splitting a Feature Document and
+§ Functional-Document Exemption. If that Read fails, do not split and claim no exemption beyond
+the list above.
 
 ## Cross-references
 

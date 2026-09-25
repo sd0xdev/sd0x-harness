@@ -20,16 +20,20 @@ test('testing.md has naming convention', () => {
   assert.match(content, /when.*then/i, 'should have when/then naming pattern');
 });
 
-test('testing.md has Evidence Model table', () => {
-  const content = readFileSync(resolve(root, 'rules/testing.md'), 'utf8');
+// rules-residency r2: the evidence table, exception gates and caps, and Adequacy Gate sentinels moved
+// to the testing contract; the resident core keeps the prohibited-domain rows (Anchor Register #3).
+const CONTRACT = 'skills/test-review/references/testing-contract.md';
+
+test('testing contract has Evidence Model table', () => {
+  const content = readFileSync(resolve(root, CONTRACT), 'utf8');
   assert.match(content, /Evidence Model/, 'should have Evidence Model section');
   assert.match(content, /Automated test/, 'should list automated test evidence');
   assert.match(content, /Runtime verification/, 'should list runtime verification evidence');
   assert.match(content, /Manual exception/, 'should list manual exception evidence');
 });
 
-test('testing.md has exception rules with closed enum', () => {
-  const content = readFileSync(resolve(root, 'rules/testing.md'), 'utf8');
+test('testing contract has exception rules with closed enum', () => {
+  const content = readFileSync(resolve(root, CONTRACT), 'utf8');
   assert.match(content, /ENV_UNAVAILABLE/, 'should have ENV_UNAVAILABLE reason');
   assert.match(content, /UNSAFE_TO_AUTOMATE/, 'should have UNSAFE_TO_AUTOMATE reason');
   assert.match(content, /ONE_TIME_MIGRATION/, 'should have ONE_TIME_MIGRATION reason');
@@ -43,8 +47,8 @@ test('testing.md has prohibited domains for exceptions', () => {
   assert.match(content, /Regression AC.*Never/i, 'regression ACs should never allow exceptions');
 });
 
-test('testing.md has 4-state Adequacy Gate Sentinels', () => {
-  const content = readFileSync(resolve(root, 'rules/testing.md'), 'utf8');
+test('testing contract has 4-state Adequacy Gate Sentinels', () => {
+  const content = readFileSync(resolve(root, CONTRACT), 'utf8');
   assert.match(content, /✅ Adequate/, 'should have Adequate sentinel');
   assert.match(content, /⚠️ Adequate with exceptions/, 'should have Adequate with exceptions sentinel');
   assert.match(content, /⚠️ Need Human/, 'should have Need Human sentinel');

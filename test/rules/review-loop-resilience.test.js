@@ -141,8 +141,9 @@ test('review-common.md loop has three executable paths; the old "just Codex" abs
 });
 
 test('test-review sentinel table no longer reads exhaustion as a derivable gate', () => {
-  const testingRules = read('rules/testing.md');
-  for (const [name, text] of [['test-review SKILL', testSkill], ['rules/testing.md', testingRules]]) {
+  // rules-residency r2: the Adequacy Gate sentinel table moved to the testing contract.
+  const testingContract = read('skills/test-review/references/testing-contract.md');
+  for (const [name, text] of [['test-review SKILL', testSkill], ['testing-contract.md', testingContract]]) {
     assert.ok(!text.includes('Codex unavailable or inconclusive'),
       `${name}: the old Need-Human meaning must be gone — a fallback carrier is not "Codex unavailable"`);
     assert.match(text, /Every carrier exhausted/,

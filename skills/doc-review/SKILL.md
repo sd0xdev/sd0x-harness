@@ -8,6 +8,12 @@ agent: Explore
 
 # Document Review Skill
 
+**Read first**: `references/documentation-contract.md` — the split procedure, the
+functional-document exemption and the comment-block exemption list that a review of a feature
+document or a comment migration judges against (`rules/docs-numbering.md` and
+`rules/docs-writing.md` are its resident cores). If that Read fails, stop and report it; do not
+review from memory.
+
 ## Trigger
 
 - Keywords: review doc, document review, tech spec review, review-spec, doc-refactor, streamline doc

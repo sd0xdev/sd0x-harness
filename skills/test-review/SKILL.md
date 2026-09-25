@@ -8,6 +8,11 @@ agent: Explore
 
 # Test Review Skill
 
+**Read first**: `references/testing-contract.md` — the evidence priority table, the exception
+gates and caps, and the Adequacy Gate sentinels every workflow here judges against
+(`rules/testing.md` is its resident core). If that Read fails, stop and report it; do not review
+or judge evidence from memory.
+
 ## Trigger
 
 - Keywords: test coverage, test review, are tests sufficient, generate tests, test gen, coverage
@@ -105,25 +110,14 @@ Fresh thread (§ Start). See `references/codex-prompt-ac-trace.md`.
 
 ### Step 5: Exception Validation (3-gate)
 
-| Gate | Check |
-|------|-------|
-| Reason class | Closed enum: `ENV_UNAVAILABLE` / `UNSAFE_TO_AUTOMATE` / `ONE_TIME_MIGRATION` |
-| Codex verification | Must emit `VALID_EXCEPTION` |
-| Expiry | ISO 8601; expired = ⛔ (strict) or ⚠️ (advisory) |
-
-**Exception caps** (from @rules/testing.md): 1-8 AC = max 1; 9-12 = max 2; 13+ = hard cap 2.
-**Prohibited domains**: Security AC, Data-integrity AC, Regression AC = no exceptions allowed.
+Validate every manual exception against the three gates and the AC-count cap in
+`references/testing-contract.md` § Evidence Model — the closed reason-class set, the Codex
+`VALID_EXCEPTION` verdict and the expiry. The domains that never take an exception — security,
+data-integrity and regression ACs — are the resident core's rows, `rules/testing.md` § Evidence Model.
 
 ### Step 6: Output + Gate
 
-Gate sentinels (from @rules/testing.md). These public forms are **derived** from the raw report's `gate:` line — `gate: Adequate` → `✅ Adequate`, `gate: Adequate_with_exceptions` → `⚠️ Adequate with exceptions`, `gate: Need_Human` → `⚠️ Need Human`, `gate: Inadequate` → `⛔ Inadequate`. Whoever produced the raw report (Codex or fallback carrier), the raw layer is what `validate-family-sentinel.js test:ac-trace` checks; this skill's derivation alone produces the public form:
-
-| Sentinel | Meaning |
-|----------|---------|
-| `✅ Adequate` | All ACs covered by evidence |
-| `⚠️ Adequate with exceptions` | Validated exceptions within cap |
-| `⚠️ Need Human` | Every carrier exhausted (behaviour-layer only — never derived from a report), or the validated report is inconclusive |
-| `⛔ Inadequate` | Unverified exception, cap breach, or prohibited domain |
+The public sentinels are **derived** from the raw report's `gate:` line — `gate: Adequate` → `✅ Adequate`, `gate: Adequate_with_exceptions` → `⚠️ Adequate with exceptions`, `gate: Need_Human` → `⚠️ Need Human`, `gate: Inadequate` → `⛔ Inadequate`. Whoever produced the raw report (Codex or fallback carrier), the raw layer is what `validate-family-sentinel.js test:ac-trace` checks; this skill's derivation alone produces the public form. What each sentinel means is `references/testing-contract.md` § Adequacy Gate Sentinels. Every carrier exhausted is the one `⚠️ Need Human` case that is never derived from a report — it is behaviour-layer only.
 
 ## Workflow: `/codex-test-gen`
 

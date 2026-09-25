@@ -112,7 +112,7 @@ plugin-managed `rules/*.md` (every `*-project.md` excluded — see item 7):
 | Repeated failed rounds; no-progress evidence | stall-diagnosis contract |
 | Git mutation intent | push/git authorization contract |
 | Test or AC work | testing contract |
-| Feature-document work | documentation contract |
+| Splitting a feature document; claiming a line-budget exemption the resident list does not settle; relying on a comment-block exemption or changing the comment-block checker | documentation contract (pruning and merging need only the resident core) |
 | Interpreting, auditing or editing a `*-project.md` override | override resolution contract (`rules/override-contract.md`) |
 
 Each row names its canonical file in the residency manifest. The instruction is an actual Read of
@@ -163,8 +163,8 @@ Anchor rule and a behavioural Read, and an independent carrier only where the op
 | Override resolution tables (`auto-loop.md` § Override Contract, `testing.md` and `git-workflow.md` § Project Customization) | `rules/override-contract.md`, one canonical path-scoped rule (`paths: [".claude/rules/*-project.md"]`) that `/install-rules` installs beside the user-owned files. Each parent keeps its heading as a live stub with the compact core — Anchor-first; the closed list of 16 shipped settings and the one section replacement; an exact parent heading is a replacement; an unknown heading fails closed to Default and is reported; user files are never edited — and a Read pointer, so links from installed `*-project.md` files keep resolving |
 | Push authorization topology (the 7,493-char line + Efficacy narrative) and the § Proactive Offer / Goal mode procedure | `skills/push-ci/references/authorization-contract.md`, loaded by every git-mutating skill (§ 6) |
 | Scope field normalization, gate derivation, breaker counters, dispositions | `skills/codex-code-review/references/scope-contract.md` |
-| Test pyramid/naming/evidence caps (non-anchor rows) | `skills/test-review/references/` + feature/bug skills |
-| Doc numbering/splitting/comment mechanics | document skills' references |
+| Evidence priority, exception gates and caps, Adequacy Gate sentinels, pre-PR execution (non-anchor rows) | `skills/test-review/references/testing-contract.md`, read first by `/test-review` and before `/pre-pr-audit`'s exception checks. The test pyramid (a `testing-project.md` section-replacement target), the conventions (cited throughout the repo) and the three Anchor domain rows stay in `rules/testing.md` |
+| Split procedure, functional-document exemption rationale, comment-block counting, exemptions and checker wiring | `skills/doc-review/references/documentation-contract.md`, read first by `/doc-review`. The numbering tables, the size-limit core with its prune/merge/split order, and the comment thresholds stay in `rules/docs-numbering.md` and `rules/docs-writing.md` |
 | Context thresholds, lesson-log format | on-demand references |
 | Historical rationale and measurements | `docs/features/…` records |
 

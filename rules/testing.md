@@ -9,6 +9,13 @@ paths:
 ---
 # Testing Rules
 
+This file is the resident core. The procedure — the evidence priority table, the three exception
+gates and their caps, the Adequacy Gate sentinels and the pre-PR execution line — is in
+`skills/test-review/references/testing-contract.md` in the sd0x-dev-flow plugin (the
+`test-review` skill's own `references/`). Read it before writing or reviewing tests, or
+before judging whether an AC has evidence. If that Read fails, stop that work and say so rather than
+working from memory.
+
 ## Test Pyramid
 
 | Type | Directory | Mock Policy | When |
@@ -32,27 +39,11 @@ Execution: Integration/E2E defaults to running a single file only; use `/verify`
 
 ## Evidence Model
 
-Every non-quality-gate AC must map to evidence.
-
-| Evidence Type | Priority | Requirement |
-|--------------|----------|-------------|
-| Automated test | 1 (preferred) | Test file + assertion covering AC behavior |
-| Runtime verification | 2 | `/feature-verify` result at L3+ confidence |
-| Manual exception | 3 (verified only) | See Exception Rules below |
-
-### Exception Rules (v1: 3-gate)
-
-| Gate | Requirement |
-|------|-------------|
-| Reason class | Closed enum: `ENV_UNAVAILABLE` / `UNSAFE_TO_AUTOMATE` / `ONE_TIME_MIGRATION` |
-| Codex verification | `/codex-test-review --ac-trace` must emit `VALID_EXCEPTION` |
-| Expiry | Required (ISO 8601); default +14d; expired = ⛔ in strict, ⚠️ in advisory |
-
-| AC Count | Max Exceptions |
-|----------|---------------|
-| 1-8 (standard) | 1 |
-| 9-12 (legacy) | 2 |
-| 13+ (should split) | 2 (hard cap) |
+Every non-quality-gate AC maps to evidence: an automated test first, a runtime verification next,
+and a manual exception only when it passes the three gates and fits the cap in `skills/test-review/references/testing-contract.md`
+§ Evidence Model — Read it before judging whether any AC has evidence; if that Read fails, stop
+judging AC evidence and say so. Some
+domains never take an exception:
 
 | Domain | Exception Allowed? |
 |--------|-------------------|
@@ -63,17 +54,14 @@ Every non-quality-gate AC must map to evidence.
 
 ## Adequacy Gate Sentinels
 
-| Sentinel | Meaning | Parsed by |
-|----------|---------|-----------|
-| `✅ Adequate` | All ACs covered by evidence | Behavior-layer |
-| `⚠️ Adequate with exceptions` | Validated exceptions within cap | Behavior-layer |
-| `⚠️ Need Human` | Every carrier exhausted (no validated verdict — behaviour-layer only), or the validated report is inconclusive | Behavior-layer |
-| `⛔ Inadequate` | Unverified/expired exception, cap breach, or prohibited domain | Behavior-layer |
+The four sentinels the Adequacy Gate reports, and what each one means, are in `skills/test-review/references/testing-contract.md`
+§ Adequacy Gate Sentinels. Read it before reporting an Adequacy Gate verdict; if that Read fails,
+report no verdict and say so.
 
 ## Execution
 
-Pre-PR required: `{LINT_FIX_COMMAND} && {TEST_COMMAND}`
-Failure report format: `Command: <cmd> | Error: <cause> | Fix: <fix>`
+The pre-PR command line and the failure-report format are in `skills/test-review/references/testing-contract.md` § Execution.
+Read it before the pre-PR run; if that Read fails, stop and say so.
 
 ## Project Customization
 
