@@ -2,6 +2,7 @@
 
 > **Current behavior authority**: Yes
 > **Doc role**: Current authority
+> **Requirements**: [1-requirements.md](./1-requirements.md) · **Intent**: [intent-rules-residency.md](./intent-rules-residency.md)
 
 > Restructure the rules layer around **residency**: a budgeted resident activation kernel,
 > on-demand canonical contracts, mechanical carriers for exact-and-dangerous behaviour, and an

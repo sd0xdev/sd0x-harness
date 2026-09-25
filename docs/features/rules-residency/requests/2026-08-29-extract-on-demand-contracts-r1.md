@@ -5,6 +5,7 @@
 > **Status**: Candidate Complete
 > **Priority**: P1
 > **Tech Spec**: [rules-residency tech spec](../2-tech-spec.md)
+> **Requirements**: [Link](../1-requirements.md)
 
 ## Background
 
