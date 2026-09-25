@@ -87,6 +87,14 @@ const CONTRACTS = [
       'Comment Blocks: Counting, Exemptions and the Checker'],
     minHeadings: 4,
   },
+  {
+    // rules-residency r3: the push authorization contract, read first by every git-mutating skill.
+    path: 'skills/push-ci/references/authorization-contract.md',
+    activatedBy: ['rules/git-workflow.md', 'rules/discretion.md', 'skills/push-ci/SKILL.md', 'skills/smart-commit/SKILL.md',
+      'skills/epic-merge/SKILL.md', 'skills/gh-stack/SKILL.md', 'skills/deploy-flow/SKILL.md'],
+    headings: ['Push safety', 'Efficacy Boundary', 'Proactive Offer'],
+    minHeadings: 3,
+  },
 ];
 
 // Files that may carry a reference: tracked, **plus untracked-but-not-ignored**. Tracked-only was
@@ -236,6 +244,17 @@ test('the testing and documentation contracts when looked up → stay registered
     ['rules/testing.md', 'skills/test-review/SKILL.md']);
   assert.deepEqual(byPath('skills/doc-review/references/documentation-contract.md')?.activatedBy,
     ['rules/docs-numbering.md', 'rules/docs-writing.md', 'skills/doc-review/SKILL.md']);
+});
+
+test('the push authorization contract when looked up → stays registered with every git-mutating skill', () => {
+  const entry = CONTRACTS.find((c) => c.path === 'skills/push-ci/references/authorization-contract.md');
+  assert.ok(entry, 'the push authorization contract must stay registered');
+  for (const s of ['push-ci', 'smart-commit', 'epic-merge', 'gh-stack', 'deploy-flow']) {
+    assert.ok(entry.activatedBy.includes(`skills/${s}/SKILL.md`), `${s} must activate the push authorization contract`);
+  }
+  for (const rule of ['rules/git-workflow.md', 'rules/discretion.md']) {
+    assert.ok(entry.activatedBy.includes(rule), `${rule} must activate the push authorization contract`);
+  }
 });
 
 test('registered contracts when checked → each exists and is reachable from its activation source', () => {

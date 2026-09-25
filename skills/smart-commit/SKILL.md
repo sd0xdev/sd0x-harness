@@ -6,6 +6,9 @@ allowed-tools: Bash(git:*), Bash(bash:*), Bash(env:*), Read, Write, Grep, Glob, 
 
 # Smart Commit
 
+**Read first**: `@skills/push-ci/references/authorization-contract.md` before `--execute` commits anything — § Proactive Offer for the menu and the four Goal mode conditions, § Efficacy Boundary for what the per-use approval authorizes. If that Read fails, stop and report it; commit nothing (manual mode, which only prints commands, is unaffected).
+
+
 Analyze uncommitted changes → group by cohesion → generate commit messages → output git commands (or execute directly with `--execute`).
 
 ## Workflow
