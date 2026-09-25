@@ -80,25 +80,9 @@ Nothing hook-parses these anymore (hook-lightweighting) — they are the signals
 
 ## Override Contract
 
-`rules/auto-loop-project.md` (user-owned) customizes this file — **Default and Guidance tiers only**. Anchor-tier instructions (`rules/discretion.md` § Anchor Register) are never overridable: on conflict the Anchor wins and the conflict is reported, not silently resolved.
+`rules/auto-loop-project.md` (user-owned) customizes this file — **Default and Guidance tiers only**. Anchor-tier instructions (`rules/discretion.md` § Anchor Register) are never overridable: on conflict the Anchor wins and the conflict is reported. Resolution is **Anchor-first** — a tier annotation in either file cannot downgrade a Register hit. Its shipped headings are **settings** read by name: `## Tier`, `## Max Rounds`, `## Plan Review`, `## Plan Review Max Rounds`, `## Git Memory`, `## Think Harder`, `## Review Thread Rotation` and `## Codex Profile`. A heading that restates one of this file's own `##` headings exactly is a **section replacement**; any other heading fails closed to **Default** and is reported. The user's file is never edited.
 
-Resolution is **Anchor-first**, because an instruction's tier is decided by `discretion.md`, never by a label written next to it: **(0)** an Anchor Register hit resolves to **Anchor** and stops there — a tier annotation in either file cannot downgrade a Register hit, and one that tries is reported as a conflict rather than honoured. Only for non-Anchor instructions does the rest apply, highest first: (1) an explicit tier annotation on the instruction itself; (2) the heading table below; (3) preamble text before the first `##` resolves as one synthetic section; (4) an unknown heading fails closed to **Default** and is listed in the report, never silently dropped.
-
-Two override kinds, and the distinction is load-bearing: a **section replacement** restates a `##` heading this file actually defines and replaces that section wholesale; a **setting** names a configuration slot that this file's prose or a hook reads by name. Settings have no same-named section here, so "full replacement" never describes them — the shipped scaffold is settings-only, and every one names its consumer below.
-
-| Override heading | Kind — consumed by | Tier |
-|------------------|--------------------|------|
-| preamble (synthetic section) | Header — the live precedence declaration, resolved as one synthetic section | Default |
-| `## Tier` | Setting — § Tiers, "the configured tier … baseline, not a ceiling" | Default — the security/data-integrity escalation sentence in § Tiers is Anchor-tier (Anchor Register #3 hit, resolved at step 0) and stays binding whatever tier is configured |
-| `## Max Rounds` | Setting — § Tiers cap sentence; the model tracks rounds against it | Default |
-| `## Plan Review` | Setting — `/plan-review` self-invocation in plan mode | Default |
-| `## Plan Review Max Rounds` | Setting — `/plan-review` loop bookkeeping, counted in conversation | Default |
-| `## Git Memory` | Setting — post-compact git-context nudge (printed by default since hook-lightweighting; heading kept for compatibility) | Default |
-| `## Think Harder` | Setting — the diagnosis protocol after a compaction, read by the model (no hook injects it); § Stall Detection and Diagnosis routes to `loop-diagnostics.md` § Cap Diagnostic Protocol, which carries the checklist | Default |
-| `## Review Thread Rotation` | Setting — the R-a rotation threshold (2–6, unset = 3) read behaviourally by `review-common.md` § Review Loop; counted in conversation, no hook reads it | Default |
-| `## Codex Profile` | Setting — the Codex profile every dispatch carries, read by `skills/codex-code-review/references/codex-transport.md` § Profile; unset means Codex's own default configuration, and selection is not tier-dependent in v1 | Default |
-
-No row is a section replacement: `## Tier` is deliberately **not** this file's `## Tiers`, and the other seven name no section at all. A user who does want a section replacement restates that section's exact heading — the mechanism is available, the scaffold just does not ship one.
+Before interpreting, auditing or editing an override, Read `override-contract.md` in the same directory as this rule — `.claude/rules/override-contract.md` in an installed project, `rules/override-contract.md` in the plugin source — for the resolution order, the two kinds, and each setting's consumer and tier. If that Read fails, do not edit or audit the override.
 
 ## Enforcement
 

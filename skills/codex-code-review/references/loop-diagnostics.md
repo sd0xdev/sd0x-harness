@@ -17,7 +17,7 @@ now named outright. § Attention-Diffusion Subtypes and the Banking Sequence is 
 inherited.
 
 **Tier.** This file sits outside `rules/discretion.md` § File Baselines, which assigns tiers to
-the 13 plugin-managed `rules/*.md` files. The relocated sections inherit the tier each statement
+the 14 plugin-managed `rules/*.md` files. The relocated sections inherit the tier each statement
 already had in `rules/auto-loop.md`, the new section resolves its Register hits at step 0 and
 takes Default for the rest, and the result is **not uniform**:
 

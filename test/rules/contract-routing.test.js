@@ -63,6 +63,15 @@ const CONTRACTS = [
       'Attention-Diffusion Subtypes and the Banking Sequence'],
     minHeadings: 3,
   },
+  {
+    // rules-residency Q2-F: the override resolution contract, path-scoped to the installed
+    // override files; each parent's compact core carries the Read pointer (tech spec § 3.4).
+    path: 'rules/override-contract.md',
+    activatedBy: ['rules/auto-loop.md', 'rules/testing.md', 'rules/git-workflow.md'],
+    headings: ['Resolution', 'Kinds', 'auto-loop-project.md → auto-loop.md',
+      'testing-project.md → testing.md', 'git-workflow-project.md → git-workflow.md'],
+    minHeadings: 5,
+  },
 ];
 
 // Files that may carry a reference: tracked, **plus untracked-but-not-ignored**. Tracked-only was
@@ -196,6 +205,13 @@ test('contract references when scanned → every fully-qualified path resolves a
   const dangling = scannedMarkdown()
     .flatMap((file) => scan(read(file)).map((p) => `${file} → ${p}`));
   assert.deepEqual(dangling, [], `dangling contract references:\n${dangling.join('\n')}`);
+});
+
+test('the override contract when looked up → stays registered with all three parent activators', () => {
+  // The registry floor below counts entries; it cannot tell which one was dropped.
+  const entry = CONTRACTS.find((c) => c.path === 'rules/override-contract.md');
+  assert.ok(entry, 'rules/override-contract.md must stay registered');
+  assert.deepEqual(entry.activatedBy, ['rules/auto-loop.md', 'rules/testing.md', 'rules/git-workflow.md']);
 });
 
 test('registered contracts when checked → each exists and is reachable from its activation source', () => {

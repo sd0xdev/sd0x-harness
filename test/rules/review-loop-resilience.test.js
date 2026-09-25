@@ -69,8 +69,11 @@ test('auto-loop.md Priority 4 forges no sentinel: plan uses its own degraded for
   assert.match(autoLoop, /the rest emit nothing/);
 });
 
-test('auto-loop.md § Override Contract and the scaffold both carry ## Review Thread Rotation', () => {
-  assert.match(autoLoop, /\| `## Review Thread Rotation` \| Setting —[^|]*\| Default \|/);
+test('the override contract, the auto-loop core and the scaffold all carry ## Review Thread Rotation', () => {
+  // rules-residency Q2-F: the row lives in rules/override-contract.md; the resident core names it.
+  const overrideContract = readFileSync(resolve(__dirname, '../../rules/override-contract.md'), 'utf8');
+  assert.match(overrideContract, /\| `## Review Thread Rotation` \| Setting —[^|]*\| Default \|/);
+  assert.match(autoLoop, /`## Review Thread Rotation`/);
   assert.match(scaffold, /^## Review Thread Rotation$/m);
   assert.match(scaffold, /Range 2-6[\s\S]*?Unset = 3/, 'the scaffold documents range and default');
 });

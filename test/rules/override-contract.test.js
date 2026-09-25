@@ -22,6 +22,12 @@ const autoLoopTpl = readFileSync(resolve(root, 'rules/auto-loop-project.md'), 'u
 const testingTpl = readFileSync(resolve(root, 'rules/testing-project.md'), 'utf8');
 const gitWorkflow = readFileSync(resolve(root, 'rules/git-workflow.md'), 'utf8');
 const gitTpl = readFileSync(resolve(root, 'rules/git-workflow-project.md'), 'utf8');
+// rules-residency Q2-F: the resolution order, the two kinds and the three heading tables moved out
+// of the parents into one path-scoped contract; each parent keeps a compact core that points to it.
+const overrideContract = readFileSync(resolve(root, 'rules/override-contract.md'), 'utf8');
+const OC_AUTO = 'auto-loop-project.md → auto-loop.md';
+const OC_TESTING = 'testing-project.md → testing.md';
+const OC_GIT = 'git-workflow-project.md → git-workflow.md';
 // The tech spec is read through liveText with fences KEPT live: the `override_templates` JSON
 // mapping is legitimately documented as a code block and a reader sees it. HTML comments are
 // blanked, because prose moved into one is gone from the rendered document while every raw
@@ -382,6 +388,7 @@ test('guarded documents when validated → stay inside the structure the scanner
     ['rules/testing-project.md', testingTpl],
     ['rules/git-workflow.md', gitWorkflow],
     ['rules/git-workflow-project.md', gitTpl],
+    ['rules/override-contract.md', overrideContract],
     ['rules/discretion.md', readFileSync(resolve(root, 'rules/discretion.md'), 'utf8')],
     ['docs/features/rule-override-pattern/2-tech-spec.md', specRaw],
     ['skills/install-rules/SKILL.md', readFileSync(resolve(root, 'skills/install-rules/SKILL.md'), 'utf8')],
@@ -458,98 +465,25 @@ test('the structural gate when the scanner is blind → catches what masking get
  *  "Anchor usually wins", inserting a sentence that grants an exception — passes every guard in
  *  this file, because each one matches a pattern the sentence still contains. Equality is the only
  *  assertion that fails on deletion, hedging, inversion, and contradictory addition alike. */
+// Regenerated for rules-residency Q2-F: the three parents now carry a compact core, and the full
+// resolution text lives in rules/override-contract.md. Every pin below is still equality, for the
+// reason given above — only equality fails on deletion, hedging, inversion and contradictory addition.
+const CANONICAL_OC_RESOLUTION =
+  "An active (non-comment) `##` section in an override file customizes its parent rule — **Default and Guidance tiers only**. Anchor-tier instructions (`rules/discretion.md` § Anchor Register) are never overridable: on conflict the Anchor wins and the conflict is reported, not silently resolved. Resolution is **Anchor-first**, because an instruction's tier is decided by `discretion.md`, never by a label written next to it: **(0)** an Anchor Register hit resolves to **Anchor** and stops there — a tier annotation in either file cannot downgrade a Register hit, and one that tries is reported as a conflict rather than honoured. Only for non-Anchor instructions does the rest apply, highest first: (1) an explicit tier annotation on the instruction itself; (2) the heading table below for that file; (3) preamble text before the first `##` resolves as one synthetic section; (4) an unknown heading fails closed to **Default** and is listed in the report, never silently dropped.";
+const CANONICAL_OC_KINDS =
+  "Two override kinds, and the distinction is load-bearing: a **section replacement** restates a `##` heading the parent rule actually defines and replaces that section wholesale; a **setting** names a configuration slot that the parent rule's prose or a hook reads by name. Settings have no same-named section in the parent, so \"full replacement\" never describes them — every setting below names its consumer.";
+const CANONICAL_OC_AUTO =
+  "Anchor instructions here are Anchor Register #3, #5, #6 and #7 material in `auto-loop.md`. | Override heading | Kind — consumed by | Tier | |------------------|--------------------|------| | preamble (synthetic section) | Header — the live precedence declaration, resolved as one synthetic section | Default | | `## Tier` | Setting — `auto-loop.md` § Tiers, \"the configured tier … baseline, not a ceiling\" | Default — the security/data-integrity escalation sentence in § Tiers is Anchor-tier (Anchor Register #3 hit, resolved at step 0) and stays binding whatever tier is configured | | `## Max Rounds` | Setting — `auto-loop.md` § Tiers cap sentence; the model tracks rounds against it | Default | | `## Plan Review` | Setting — `/plan-review` self-invocation in plan mode | Default | | `## Plan Review Max Rounds` | Setting — `/plan-review` loop bookkeeping, counted in conversation | Default | | `## Git Memory` | Setting — post-compact git-context nudge (printed by default since hook-lightweighting; heading kept for compatibility) | Default | | `## Think Harder` | Setting — the diagnosis protocol after a compaction, read by the model (no hook injects it); `auto-loop.md` § Stall Detection and Diagnosis routes to `loop-diagnostics.md` § Cap Diagnostic Protocol, which carries the checklist | Default | | `## Review Thread Rotation` | Setting — the R-a rotation threshold (2–6, unset = 3) read behaviourally by `review-common.md` § Review Loop; counted in conversation, no hook reads it | Default | | `## Codex Profile` | Setting — the Codex profile every dispatch carries, read by `skills/codex-code-review/references/codex-transport.md` § Profile; unset means Codex's own default configuration, and selection is not tier-dependent in v1 | Default | No row is a section replacement: `## Tier` is deliberately **not** `auto-loop.md`'s `## Tiers`, and the other seven name no section at all. A user who does want a section replacement restates that section's exact heading — the mechanism is available, the scaffold just does not ship one.";
+const CANONICAL_OC_TESTING =
+  "Anchor-tier rows in `testing.md` are the security / data-integrity / regression \"❌ Never\" rows (Anchor Register #3). | Override heading | Kind — consumed by | Tier | |------------------|--------------------|------| | preamble (synthetic section) | Header — the live precedence declaration, resolved as one synthetic section | Default | | `## Test Pyramid` | Section replacement — `testing.md`'s `## Test Pyramid` | Default | | `## Adequacy Mode (project-only extension — not in testing.md core)` | Setting — `auto-loop.md` § Tiers gate sequence reads the Adequacy Gate mode from it | Default — project-only extension with no parent section; permitted as a documented extension, resolved by this table (exact template heading) rather than parent-heading match |";
+const CANONICAL_OC_GIT =
+  "Anchor-tier instructions in `git-workflow.md` are Anchor Register #4 — the forbidden-operation list, the enumerated workflow grants, the attribution rule, the default protected branches and § Push safety — and #2 for secrets. The shipped scaffold is settings-only. | Override heading | Kind — consumed by | Tier | |------------------|--------------------|------| | preamble (synthetic section) | Header — the live precedence declaration, resolved as one synthetic section | Default | | `## Branch Naming` | Setting — replaces `git-workflow.md`'s `Branches:` line | Default | | `## Commit Format` | Setting — replaces `git-workflow.md`'s `Commit:` line | Default | | `## Protected Branches` | Setting — an additions list unioned with the default set, read by `scripts/protected-branches.sh`; there is no removal syntax, and a removal attempt or parse error makes every branch read as protected | Default — the default set itself is Anchor (Register #4) and cannot shrink | | `## Offer Mode` | Setting — `on` (default) · `commit-only` · `off`, read by `review-state.js offer` (`git-workflow.md` § Proactive Offer); `/claude-health` validates the value | Default | | `## Deploy Workflow` | Setting — the declared `merge` / `run` steps, read by `/deploy-flow`; `/claude-health` validates the lines | Default — the steps run only under `/deploy-flow`'s own Register #4 entry and its per-step approval | | `## Run Steps` | Setting — `print` (default) · `execute`, read by `/deploy-flow`; the scaffold states the run-script risk | Default | | `## Goal Commit` | Setting — `on` (default) · `off`, read by `review-state.js goal-commit` (`git-workflow.md` § Proactive Offer, \"Goal mode\"); `off` only narrows | Default |";
 const CANONICAL_AUTO_LOOP_OVERRIDE =
-  '`rules/auto-loop-project.md` (user-owned) customizes this file — **Default and Guidance tiers ' +
-  'only**. Anchor-tier instructions (`rules/discretion.md` § Anchor Register) are never ' +
-  'overridable: on conflict the Anchor wins and the conflict is reported, not silently resolved. ' +
-  'Resolution is **Anchor-first**, because an instruction\'s tier is decided by `discretion.md`, ' +
-  'never by a label written next to it: **(0)** an Anchor Register hit resolves to **Anchor** and ' +
-  'stops there — a tier annotation in either file cannot downgrade a Register hit, and one that ' +
-  'tries is reported as a conflict rather than honoured. Only for non-Anchor instructions does the ' +
-  'rest apply, highest first: (1) an explicit tier annotation on the instruction itself; (2) the ' +
-  'heading table below; (3) preamble text before the first `##` resolves as one synthetic section; ' +
-  '(4) an unknown heading fails closed to **Default** and is listed in the report, never silently ' +
-  'dropped. Two override kinds, and the distinction is load-bearing: a **section replacement** ' +
-  'restates a `##` heading this file actually defines and replaces that section wholesale; a ' +
-  '**setting** names a configuration slot that this file\'s prose or a hook reads by name. Settings ' +
-  'have no same-named section here, so "full replacement" never describes them — the shipped ' +
-  'scaffold is settings-only, and every one names its consumer below. | Override heading | Kind — ' +
-  'consumed by | Tier | |------------------|--------------------|------| | preamble (synthetic ' +
-  'section) | Header — the live precedence declaration, resolved as one synthetic section | ' +
-  'Default | | `## Tier` | Setting — § Tiers, "the configured tier … baseline, not a ceiling" | ' +
-  'Default — the security/data-integrity escalation sentence in § Tiers is Anchor-tier (Anchor ' +
-  'Register #3 hit, resolved at step 0) and stays binding whatever tier is configured | | `## Max ' +
-  'Rounds` | Setting — § Tiers cap sentence; the model tracks rounds against it | Default | | `## ' +
-  'Plan Review` | Setting — `/plan-review` self-invocation in plan mode | Default | | `## Plan ' +
-  'Review Max Rounds` | Setting — `/plan-review` loop bookkeeping, counted in conversation | ' +
-  'Default | | `## Git Memory` | Setting — post-compact git-context nudge (printed by default ' +
-  'since hook-lightweighting; heading kept for compatibility) | Default | | `## Think Harder` | ' +
-  'Setting — the diagnosis protocol after a compaction, read by the model (no hook injects ' +
-  'it); § Stall Detection and Diagnosis routes to `loop-diagnostics.md` § Cap Diagnostic ' +
-  'Protocol, which carries the checklist ' +
-  '| Default | | `## Review Thread Rotation` | Setting — the R-a rotation threshold (2–6, unset = ' +
-  '3) read behaviourally by `review-common.md` § Review Loop; counted in conversation, no hook ' +
-  'reads it | Default | | `## Codex Profile` | Setting — the Codex profile every dispatch carries, ' +
-  'read by `skills/codex-code-review/references/codex-transport.md` § Profile; unset means Codex\'s ' +
-  'own default configuration, and selection is not tier-dependent in v1 | Default | No row is a ' +
-  'section replacement: `## Tier` is deliberately **not** this ' +
-  'file\'s `## Tiers`, and the other seven name no section at all. A user who does want a section replacement ' +
-  'restates that section\'s exact heading — the mechanism is available, the scaffold just does not ' +
-  'ship one.';
-
-const CANONICAL_GIT_CUSTOMIZATION =
-  'Project-specific settings belong in `git-workflow-project.md` (not this file). See ' +
-  '`@rules/git-workflow-project.md` for your project\'s git conventions. Override contract: an ' +
-  'active `##` section there customizes this file — **Default and Guidance tiers only**. ' +
-  'Anchor-tier instructions (Anchor Register #4 — the forbidden-operation list, the enumerated ' +
-  'workflow grants, the attribution rule, the default protected branches and § Push safety — and ' +
-  '#2 for secrets) are never overridable: on conflict the Anchor wins and the conflict is ' +
-  'reported. Resolution is **Anchor-first**, since tier is decided by `discretion.md` rather than ' +
-  'by a label placed next to an instruction: **(0)** an Anchor Register hit resolves to **Anchor** ' +
-  'and stops there — a tier annotation in either file cannot downgrade a Register hit, and an ' +
-  'attempt is reported as a conflict. Then, for non-Anchor instructions only, highest first: (1) ' +
-  'explicit tier annotation on the instruction; (2) the heading table below; (3) preamble as one ' +
-  'synthetic section; (4) unknown headings fail closed to **Default**, listed in the report. ' +
-  'Kinds, as in `auto-loop.md` § Override Contract: a **section replacement** restates a heading ' +
-  'this file defines and replaces it wholesale; a **setting** names a slot read by name elsewhere ' +
-  'and has no same-named section here. The shipped scaffold is settings-only. | Override heading | ' +
-  'Kind — consumed by | Tier | |------------------|--------------------|------| | preamble ' +
-  '(synthetic section) | Header — the live precedence declaration, resolved as one synthetic ' +
-  'section | Default | | `## Branch Naming` | Setting — replaces this file\'s `Branches:` line | ' +
-  'Default | | `## Commit Format` | Setting — replaces this file\'s `Commit:` line | Default | | ' +
-  '`## Protected Branches` | Setting — an additions list unioned with the default set, read by ' +
-  '`scripts/protected-branches.sh`; there is no removal syntax, and a removal attempt or parse ' +
-  'error makes every branch read as protected | Default — the default set itself is Anchor ' +
-  '(Register #4) and cannot shrink | | `## Offer Mode` | Setting — `on` (default) · `commit-only` ' +
-  '· `off`, read by `review-state.js offer` (§ Proactive Offer); `/claude-health` validates the ' +
-  'value | Default | | `## Deploy Workflow` | Setting — the declared `merge` / `run` steps, read ' +
-  'by `/deploy-flow`; `/claude-health` validates the lines | Default — the steps run only under ' +
-  '`/deploy-flow`\'s own Register #4 entry and its per-step approval | | `## Run Steps` | Setting — ' +
-  '`print` (default) · `execute`, read by `/deploy-flow`; the scaffold states the run-script risk ' +
-  '| Default | | `## Goal Commit` | Setting — `on` (default) · `off`, read by `review-state.js ' +
-  'goal-commit` (§ Proactive Offer, "Goal mode"); `off` only narrows | Default |';
+  "`rules/auto-loop-project.md` (user-owned) customizes this file — **Default and Guidance tiers only**. Anchor-tier instructions (`rules/discretion.md` § Anchor Register) are never overridable: on conflict the Anchor wins and the conflict is reported. Resolution is **Anchor-first** — a tier annotation in either file cannot downgrade a Register hit. Its shipped headings are **settings** read by name: `## Tier`, `## Max Rounds`, `## Plan Review`, `## Plan Review Max Rounds`, `## Git Memory`, `## Think Harder`, `## Review Thread Rotation` and `## Codex Profile`. A heading that restates one of this file's own `##` headings exactly is a **section replacement**; any other heading fails closed to **Default** and is reported. The user's file is never edited. Before interpreting, auditing or editing an override, Read `override-contract.md` in the same directory as this rule — `.claude/rules/override-contract.md` in an installed project, `rules/override-contract.md` in the plugin source — for the resolution order, the two kinds, and each setting's consumer and tier. If that Read fails, do not edit or audit the override.";
 const CANONICAL_TESTING_CUSTOMIZATION =
-  'Project-specific overrides belong in `testing-project.md` (not this file). See ' +
-  '`@rules/testing-project.md` for your project\'s custom testing conventions. Override contract: an ' +
-  'active `##` section there customizes this file — **Default and Guidance tiers only**. ' +
-  'Anchor-tier rows (the security / data-integrity / regression "❌ Never" rows, per ' +
-  '`rules/discretion.md` § Anchor Register) are never overridable: on conflict the Anchor wins and ' +
-  'the conflict is reported. Resolution is **Anchor-first**, since tier is decided by ' +
-  '`discretion.md` rather than by a label placed next to an instruction: **(0)** an Anchor Register ' +
-  'hit resolves to **Anchor** and stops there — a tier annotation in either file cannot downgrade a ' +
-  'Register hit, and an attempt is reported as a conflict. Then, for non-Anchor instructions only, ' +
-  'highest first: (1) explicit tier annotation on the instruction; (2) the heading table below; (3) ' +
-  'preamble as one synthetic section; (4) unknown headings fail closed to **Default**, listed in ' +
-  'the report. Kinds, as in `auto-loop.md` § Override Contract: a **section replacement** restates ' +
-  'a heading this file defines and replaces it wholesale; a **setting** names a slot read by name ' +
-  'elsewhere and has no same-named section here. | Override heading | Kind — consumed by | Tier | ' +
-  '|------------------|--------------------|------| | preamble (synthetic section) | Header — the ' +
-  'live precedence declaration, resolved as one synthetic section | Default | | `## Test Pyramid` | ' +
-  'Section replacement — this file\'s `## Test Pyramid` | Default | | `## Adequacy Mode ' +
-  '(project-only extension — not in testing.md core)` | Setting — `auto-loop.md` § Tiers gate ' +
-  'sequence reads the Adequacy Gate mode from it | Default — project-only extension with no parent ' +
-  'section here; permitted as a documented extension, resolved by this table (exact template ' +
-  'heading) rather than parent-heading match |';
+  "Project-specific overrides belong in `testing-project.md` (not this file). See `@rules/testing-project.md` for your project's custom testing conventions. Override contract: an active `##` section there customizes this file — **Default and Guidance tiers only**. Anchor-tier rows (the security / data-integrity / regression \"❌ Never\" rows, per `rules/discretion.md` § Anchor Register) are never overridable: on conflict the Anchor wins and the conflict is reported. Resolution is **Anchor-first** — a tier annotation in either file cannot downgrade a Register hit. `## Test Pyramid` is a **section replacement** of this file's section; `## Adequacy Mode (project-only extension — not in testing.md core)` is a **setting** the Adequacy Gate reads; any other heading fails closed to **Default** and is reported. The user's file is never edited. Before interpreting, auditing or editing the override, Read `override-contract.md` in the same directory as this rule — `.claude/rules/override-contract.md` in an installed project, `rules/override-contract.md` in the plugin source — for the resolution order, the two kinds, and each heading's consumer and tier. If that Read fails, do not edit or audit the override.";
+const CANONICAL_GIT_CUSTOMIZATION =
+  "Project-specific settings belong in `git-workflow-project.md` (not this file). See `@rules/git-workflow-project.md` for your project's git conventions. Override contract: an active `##` section there customizes this file — **Default and Guidance tiers only**. Anchor-tier instructions (Anchor Register #4 — the forbidden-operation list, the enumerated workflow grants, the attribution rule, the default protected branches and § Push safety — and #2 for secrets) are never overridable: on conflict the Anchor wins and the conflict is reported. Resolution is **Anchor-first** — a tier annotation in either file cannot downgrade a Register hit. Its shipped headings are **settings** read by name: `## Branch Naming`, `## Commit Format`, `## Protected Branches` (additions only — the default set cannot shrink), `## Offer Mode`, `## Deploy Workflow`, `## Run Steps` and `## Goal Commit`. A heading that restates one of this file's own `##` headings exactly is a **section replacement**; any other heading fails closed to **Default** and is reported. The user's file is never edited. Before interpreting, auditing or editing the override, Read `override-contract.md` in the same directory as this rule — `.claude/rules/override-contract.md` in an installed project, `rules/override-contract.md` in the plugin source — for the resolution order, the two kinds, and each setting's consumer and tier. If that Read fails, do not edit or audit the override.";
 
 /** Section prose, normalized for comparison. NUL is dropped rather than kept: it marks text the
  *  scanner hid, which by definition is not prose a reader receives — and the gate above is what
@@ -562,18 +496,73 @@ function normalizeSection(sectionText) {
     .trim();
 }
 
-test('the parent override sections when reworded → still say what the templates rely on', () => {
+test('the parent override sections and the override contract when reworded → still say what the templates rely on', () => {
   for (const [what, doc, heading, canonical] of [
-    ['rules/auto-loop.md § Override Contract', autoLoop, 'Override Contract',
-      CANONICAL_AUTO_LOOP_OVERRIDE],
-    ['rules/testing.md § Project Customization', testing, 'Project Customization',
-      CANONICAL_TESTING_CUSTOMIZATION],
-    ['rules/git-workflow.md § Project Customization', gitWorkflow, 'Project Customization',
-      CANONICAL_GIT_CUSTOMIZATION],
+    ['rules/auto-loop.md § Override Contract', autoLoop, 'Override Contract', CANONICAL_AUTO_LOOP_OVERRIDE],
+    ['rules/testing.md § Project Customization', testing, 'Project Customization', CANONICAL_TESTING_CUSTOMIZATION],
+    ['rules/git-workflow.md § Project Customization', gitWorkflow, 'Project Customization', CANONICAL_GIT_CUSTOMIZATION],
+    ['rules/override-contract.md § Resolution', overrideContract, 'Resolution', CANONICAL_OC_RESOLUTION],
+    ['rules/override-contract.md § Kinds', overrideContract, 'Kinds', CANONICAL_OC_KINDS],
+    [`rules/override-contract.md § ${OC_AUTO}`, overrideContract, OC_AUTO, CANONICAL_OC_AUTO],
+    [`rules/override-contract.md § ${OC_TESTING}`, overrideContract, OC_TESTING, CANONICAL_OC_TESTING],
+    [`rules/override-contract.md § ${OC_GIT}`, overrideContract, OC_GIT, CANONICAL_OC_GIT],
   ]) {
     assert.equal(normalizeSection(section(doc, heading)), canonical,
       `${what} changed — read the diff, confirm it is not a deletion, a hedge, or an inversion of Anchor supremacy, then update the pinned value in the same commit`);
   }
+});
+
+/** The contract's introduction — the live text between its `# Override Contract` title and the
+ *  first `##` — is live instruction too, so it is pinned by equality like every section. */
+const CANONICAL_OC_INTRO =
+  "The canonical resolution contract for the three user-owned override files — `auto-loop-project.md`, `testing-project.md` and `git-workflow-project.md`. Each parent rule keeps a compact core in its own section (`auto-loop.md` § Override Contract, `testing.md` § Project Customization, `git-workflow.md` § Project Customization) and points here; this file carries the resolution order, the two kinds and the heading tables. Read it before interpreting, auditing or editing an override. It restates Anchor supremacy; it grants no exception to it.";
+
+function introOf(doc) {
+  const masked = toLines(liveText(doc));
+  const at = masked.findIndex((l) => atxHeadingName(l, 1) === 'Override Contract');
+  assert.notEqual(at, -1, '`# Override Contract` must be a live title');
+  const body = [];
+  for (let i = at + 1; i < masked.length; i += 1) {
+    if (atxHeadingName(masked[i], 1) || atxHeadingName(masked[i], 2)) break;
+    body.push(masked[i]);
+  }
+  return normalizeSection(body.join('\n'));
+}
+
+/** A live heading-table header row anywhere in a document. The tables' one canonical home is
+ *  rules/override-contract.md (tech spec § 3.4), so a parent carrying one is a second copy. */
+function headingTableRows(doc) {
+  return toLines(liveText(doc)).filter((l) => /^\s*\|\s*Override heading\s*\|/.test(l));
+}
+
+test('the override contract introduction when reworded → fails its pin', () => {
+  assert.equal(introOf(overrideContract), CANONICAL_OC_INTRO,
+    'rules/override-contract.md introduction changed — confirm it grants no exception to Anchor supremacy, then update the pin');
+  const mutated = overrideContract.replace('\n## Resolution\n', '\nOverrides may waive Anchors.\n\n## Resolution\n');
+  assert.notEqual(mutated, overrideContract, 'fixture premise: the insertion applied');
+  assert.notEqual(introOf(mutated), CANONICAL_OC_INTRO, 'the pin must reject a contradictory addition');
+});
+
+/** Live level-one headings. The section pins and the introduction pin all stop at a `#`, so a
+ *  second title would carry text past every pin; the contract has exactly one. */
+function h1Names(doc) {
+  return toLines(liveText(doc)).map((l) => atxHeadingName(l, 1)).filter(Boolean);
+}
+
+test('the override contract when a second title is appended → fails the single-title guard', () => {
+  assert.deepEqual(h1Names(overrideContract), ['Override Contract']);
+  const appended = `${overrideContract}\n# Override Exception\n\nProject overrides may waive Anchors.\n`;
+  assert.notDeepEqual(h1Names(appended), ['Override Contract'], 'the guard must see an appended title');
+});
+
+test('override heading tables when searched → live only in rules/override-contract.md', () => {
+  assert.equal(headingTableRows(overrideContract).length, 3, 'the contract carries the three tables');
+  for (const [name, doc] of [['auto-loop.md', autoLoop], ['testing.md', testing], ['git-workflow.md', gitWorkflow]]) {
+    assert.deepEqual(headingTableRows(doc), [], `rules/${name} carries a second copy of a heading table`);
+  }
+  // Negative control through the same guard: a table appended to a different parent section.
+  const planted = `${autoLoop}\n| Override heading | Kind — consumed by | Tier |\n|---|---|---|\n`;
+  assert.equal(headingTableRows(planted).length, 1, 'the guard must see a table planted outside the stub');
 });
 
 test('the section pin rejects the edits every pattern guard accepts', () => {
@@ -584,13 +573,13 @@ test('the section pin rejects the edits every pattern guard accepts', () => {
     ['hedge', (s) => s.replace('the Anchor wins', 'the Anchor usually wins')],
     ['inversion', (s) => s.replace('are never overridable', 'are overridable')],
     ['contradictory addition',
-      (s) => s.replace('## Override Contract\n', '## Override Contract\n\nA project may waive any of the below.\n')],
+      (s) => s.replace('## Resolution\n', '## Resolution\n\nA project may waive any of the below.\n')],
   ];
   for (const [what, mutate] of mutations) {
-    const mutated = mutate(autoLoop);
-    assert.notEqual(mutated, autoLoop, `fixture premise: the ${what} mutation applied`);
-    assert.notEqual(normalizeSection(section(mutated, 'Override Contract')),
-      CANONICAL_AUTO_LOOP_OVERRIDE, `the pin must reject a ${what}`);
+    const mutated = mutate(overrideContract);
+    assert.notEqual(mutated, overrideContract, `fixture premise: the ${what} mutation applied`);
+    assert.notEqual(normalizeSection(section(mutated, 'Resolution')),
+      CANONICAL_OC_RESOLUTION, `the pin must reject a ${what}`);
   }
 });
 
@@ -688,13 +677,13 @@ test('the mapping table when a cell contradicts the contract → fails the secti
   // a Kind cell need only start with one of three words and most Tier cells need only start with
   // `Default`. Excluding table rows from the pin therefore left the rows open to exactly the edit
   // the pin exists to catch — a visible sentence that reverses what the section promises.
-  const mutated = autoLoop.replace(
-    '| `## Max Rounds` | Setting — § Tiers cap sentence; the model tracks rounds against it | Default |',
-    '| `## Max Rounds` | Setting — § Tiers cap sentence; the model tracks rounds against it | Default — Anchor instructions may be overridden |'
+  const mutated = overrideContract.replace(
+    '| `## Max Rounds` | Setting — `auto-loop.md` § Tiers cap sentence; the model tracks rounds against it | Default |',
+    '| `## Max Rounds` | Setting — `auto-loop.md` § Tiers cap sentence; the model tracks rounds against it | Default — Anchor instructions may be overridden |'
   );
-  assert.notEqual(mutated, autoLoop, 'fixture premise: the contradictory cell was inserted');
-  assert.notEqual(normalizeSection(section(mutated, 'Override Contract')),
-    CANONICAL_AUTO_LOOP_OVERRIDE, 'the pin must reject a contradiction written into a table cell');
+  assert.notEqual(mutated, overrideContract, 'fixture premise: the contradictory cell was inserted');
+  assert.notEqual(normalizeSection(section(mutated, OC_AUTO)),
+    CANONICAL_OC_AUTO, 'the pin must reject a contradiction written into a table cell');
 });
 
 test('the gate fence pass when a list holds the fence → accepts the closer the renderer accepts', () => {
@@ -1041,6 +1030,25 @@ test('section extraction when a fake heading is planted → does not truncate th
     'a live sibling heading still bounds the section');
 });
 
+// rules-residency INV-002 (docs/features/rules-residency/intent-rules-residency.md): the migration
+// never modifies, strips or re-heads a `*-project.md` file. The byte digests at the start of the
+// migration are pinned, so an edit to a template fails here instead of shipping in a residency change.
+// Changing a template is a separate, maintainer-approved change that updates these values.
+const TEMPLATE_SHA256 = {
+  'auto-loop-project.md': 'dd279e6341242f55f66836d7ee8e812d82e8da2155bad6f5008f3b577622e46c',
+  'git-workflow-project.md': '2a930f08730448f26daf96cab327bca778ceef31f060c1b7d1f7e144b30de589',
+  'testing-project.md': '0a9df4bfb310cbaeb578179045cc5519ffd60e71570c7cfc58377be3e8e8e91e',
+};
+const sha256 = (text) => require('node:crypto').createHash('sha256').update(text).digest('hex');
+
+test('override templates when hashed → are byte-identical to the pre-migration files (INV-002)', () => {
+  for (const [name, text] of [['auto-loop-project.md', autoLoopTpl], ['git-workflow-project.md', gitTpl], ['testing-project.md', testingTpl]]) {
+    assert.equal(sha256(text), TEMPLATE_SHA256[name], `rules/${name} changed — INV-002 forbids a migration edit`);
+  }
+  // Negative control through the same digest: a one-character edit changes it.
+  assert.notEqual(sha256(`${autoLoopTpl} `), TEMPLATE_SHA256['auto-loop-project.md']);
+});
+
 test('override templates when read → precedence declaration is live text in the preamble, not a comment', () => {
   // This is the template-side carrier invariant R8 exists to enforce, so it must be decided by the
   // shared parser rather than a local line filter. The previous filter dropped only the `<!--` and
@@ -1081,35 +1089,56 @@ test('override templates when declaring precedence → carry the Anchor exceptio
 
 // --- Resolution hierarchy published in both parents ---
 
-test('parent rules when publishing the hierarchy → Anchor-first, then all four steps in fixed order', () => {
-  for (const [name, text] of [
-    ['auto-loop.md § Override Contract', section(autoLoop, 'Override Contract')],
-    ['testing.md § Project Customization', section(testing, 'Project Customization')],
-    ['git-workflow.md § Project Customization', section(gitWorkflow, 'Project Customization')],
-  ]) {
-    // Step 0 must come FIRST and must be the Anchor Register, not an annotation. Publishing
-    // "explicit tier annotation" as the top step contradicted discretion.md's own order and left
-    // a self-certified label able to outrank a Register hit — the exact escape the contract
-    // claims to close.
-    const s0 = text.indexOf('**(0)**');
-    const s1 = text.indexOf('(1) an explicit tier annotation') !== -1
-      ? text.indexOf('(1) an explicit tier annotation')
-      : text.indexOf('(1) explicit tier annotation');
-    const s2 = text.indexOf('(2) the heading table below');
-    const s3 = text.indexOf('(3) preamble');
-    const s4 = text.indexOf('(4)');
-    assert.ok(s0 !== -1 && s1 > s0 && s2 > s1 && s3 > s2 && s4 > s3,
-      `${name}: Anchor-first then 4-step hierarchy in order (got ${s0},${s1},${s2},${s3},${s4})`);
-    assert.match(text, /Anchor-first/, `${name}: the order is named, not just implied`);
-    assert.match(text, /Anchor Register hit resolves to \*\*Anchor\*\* and stops/,
-      `${name}: a Register hit terminates resolution before any annotation is consulted`);
-    assert.match(text, /annotation[\s\S]{0,80}cannot downgrade/,
-      `${name}: a self-certified annotation cannot demote a Register hit`);
-    assert.match(text, /synthetic section/, `${name}: preamble resolves as one synthetic section`);
-    assert.match(text, /fails? closed to \*\*Default\*\*/, `${name}: unknown headings fail closed to Default`);
-    assert.match(text, /never silently dropped|listed in the report/, `${name}: fail-closed results are enumerable, not silent`);
+test('the override contract when publishing the hierarchy → Anchor-first, then all four steps in fixed order', () => {
+  const text = section(overrideContract, 'Resolution');
+  // Step 0 must come FIRST and must be the Anchor Register, not an annotation. Publishing
+  // "explicit tier annotation" as the top step contradicted discretion.md's own order and left
+  // a self-certified label able to outrank a Register hit — the exact escape the contract
+  // claims to close.
+  const s0 = text.indexOf('**(0)**');
+  const s1 = text.indexOf('(1) an explicit tier annotation');
+  const s2 = text.indexOf('(2) the heading table below');
+  const s3 = text.indexOf('(3) preamble');
+  const s4 = text.indexOf('(4)');
+  assert.ok(s0 !== -1 && s1 > s0 && s2 > s1 && s3 > s2 && s4 > s3,
+    `Anchor-first then 4-step hierarchy in order (got ${s0},${s1},${s2},${s3},${s4})`);
+  assert.match(text, /Anchor-first/, 'the order is named, not just implied');
+  assert.match(text, /Anchor Register hit resolves to \*\*Anchor\*\* and stops/,
+    'a Register hit terminates resolution before any annotation is consulted');
+  assert.match(text, /annotation[\s\S]{0,80}cannot downgrade/, 'a self-certified annotation cannot demote a Register hit');
+  assert.match(text, /synthetic section/, 'preamble resolves as one synthetic section');
+  assert.match(text, /fails? closed to \*\*Default\*\*/, 'unknown headings fail closed to Default');
+  assert.match(text, /never silently dropped|listed in the report/, 'fail-closed results are enumerable, not silent');
+  assert.match(text, /never overridable/, 'Anchor supremacy stated');
+  assert.match(text, /conflict is reported/, 'conflicts reported, not silently resolved');
+});
+
+test('parent rules when keeping the compact core → Anchor supremacy, the known headings and the Read pointer stay resident', () => {
+  // The parents are resident; the contract loads on demand. What an ordinary run needs before any
+  // Read — Anchor supremacy, Anchor-first, the closed list of shipped headings, the fail-closed
+  // unknown-heading rule, never editing the user file — therefore stays in each parent, and the
+  // pointer names the one canonical file with the stop-on-failure rule (FR-6).
+  const cores = [
+    ['auto-loop.md § Override Contract', section(autoLoop, 'Override Contract'),
+      ['Tier', 'Max Rounds', 'Plan Review', 'Plan Review Max Rounds', 'Git Memory', 'Think Harder', 'Review Thread Rotation', 'Codex Profile']],
+    ['testing.md § Project Customization', section(testing, 'Project Customization'),
+      ['Test Pyramid', 'Adequacy Mode (project-only extension — not in testing.md core)']],
+    ['git-workflow.md § Project Customization', section(gitWorkflow, 'Project Customization'),
+      ['Branch Naming', 'Commit Format', 'Protected Branches', 'Offer Mode', 'Deploy Workflow', 'Run Steps', 'Goal Commit']],
+  ];
+  for (const [name, text, headings] of cores) {
     assert.match(text, /never overridable/, `${name}: Anchor supremacy stated`);
-    assert.match(text, /conflict is reported/, `${name}: conflicts reported, not silently resolved`);
+    assert.match(text, /conflict is reported/, `${name}: conflicts reported`);
+    assert.match(text, /Anchor-first/, `${name}: the order is named`);
+    assert.match(text, /annotation[\s\S]{0,80}cannot downgrade a Register hit/, `${name}: a label cannot demote a Register hit`);
+    assert.match(text, /fails closed to \*\*Default\*\* and is reported/, `${name}: unknown headings fail closed`);
+    assert.ok(text.includes("The user's file is never edited."), `${name}: the user's override file is never edited`);
+    // Both locations: `/project-setup` and `/install-rules` put the contract in `.claude/rules/`,
+    // where a root `rules/` path does not exist, and a Read that cannot resolve stops the work.
+    assert.ok(text.includes('`.claude/rules/override-contract.md` in an installed project'), `${name}: names the installed location`);
+    assert.ok(text.includes('`rules/override-contract.md` in the plugin source'), `${name}: names the plugin-source location`);
+    assert.match(text, /If that Read fails, do not edit or audit the override/, `${name}: a missing contract stops the governed action`);
+    for (const h of headings) assert.ok(text.includes(`\`## ${h}\``), `${name}: shipped heading "${h}" is named in the resident core`);
   }
 });
 
@@ -1117,12 +1146,13 @@ test('parent rules when distinguishing override kinds → settings are not descr
   // The shipped auto-loop scaffold has SIX headings and the parent has a same-named section for
   // none of them (`## Tier` vs the parent's `## Tiers`). A contract that calls every row a
   // same-heading full replacement therefore documents a mechanism the scaffold never exercises.
-  const contract = section(autoLoop, 'Override Contract');
-  assert.match(contract, /a \*\*section replacement\*\* restates a `##` heading this file actually defines/,
+  const kinds = section(overrideContract, 'Kinds');
+  const contract = section(overrideContract, OC_AUTO);
+  assert.match(kinds, /a \*\*section replacement\*\* restates a `##` heading the parent rule actually defines/,
     'section replacement is defined by whether the parent actually has the heading');
-  assert.match(contract, /a \*\*setting\*\* names a configuration slot/, 'settings are defined as slots');
-  assert.match(contract, /Settings have no same-named section here/, 'the distinction is stated, not implied');
-  assert.match(contract, /`## Tier` is deliberately \*\*not\*\* this file's `## Tiers`/,
+  assert.match(kinds, /a \*\*setting\*\* names a configuration slot/, 'settings are defined as slots');
+  assert.match(kinds, /Settings have no\s+same-named section in the parent/, 'the distinction is stated, not implied');
+  assert.match(contract, /`## Tier` is deliberately \*\*not\*\* `auto-loop\.md`'s `## Tiers`/,
     'the one heading that looks like a match is called out explicitly');
 
   // Structural check, so the prose cannot drift from the files: every auto-loop template heading
@@ -1141,7 +1171,7 @@ test('parent rules when distinguishing override kinds → settings are not descr
   assert.ok(parentSections.has('Tiers'), 'sanity: the parent section inventory was actually parsed');
 
   // testing.md is the mixed case and proves the classification is real rather than a blanket label.
-  const testingRows = parseMappingTable(section(testing, 'Project Customization'));
+  const testingRows = parseMappingTable(section(overrideContract, OC_TESTING));
   const pyramid = testingRows.find(([h]) => h === '`## Test Pyramid`');
   assert.match(pyramid[1], /^Section replacement — /, 'Test Pyramid IS a genuine same-heading replacement');
   assert.ok(documentSections(testing).includes('Test Pyramid'),
@@ -1153,7 +1183,7 @@ test('parent rules when distinguishing override kinds → settings are not descr
 // --- Heading → tier mapping: complete, duplicate-free, conflict-free ---
 
 test('auto-loop mapping table when parsed → covers preamble plus every template heading exactly once, all Default', () => {
-  const rows = parseMappingTable(section(autoLoop, 'Override Contract'));
+  const rows = parseMappingTable(section(overrideContract, OC_AUTO));
   const headings = rows.map((r) => r[0]);
   assert.deepEqual(headings, [
     'preamble (synthetic section)',
@@ -1181,7 +1211,7 @@ test('auto-loop mapping table when parsed → covers preamble plus every templat
 });
 
 test('testing mapping table when parsed → covers preamble and both template sections by their exact headings', () => {
-  const rows = parseMappingTable(section(testing, 'Project Customization'));
+  const rows = parseMappingTable(section(overrideContract, OC_TESTING));
   const headings = rows.map((r) => r[0]);
   assert.deepEqual(headings, [
     'preamble (synthetic section)',
@@ -1218,7 +1248,7 @@ test('mixed-tier Tier section when classified → setting stays Default while th
   // the register itself actually contains the escalation obligation.
   assert.match(tierBlock, /\(Anchor — discretion\.md Register #3; no tier setting or override removes it\)/,
     'the escalation sentence carries a genuine instruction-level annotation');
-  const tierRow = parseMappingTable(section(autoLoop, 'Override Contract')).find((r) => r[0] === '`## Tier`');
+  const tierRow = parseMappingTable(section(overrideContract, OC_AUTO)).find((r) => r[0] === '`## Tier`');
   assert.match(tierRow[2], /^Default/, 'the configurable tier choice is Default');
   assert.match(tierRow[2], /Anchor-tier \(Anchor Register #3 hit, resolved at step 0\)/,
     'the mapping row cites the register hit at the Anchor-first step, not a bare "Anchor" label');
@@ -1703,7 +1733,7 @@ test('spec when recording the carrier decision → documents comment invisibilit
 // --- git-autonomy R2: the third override file ---
 
 test('git-workflow mapping table when parsed → covers preamble plus every template heading exactly once, all Default', () => {
-  const rows = parseMappingTable(section(gitWorkflow, 'Project Customization'));
+  const rows = parseMappingTable(section(overrideContract, OC_GIT));
   const headings = rows.map((r) => r[0]);
   assert.deepEqual(headings, [
     'preamble (synthetic section)',
@@ -1730,7 +1760,7 @@ test('git-workflow mapping table when parsed → covers preamble plus every temp
 });
 
 test('git-workflow Protected Branches row when read → the default set is Anchor and only widens', () => {
-  const row = parseMappingTable(section(gitWorkflow, 'Project Customization'))
+  const row = parseMappingTable(section(overrideContract, OC_GIT))
     .find((r) => r[0] === '`## Protected Branches`');
   assert.match(row[1], /additions list/, 'the setting adds, it never replaces');
   assert.match(row[1], /no removal syntax/, 'removal is not expressible');

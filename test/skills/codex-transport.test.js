@@ -388,10 +388,13 @@ describe('§ Profile — one knob, fail-closed, not tier-dependent', () => {
 });
 
 describe('the setting is declared where its consumers look', () => {
-  test('auto-loop.md § Override Contract carries the row naming the transport as consumer', () => {
-    const oc = sectionOf(autoLoop, 'Override Contract');
+  test('rules/override-contract.md carries the row naming the transport as consumer; the auto-loop core names the setting', () => {
+    // rules-residency Q2-F: the heading table moved to the path-scoped override contract; the
+    // resident auto-loop core keeps the closed list of setting names.
+    const oc = sectionOf(readFileSync(join(ROOT, 'rules/override-contract.md'), 'utf8'), 'auto-loop-project.md → auto-loop.md');
     assert.match(oc, /\| `## Codex Profile` \| Setting — .*codex-transport\.md` § Profile/);
     assert.match(oc, /the other seven name no section at all/, 'the count moves with the row');
+    assert.match(sectionOf(autoLoop, 'Override Contract'), /`## Codex Profile`/);
   });
   test('the project scaffold has the heading', () => {
     assert.ok(project.split('\n').some((l) => l.trim() === '## Codex Profile'));

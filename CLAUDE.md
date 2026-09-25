@@ -72,6 +72,7 @@ Rules 3 and 4 are Anchor Register #4 (@rules/discretion.md); their exception lis
 - @rules/docs-numbering.md
 - @rules/git-workflow.md
 - @rules/git-workflow-project.md -- Project-specific git overrides (user-owned)
+- `rules/override-contract.md` (path-scoped — loads when an installed override file is read; in this checkout the parents' Read pointer reaches it) -- Resolution order and heading tables for the three override files
 - @rules/logging.md
 - @rules/self-improvement.md -- Corrected → record → prevent recurrence
 - @rules/context-management.md -- Data-driven context monitoring (measure before deciding)

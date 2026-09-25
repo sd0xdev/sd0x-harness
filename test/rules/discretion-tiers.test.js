@@ -1,6 +1,6 @@
 'use strict';
 
-// R7: pins the closed sets in rules/discretion.md — the anchor register, the 13-file baseline
+// R7: pins the closed sets in rules/discretion.md — the anchor register, the 14-file baseline
 // table, the deviation format and the proposal channel's efficacy boundary. Removing or
 // downgrading any pinned item fails here by design: relabelling an anchor is a spec change that
 // must be made in BOTH the rule and this test, under human review.
@@ -29,6 +29,7 @@ const MANAGED_FILES = [
   'framework.md',
   'self-improvement.md',
   'scope-discipline.md',
+  'override-contract.md',
 ];
 
 function section(doc, heading) {
@@ -80,12 +81,12 @@ test('resolution order when parsed → an Anchor Register hit always resolves to
   assert.match(preamble, /exactly one\*\* tier/, 'every instruction resolves to exactly one tier');
 });
 
-test('baseline table when parsed → the full 13-row file/baseline/exception mapping is pinned verbatim', () => {
+test('baseline table when parsed → the full 14-row file/baseline/exception mapping is pinned verbatim', () => {
   // deepEqual over ALL THREE columns: flipping a baseline (framework.md → Anchor) or slipping a
   // "→ Anchor" exception into any row would mint a new anchor OUTSIDE the closed register while
   // a files-only check stays green. Every Anchor-producing cell below maps back to a register item.
   const rows = parseTable(
-    section(discretion, 'File Baselines (13 plugin-managed files)'),
+    section(discretion, 'File Baselines (14 plugin-managed files)'),
     ['File', 'Baseline', 'Exceptions above baseline']
   );
   assert.deepEqual(rows, [
@@ -102,12 +103,13 @@ test('baseline table when parsed → the full 13-row file/baseline/exception map
     ['`framework.md`', 'Guidance', '—'],
     ['`self-improvement.md`', 'Default', 'Redaction rules (never record secrets) → Anchor (Register #2)'],
     ['`scope-discipline.md`', 'Default', 'Edit re-review sentence → Anchor (Register #6); deferred/skip records never carry secrets → Anchor (Register #2); security/data-integrity `thorough` escalation → Anchor (Register #3)'],
+    ['`override-contract.md`', 'Default', '— (it restates Anchor supremacy over the overrides and grants no exception; Register hits in it resolve at step 0)'],
   ], 'the classification mapping is closed — changing any cell is a reviewed spec change');
   assert.equal(rows.length, MANAGED_FILES.length);
 });
 
 test('override files when classified → excluded from the table and delegated to R8', () => {
-  const table = section(discretion, 'File Baselines (13 plugin-managed files)');
+  const table = section(discretion, 'File Baselines (14 plugin-managed files)');
   assert.ok(!table.includes('auto-loop-project.md'), 'override files are not classified here');
   assert.ok(!table.includes('testing-project.md'), 'override files are not classified here');
   assert.match(discretion, /auto-loop-project\.md.*testing-project\.md.*out of scope/s);
@@ -501,7 +503,7 @@ const FROZEN_ANCHOR_INVENTORY = [
 
 test('legacy anchors when migrated → every pre-change anchor source still exists and maps to the register', () => {
   const reg = section(discretion, 'Anchor Register (closed list)');
-  const baselines = section(discretion, 'File Baselines (13 plugin-managed files)');
+  const baselines = section(discretion, 'File Baselines (14 plugin-managed files)');
   const mappingTargets = reg + baselines;
   for (const { file, phrase, mapped } of FROZEN_ANCHOR_INVENTORY) {
     const src = readFileSync(resolve(root, file), 'utf8');

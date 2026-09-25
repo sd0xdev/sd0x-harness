@@ -108,7 +108,11 @@ function freshInstall(extraChars = 0) {
 test(`a fresh install → the plugin's always-loaded total stays at or under ${CEILING} characters`, () => {
   const r = freshInstall();
   assert.ok(r.total <= CEILING, `fresh-install always-loaded total is ${r.total}, over the ${CEILING} ceiling — move content on demand before adding`);
-  assert.equal(r.path_scoped.length, 4, 'the four path-scoped rules are not counted');
+  // Derived from disk: a rule is path-scoped when its frontmatter opens with `paths:`.
+  const scoped = readdirSync(join(ROOT, 'rules'))
+    .filter((n) => n.endsWith('.md') && readFileSync(join(ROOT, 'rules', n), 'utf8').startsWith('---\npaths:'));
+  assert.ok(scoped.length >= 5, `path-scoped rule set collapsed unexpectedly: ${scoped.length}`);
+  assert.equal(r.path_scoped.length, scoped.length, 'every path-scoped rule is left out of the always-loaded total');
 });
 
 test('the ceiling when a resident rule grows past it → fails (negative control, gap measured)', () => {

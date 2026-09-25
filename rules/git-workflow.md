@@ -93,19 +93,6 @@ asks its own approval.
 Project-specific settings belong in `git-workflow-project.md` (not this file). See
 `@rules/git-workflow-project.md` for your project's git conventions.
 
-Override contract: an active `##` section there customizes this file — **Default and Guidance tiers only**. Anchor-tier instructions (Anchor Register #4 — the forbidden-operation list, the enumerated workflow grants, the attribution rule, the default protected branches and § Push safety — and #2 for secrets) are never overridable: on conflict the Anchor wins and the conflict is reported.
+Override contract: an active `##` section there customizes this file — **Default and Guidance tiers only**. Anchor-tier instructions (Anchor Register #4 — the forbidden-operation list, the enumerated workflow grants, the attribution rule, the default protected branches and § Push safety — and #2 for secrets) are never overridable: on conflict the Anchor wins and the conflict is reported. Resolution is **Anchor-first** — a tier annotation in either file cannot downgrade a Register hit. Its shipped headings are **settings** read by name: `## Branch Naming`, `## Commit Format`, `## Protected Branches` (additions only — the default set cannot shrink), `## Offer Mode`, `## Deploy Workflow`, `## Run Steps` and `## Goal Commit`. A heading that restates one of this file's own `##` headings exactly is a **section replacement**; any other heading fails closed to **Default** and is reported. The user's file is never edited.
 
-Resolution is **Anchor-first**, since tier is decided by `discretion.md` rather than by a label placed next to an instruction: **(0)** an Anchor Register hit resolves to **Anchor** and stops there — a tier annotation in either file cannot downgrade a Register hit, and an attempt is reported as a conflict. Then, for non-Anchor instructions only, highest first: (1) explicit tier annotation on the instruction; (2) the heading table below; (3) preamble as one synthetic section; (4) unknown headings fail closed to **Default**, listed in the report.
-
-Kinds, as in `auto-loop.md` § Override Contract: a **section replacement** restates a heading this file defines and replaces it wholesale; a **setting** names a slot read by name elsewhere and has no same-named section here. The shipped scaffold is settings-only.
-
-| Override heading | Kind — consumed by | Tier |
-|------------------|--------------------|------|
-| preamble (synthetic section) | Header — the live precedence declaration, resolved as one synthetic section | Default |
-| `## Branch Naming` | Setting — replaces this file's `Branches:` line | Default |
-| `## Commit Format` | Setting — replaces this file's `Commit:` line | Default |
-| `## Protected Branches` | Setting — an additions list unioned with the default set, read by `scripts/protected-branches.sh`; there is no removal syntax, and a removal attempt or parse error makes every branch read as protected | Default — the default set itself is Anchor (Register #4) and cannot shrink |
-| `## Offer Mode` | Setting — `on` (default) · `commit-only` · `off`, read by `review-state.js offer` (§ Proactive Offer); `/claude-health` validates the value | Default |
-| `## Deploy Workflow` | Setting — the declared `merge` / `run` steps, read by `/deploy-flow`; `/claude-health` validates the lines | Default — the steps run only under `/deploy-flow`'s own Register #4 entry and its per-step approval |
-| `## Run Steps` | Setting — `print` (default) · `execute`, read by `/deploy-flow`; the scaffold states the run-script risk | Default |
-| `## Goal Commit` | Setting — `on` (default) · `off`, read by `review-state.js goal-commit` (§ Proactive Offer, "Goal mode"); `off` only narrows | Default |
+Before interpreting, auditing or editing the override, Read `override-contract.md` in the same directory as this rule — `.claude/rules/override-contract.md` in an installed project, `rules/override-contract.md` in the plugin source — for the resolution order, the two kinds, and each setting's consumer and tier. If that Read fails, do not edit or audit the override.
