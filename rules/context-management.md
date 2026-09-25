@@ -11,7 +11,7 @@
 
 ## Auto-Compact Mode
 
-If the user has auto-compact on, the harness owns compaction. Skip all of the monitoring below, never mention context capacity, never propose a new session or `/compact` — just do the task. Detect it from `[auto-compact]` markers or a conversation that has already been auto-compacted.
+With auto-compact on (`[auto-compact]` markers, or a conversation already auto-compacted) the harness owns compaction: skip the monitoring below, never mention context capacity, never propose a new session or `/compact`.
 
 ## Three-Tier Policy (manual compact mode only)
 
@@ -21,13 +21,11 @@ If the user has auto-compact on, the harness owns compaction. Skip all of the mo
 | Compact | 80% ≤ used < 92% | `/compact` at the next major boundary, then continue |
 | Critical | used ≥ 92% | Finish pending auto-loop obligations → `/compact` → if still ≥ 92%, propose a new session with handoff |
 
-Milestone checks (precommit pass, review complete, task group done) are **diagnostic** — do not change behaviour on a reading alone. Skip the check if `/context` ran within the last 2 tool calls.
+Milestone readings are **diagnostic** — do not change behaviour on a reading alone; skip the check if `/context` ran within the last 2 tool calls.
 
 ## Compact Preservation
 
-A compact summary must carry forward: the pending task list and current progress, this session's architectural decisions, active review threadIds (for `--continue`), the uncommitted file list, and the current plan file path.
-
-Also carry any active `/orchestrate` run's `baseline_sha256` — the hex digest `run-verify.js snapshot` prints to stderr. It is stored nowhere on disk, so losing it makes the run unresumable, and resume needs both the digest **and** the original baseline bytes at `.claude_workflows/<run-id>/baseline.json`. Preserve the run-id and that path alongside it. (Compaction is the only such loss this rule can prevent — a crash or a cleared conversation drops it just as completely.)
+A compact summary must carry forward: the pending task list and current progress, this session's architectural decisions, active review threadIds (for `--continue`), the uncommitted file list, the current plan file path, and any active `/orchestrate` run's run-id and `baseline_sha256` — stored nowhere on disk, so losing it makes the run unresumable (`/orchestrate` § Flags, the `--resume` row).
 
 Never put secrets, tokens, or passwords in a compact summary (per @rules/security.md).
 

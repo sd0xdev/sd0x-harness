@@ -43,8 +43,8 @@ const CONTRACTS = [
     // Headings other files reference by `§`; each must survive in the contract.
     headings: ['Scope Baseline', 'Scope Determination', 'Behavior Table', 'Opportunistic Envelope',
       'Records', 'Closed-Set Options', 'Helper-Sweep Ban', 'Circuit Breaker', 'Gate Derivation',
-      'Human Exits', 'Anchor Compatibility'],
-    minHeadings: 11,
+      'Human Exits', 'Anchor Compatibility', 'Fix Obligation'],
+    minHeadings: 12,
   },
   {
     // instruction-budget R2: the Codex prompt contract, loaded before a review dispatch; its
@@ -107,6 +107,8 @@ function scannedMarkdown() {
   const ls = (args) => execFileSync('git', ['-C', root, 'ls-files', '-z', ...args, '*.md'],
     { encoding: 'utf8' }).split('\0').filter(Boolean);
   return [...new Set([...ls([]), ...ls(['--others', '--exclude-standard'])])]
+    // A tracked file deleted in the working tree is still listed by `ls-files`; it carries nothing.
+    .filter((p) => existsSync(resolve(root, p)))
     .filter((p) => p.startsWith('rules/') || p.startsWith('skills/') || p.startsWith('agents/')
       || p === 'CLAUDE.md' || p === 'CLAUDE.template.md' || /^README(\.[\w-]+)?\.md$/.test(p)
       // `docs/` is in scope only where the document is current authority. A record states a point

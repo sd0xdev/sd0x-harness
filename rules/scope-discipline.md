@@ -2,7 +2,7 @@
 
 **Scope is an axis orthogonal to severity.** Severity says how bad a finding is; scope says whether
 this task owes it a fix. A defect introduced by this branch is fixed under zero tolerance
-(@rules/fix-all-issues.md); a pre-existing defect outside the change's reach gets a recorded exit
+(`rules/auto-loop.md` § Fix Obligation); a pre-existing defect outside the change's reach gets a recorded exit
 instead of expanding a one-file change into a repo-wide sweep. Baseline tier: **Default**
 (@rules/discretion.md) — deviate with a `[DEVIATION]` line naming a fact signal.
 
@@ -30,10 +30,8 @@ instead of expanding a one-file change into a repo-wide sweep. Baseline tier: **
    `mandatory` (fail-closed). **Deferral is not dismissal**: the finding stays actionable and
    recorded, and a later round reading `affected` or `uncertain` makes it mandatory again. A
    candidate is **admitted** only inside a fix phase a mandatory blocking finding already opened —
-   never a round of its own — and an admitted finding is owed **for that phase, whatever its
-   severity**: the phase does not re-dispatch while it is unfixed, and the verifying re-review
-   derives it afresh (no obligation is carried across rounds). Until the envelope's capacity is defined, it is `closed`: every candidate is
-   deferred and recorded.
+   never a round of its own — and is then owed **for that phase, whatever its severity** — no obligation is carried across rounds. Until the envelope's capacity is
+   defined, it is `closed`: every candidate is deferred and recorded.
 7. **Anchor compatibility.** Scope decides which findings demand a fix — it **never** exempts an
    edit from re-review: an edit moves the digest, re-opens the plane, and the reviewer re-runs
    (Register #6) — there is no user exception to that. Expansion into security/data-integrity
@@ -59,12 +57,9 @@ A finding or an edit falls outside the frozen baseline · scope is `uncertain` �
 being dispatched or its gate derived · the circuit breaker may have tripped · an E1 disposition is
 being created or validated · an opportunistic candidate is being admitted or deferred.
 
-→ `skills/codex-code-review/references/scope-contract.md` — baseline computation and the
-`${BASE_BRANCH}` cascade, the full behavior table, `[USER_SKIPPED]` validity, the closed-set E1
-options, the helper-sweep boundary, circuit-breaker counters and thresholds, the opportunistic
-candidate predicate and obligation set, the normalization-first
-gate derivation (the routing matrix itself stays in the review skill's § Step 4.5), and the
-enumerated human exits E1 and E2.
+→ `skills/codex-code-review/references/scope-contract.md` — baseline computation, the behavior
+table, `[USER_SKIPPED]` validity, E1 options, the breaker, the opportunistic predicate, gate
+derivation, the fix obligation and the human exits E1 and E2.
 
 Read it before declaring a finding out of scope, deferring a candidate, or deriving a gate. If that
 Read fails, stop: decide no fix obligation, declare nothing out of scope, defer nothing and derive

@@ -1,6 +1,6 @@
 # Discretion Tiers ⚠️ CRITICAL
 
-Single authority for how binding each instruction in the plugin-managed `rules/*.md` files is. Every instruction in the 14 files below resolves to **exactly one** tier: Anchor Register hit → **Anchor**; otherwise a listed file exception → that tier; otherwise the file's **baseline**. Preamble text (before a file's first `##`) follows the same resolution. `rules/auto-loop-project.md`, `rules/testing-project.md` and `rules/git-workflow-project.md` are **out of scope of this file's classification** — they are user-owned, so their tiers are not assigned here. Their precedence and resolution contract is defined by R8 (`docs/features/auto-loop-autonomy/requests/2026-07-26-override-contract-migration-r8.md`) and published in `override-contract.md` — with a compact core kept in `auto-loop.md` § Override Contract, `testing.md` § Project Customization and `git-workflow.md` § Project Customization — which resolve **Anchor-first**: this file decides what is Anchor, and no annotation in a user-owned file can downgrade a Register hit.
+Single authority for how binding each instruction in the plugin-managed `rules/*.md` files is. Every instruction in the 12 files below resolves to **exactly one** tier: Anchor Register hit → **Anchor**; otherwise a listed file exception → that tier; otherwise the file's **baseline**. Preamble text (before a file's first `##`) follows the same resolution. `rules/auto-loop-project.md`, `rules/testing-project.md` and `rules/git-workflow-project.md` are **out of scope of this file's classification** — they are user-owned, so their tiers are not assigned here. Their resolution contract (R8, `docs/features/auto-loop-autonomy/requests/2026-07-26-override-contract-migration-r8.md`) is `override-contract.md`, which resolves **Anchor-first**: this file decides what is Anchor, and no annotation in a user-owned file can downgrade a Register hit.
 
 ## Tiers
 
@@ -10,7 +10,7 @@ Single authority for how binding each instruction in the plugin-managed `rules/*
 | **Default** | The normal call; the model may judge otherwise from context | State a `[DEVIATION]` line citing a fact signal, then **continue working** |
 | **Guidance** | Advisory | Nothing |
 
-## File Baselines (14 plugin-managed files)
+## File Baselines (12 plugin-managed files)
 
 | File | Baseline | Exceptions above baseline |
 |------|----------|---------------------------|
@@ -19,12 +19,10 @@ Single authority for how binding each instruction in the plugin-managed `rules/*
 | `git-workflow.md` | Default | Forbidden/destructive git ops, protected branches, attribution → Anchor (Register #4); commit containing secrets → Anchor (Register #2) |
 | `auto-loop.md` | Default | Register #5–#7 items → Anchor; § Tiers security/data-integrity escalation → Anchor (Register #3) |
 | `codex-invocation.md` | Default | — (the loop-review exception in the file is part of its own contract) |
-| `fix-all-issues.md` | Default | Its exception table's logging duty stands as written |
 | `testing.md` | Default | Security / data-integrity / regression AC "❌ Never" rows → Anchor |
 | `docs-writing.md` | Guidance | Comment-block thresholds and move-or-dedupe (no net information loss) → Default |
 | `docs-numbering.md` | Default | — (the 500-line limit is the canonical Default example) |
 | `context-management.md` | Default | "Context state never overrides auto-loop" and gate-skip prohibition → Anchor (Register #7); no secrets in compact summaries → Anchor (Register #2) |
-| `framework.md` | Guidance | — |
 | `self-improvement.md` | Default | Redaction rules (never record secrets) → Anchor (Register #2) |
 | `scope-discipline.md` | Default | Edit re-review sentence → Anchor (Register #6); deferred/skip records never carry secrets → Anchor (Register #2); security/data-integrity `thorough` escalation → Anchor (Register #3) |
 | `override-contract.md` | Default | — (it restates Anchor supremacy over the overrides and grants no exception; Register hits in it resolve at step 0) |

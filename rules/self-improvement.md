@@ -36,11 +36,6 @@ Example source line: `2026-02-24 — Deleted rules/docs-writing.md instead of .c
 
 ## Management
 
-| Rule | Detail |
-|------|--------|
-| Max 20 active lessons | Active = not promoted, not archived. Over that, consolidate before adding |
-| Promotion path | Lesson → `.claude/rules/` for this project → plugin core only with cross-project evidence (3+ projects, via issues/PRs) |
-| After consolidating | Run `/codex-review-doc` on the log |
-| Version control | The user's call. Untracked = personal memory; tracked = shared team memory. `.gitignore` accordingly |
+At most 20 active (not promoted, not archived) lessons — consolidate before adding more, then run `/codex-review-doc` on the log. Promotion path: lesson → `.claude/rules/` for this project → plugin core only with cross-project evidence (3+ projects, via issues/PRs). Tracking the log in version control is the user's call: untracked is personal memory, tracked is shared team memory.
 
-Complementary to @rules/fix-all-issues.md: that rule repairs the defect now, this one records why it happened so the class stops recurring. Neither affects the review loop.
+Complementary to `rules/auto-loop.md` § Fix Obligation: that rule repairs the defect now, this one records why it happened so the class stops recurring. Neither affects the review loop.

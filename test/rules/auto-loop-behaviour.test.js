@@ -45,7 +45,15 @@ const DUPLICATED_STALL_POLICY = [
   /A \*\*fourth\*\* stall on the same change → ⚠️ Need Human/,
   /The same change hitting the cap a \*\*second\*\* time → ⚠️ Need Human/,
   /Never re-try an adjustment recorded as failed/,
+];
+// Stall mechanics the resident core no longer restates (rules-residency task 3 compacted
+// § Stall Detection and Diagnosis to its exits): the contract is their only carrier, so they are
+// pinned there alone — a resident copy reappearing is a second carrier and must join the list above.
+const CONTRACT_ONLY_STALL_POLICY = [
   /absence is not a signal/,
+  /`SCATTER`/,
+  /`REFERENCE_DRIFT`/,
+  /\*\*1\*\* diagnosis per change/,
 ];
 
 // Register-citing statements that travelled into the contract. Prose declaring them Anchor is
@@ -73,7 +81,7 @@ test('duplicated stall policy when compared → every statement holds on every c
   // in contract-routing.test.js; it was applied to that registry in this commit and not to these.
   assert.ok(Object.keys(STALL_POLICY_CARRIERS).length >= 2,
     'both carriers of the stall policy must stay registered — the canonical one governs');
-  assert.ok(DUPLICATED_STALL_POLICY.length >= 5,
+  assert.ok(DUPLICATED_STALL_POLICY.length >= 4,
     'the duplicated-statement list must not shrink; add a row when a statement is duplicated');
   for (const [name, body] of Object.entries(STALL_POLICY_CARRIERS)) {
     for (const pat of DUPLICATED_STALL_POLICY) {
@@ -89,8 +97,8 @@ test('anti-loop budget: one cap diagnosis, three stall diagnoses, then a human',
     'the cap earns exactly one diagnosis per change');
   assert.match(loopDiagnostics, /\| Stall \| \*\*3\*\* per change \|/,
     'stalls earn three diagnoses per change');
-  assert.match(autoLoop, /\*\*1\*\* diagnosis per change for the cap, \*\*3\*\* per change for stalls/,
-    'the resident stanza must still carry both budgets');
+  assert.match(autoLoop, /hitting the cap a \*\*second\*\* time → ⚠️ Need Human, no second diagnosis/,
+    'the resident stanza must still carry the cap exit the one-diagnosis budget implies');
   assert.match(autoLoop, /A \*\*fourth\*\* stall on the same change → ⚠️ Need Human/,
     'a fourth stall must route to a human, not a fourth diagnosis');
 });
@@ -109,22 +117,27 @@ test('stall detection is model-side bookkeeping — no hook emitter is promised'
 });
 
 test('the rounds count is named as the one mechanical fact, honestly scoped', () => {
-  assert.match(autoLoop, /`rounds` count \(`review-state\.js check --format=json`\)/,
+  assert.match(autoLoop, /`rounds` \(`review-state\.js check --format=json`\)/,
     'the state slot rounds count is the surviving mechanical input');
-  assert.match(autoLoop, /it counts failed verdicts on the current change, not your conversational rounds/,
+  assert.match(autoLoop, /counts failed verdicts since the last pass — a floor, never the whole story/,
     'the count must be scoped honestly — a floor, not the whole story');
 });
 
-// --- review-loop-recovery: ATTENTION_DIFFUSION subtypes + banking sequence ---
-// docs/features/review-loop-recovery/2-tech-spec.md § 3.2, § 3.4. The subtype names are
-// duplicated across the resident summary and the canonical contract, so they are pinned on
-// both carriers per this file's carrier discipline.
-
-test('both carriers name the two ATTENTION_DIFFUSION subtypes and no third', () => {
-  for (const [name, body] of Object.entries(STALL_POLICY_CARRIERS)) {
-    assert.match(body(), /`SCATTER`/, `${name} must name the SCATTER subtype`);
-    assert.match(body(), /`REFERENCE_DRIFT`/, `${name} must name the REFERENCE_DRIFT subtype`);
+test('contract-only stall mechanics when scanned → held by the contract, not restated resident', () => {
+  assert.ok(CONTRACT_ONLY_STALL_POLICY.length >= 4, 'the contract-only list must not shrink');
+  for (const pat of CONTRACT_ONLY_STALL_POLICY) {
+    assert.match(loopDiagnostics, pat, `the contract lost a stall statement: ${pat}`);
+    assert.doesNotMatch(autoLoop, pat, `resident copy of ${pat} — register it as duplicated instead`);
   }
+});
+
+// --- review-loop-recovery: ATTENTION_DIFFUSION subtypes + banking sequence ---
+// docs/features/review-loop-recovery/2-tech-spec.md § 3.2, § 3.4. Since rules-residency task 3
+// the subtype names live in the canonical contract only (CONTRACT_ONLY_STALL_POLICY above).
+
+test('the contract names the two ATTENTION_DIFFUSION subtypes and no third', () => {
+  assert.match(loopDiagnostics, /`SCATTER`/, 'the contract must name the SCATTER subtype');
+  assert.match(loopDiagnostics, /`REFERENCE_DRIFT`/, 'the contract must name the REFERENCE_DRIFT subtype');
   assert.match(loopDiagnostics, /not new diagnosis classes/,
     'subtypes are adjustment directions — the closed class table must stay closed');
 });
