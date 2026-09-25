@@ -138,8 +138,12 @@ candidate only after that removal ([1-requirements.md](./1-requirements.md) FR-4
    situations hooks cannot (baseline membership, finding identity, semantic progress).
 2. **Skills** — each mutating/reviewing skill lists its required contracts; routing tests pin the
    skill→contract edges.
-3. **Hooks** — `[AUTO_LOOP_STATE]` gains an optional `procedure_hint=<contract,…>` field derived
-   from mechanical facts only (e.g. `rounds≥3` → review-loop,stall). A hook may **deny** a
+3. **Hooks** — `[AUTO_LOOP_STATE]` gains an optional `procedure_hint=<contract,…>` field on the
+   same line, after `intent_hint=` (task 5; one fact line, not two). It carries plugin-relative
+   contract paths, sorted and de-duplicated, derived from three mechanical facts only: a plane
+   whose slot records ≥ 3 failed rounds → `review-common.md` and `loop-diagnostics.md`; a changed
+   `*-project.md` directly under `rules/` or `.claude/rules/` → `rules/override-contract.md`; a changed feature document under `docs/features/`
+   (request tickets excluded) past 500 lines → `documentation-contract.md`. A hook may **deny** a
    recognisable tool call on a mechanical fact — a required contract file missing — with a reason
    naming the contract and the route to retry. Hooks never diagnose, classify, interpret a verdict
    or grant git authorization, and `rounds` remains a floor, not a semantic stall verdict. A
@@ -324,7 +328,8 @@ ship and task 9 lands.
 2. ~~Exact byte ceiling: 40,000 is ~10K tokens by heuristic; confirm or tune after task 3 lands.~~
    **Resolved 2026-09-25**: the target is ≤ 50,000 characters of plugin-managed resident text on a
    rendered fresh install (§ 3.5); task 4 fixes the paired line ceiling from the landed kernel.
-3. `procedure_hint` shape: extend `[AUTO_LOOP_STATE]` line vs. second fact line — decide in task 5.
+3. ~~`procedure_hint` shape: extend `[AUTO_LOOP_STATE]` line vs. second fact line — decide in task 5.~~
+   **Resolved 2026-09-25 (task 5)**: an optional field on the existing line, § 3.3 item 3.
 4. Whether `docs-numbering.md`'s mechanical taxonomy half stays resident for `doc-classifier.js`
    parity, or moves with the rest — decide during task 1 by checking what the classifier reads.
 5. ~~Installs without the plugin: install the push authorization contract with the rules?~~

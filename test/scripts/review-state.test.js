@@ -318,6 +318,125 @@ test('repo-key: two same-named checkouts do not collide; a worktree stays isolat
   assert.equal(stateKeys(home).length, 3, 'a worktree neither shares nor clobbers its origin state');
 });
 
+// --- procedure_hint: fact-conditioned contract hints (rules-residency task 5) ---
+
+const LOOP_HINT = 'skills/codex-code-review/references/loop-diagnostics.md,skills/codex-code-review/references/review-common.md';
+
+test('procedure_hint: a plane at 3 failed rounds → review-loop and stall contracts; 2 rounds → none', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  note(repo, home, 'code_review', 'fail');
+  note(repo, home, 'code_review', 'fail');
+  let fact = run(repo, home, ['check', '--format=fact']);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/, 'two failed rounds are below the signal');
+  note(repo, home, 'code_review', 'fail');
+  fact = run(repo, home, ['check', '--format=fact']);
+  assert.match(fact.stdout, new RegExp(` procedure_hint=${LOOP_HINT.replace(/\./g, '\\.')} source=state\\n$`));
+  // A pass resets the slot's rounds, and the hint goes with it.
+  note(repo, home, 'code_review', 'pass');
+  fact = run(repo, home, ['check', '--format=fact']);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/, 'a pass resets the fact the hint rests on');
+});
+
+test('procedure_hint: a changed *-project.md override → override contract; a changed parent rule → none', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  mkdirSync(join(repo, 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'rules', 'auto-loop.md'), '# parent\n');
+  let fact = run(repo, home, ['check', '--format=fact']);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/, 'a parent rule is not an override');
+  mkdirSync(join(repo, '.claude', 'rules'), { recursive: true });
+  writeFileSync(join(repo, '.claude', 'rules', 'testing-project.md'), '# Testing Project Overrides\n');
+  fact = run(repo, home, ['check', '--format=fact']);
+  assert.match(fact.stdout, / procedure_hint=rules\/override-contract\.md source=state\n$/);
+});
+
+test('procedure_hint: a feature doc past 500 lines → documentation contract; 500 lines or a record → none', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  const feat = join(repo, 'docs', 'features', 'x');
+  mkdirSync(join(feat, 'requests'), { recursive: true });
+  const lines = (n) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
+  writeFileSync(join(feat, '2-tech-spec.md'), lines(500));
+  writeFileSync(join(feat, 'requests', '2026-09-25-long.md'), lines(900));
+  let fact = run(repo, home, ['check', '--format=fact']);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/, '500 lines is at the signal, not past it; a record is exempt');
+  writeFileSync(join(feat, '2-tech-spec.md'), lines(501));
+  fact = run(repo, home, ['check', '--format=fact']);
+  assert.match(fact.stdout, / procedure_hint=skills\/doc-review\/references\/documentation-contract\.md source=state\n$/);
+});
+
+test('procedure_hint: several facts at once → one sorted, de-duplicated field', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  mkdirSync(join(repo, 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'rules', 'auto-loop-project.md'), '# a\n');
+  writeFileSync(join(repo, 'rules', 'git-workflow-project.md'), '# b\n');
+  for (let i = 0; i < 3; i += 1) note(repo, home, 'doc_review', 'fail');
+  const fact = run(repo, home, ['check', '--format=fact']);
+  assert.match(fact.stdout, new RegExp(` procedure_hint=rules/override-contract\\.md,${LOOP_HINT.replace(/\./g, '\\.')} source=state\\n$`));
+  assert.equal((fact.stdout.match(/procedure_hint=/g) || []).length, 1);
+});
+
+test('procedure_hint: every fact at once → one line, intent_hint first, then the full sorted value', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  const feat = join(repo, 'docs', 'features', 'x');
+  mkdirSync(feat, { recursive: true });
+  writeFileSync(join(feat, 'intent-x.md'), '# Intent — x\n');
+  git(repo, 'add', '-A');
+  git(repo, 'commit', '-q', '-m', 'intent');
+  writeFileSync(join(feat, '2-tech-spec.md'), 'line\n'.repeat(501));
+  mkdirSync(join(repo, 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'rules', 'auto-loop-project.md'), '# a\n');
+  for (let i = 0; i < 3; i += 1) note(repo, home, 'code_review', 'fail');
+  const fact = run(repo, home, ['check', '--format=fact']);
+  assert.equal(fact.status, 0, fact.stderr);
+  assert.match(fact.stdout,
+    / intent_hint=docs\/features\/x\/intent-x\.md procedure_hint=rules\/override-contract\.md,skills\/codex-code-review\/references\/loop-diagnostics\.md,skills\/codex-code-review\/references\/review-common\.md,skills\/doc-review\/references\/documentation-contract\.md source=state\n$/);
+  assert.equal(fact.stdout.trim().split('\n').length, 1, 'one fact line');
+});
+
+test('procedure_hint: a changed feature doc that can no longer be read → no hint, and check still answers', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  const doc = join(repo, 'docs', 'features', 'x', '2-tech-spec.md');
+  mkdirSync(join(repo, 'docs', 'features', 'x'), { recursive: true });
+  writeFileSync(doc, 'line\n'.repeat(501));
+  git(repo, 'add', '-A');
+  git(repo, 'commit', '-q', '-m', 'long feature doc');
+  rmSync(doc); // still a changed git path; reading it now fails
+  const fact = run(repo, home, ['check', '--format=fact']);
+  assert.equal(fact.status, 0, fact.stderr);
+  assert.match(fact.stdout, /^\[AUTO_LOOP_STATE\] change=doc /);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/);
+});
+
+test('procedure_hint: override paths are anchored to rules/ and .claude/rules/ only', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  mkdirSync(join(repo, 'docs', 'vendor', 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'docs', 'vendor', 'rules', 'testing-project.md'), '# vendored\n');
+  let fact = run(repo, home, ['check', '--format=fact']);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/, 'a rules/ directory elsewhere is not an override location');
+  mkdirSync(join(repo, 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'rules', 'git-workflow-project.md'), '# b\n');
+  fact = run(repo, home, ['check', '--format=fact']);
+  assert.match(fact.stdout, / procedure_hint=rules\/override-contract\.md source=state\n$/, 'the checkout root rules/ is');
+});
+
+test('procedure_hint: a non-ASCII feature doc filename past 500 lines → documentation contract', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  const feat = join(repo, 'docs', 'features', 'x');
+  mkdirSync(feat, { recursive: true });
+  writeFileSync(join(feat, '設計.md'), 'line\n'.repeat(501));
+  const fact = run(repo, home, ['check', '--format=fact']);
+  assert.equal(fact.status, 0, fact.stderr);
+  assert.match(fact.stdout, / procedure_hint=skills\/doc-review\/references\/documentation-contract\.md source=state\n$/);
+});
+
 // --- intent_hint: exact-name doc mapping on the state-backed fact line ---
 
 test('intent_hint: changed feature doc + exact intent-<key>.md → hint; stray name → none', () => {

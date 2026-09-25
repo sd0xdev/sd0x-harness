@@ -216,7 +216,7 @@ Non-goal stops and asks — amending this file is a re-decision, not a sync") an
 | Classifier mis-typing via prefix fallback | Prohibited rows + executable classifier tests for `intent-x.md`, `1-intent.md` (negative), `intent-decision-x.md` (ordering control vs. `adr`) |
 | Deviation gate becomes noise (every minor tension → Need Human) | Trigger requires a cited `INV-*` or exact Non-goal line, plus the violating element; invariants capped at 7 per file |
 | `/tech-spec` inline intent-lookup drift (an exact-name/wildcard lookup maintained beside the skill's own discovery cascade) | Accepted as an untested prose-level risk (§ 6 deliberately pins no skill prose) — the cost of the skill's deliberate `Bash(node:*)` absence |
-| Dependency: `procedure_hint` mechanism (rules-residency task 5) not yet landed | `intent_hint` is designed to the same contract and can land first; the two merge trivially |
+| Dependency: `procedure_hint` mechanism (rules-residency task 5) | Landed 2026-09-25 as a separate optional field on the same `[AUTO_LOOP_STATE]` line, after `intent_hint=`; the two share the fact-only contract |
 
 ## 5. Work Breakdown
 

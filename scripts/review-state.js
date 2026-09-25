@@ -129,6 +129,41 @@ function intentHints(root, dirtyPaths) {
   return [...hints].sort();
 }
 
+// Procedure hints (rules-residency task 5, tech spec § 3.3): which on-demand contract a mechanical
+// fact makes relevant, printed as plugin-relative paths the model can Read. Facts only — the hook
+// never diagnoses, classifies or reads a verdict's meaning: `rounds` is the slot's failed-verdict
+// count (a floor, not a stall verdict), a path is a path, a line count is a line count.
+const STALL_ROUNDS = 3;
+const DOC_LINE_SIGNAL = 500;
+const LOOP_CONTRACTS = [
+  'skills/codex-code-review/references/review-common.md',
+  'skills/codex-code-review/references/loop-diagnostics.md',
+];
+const OVERRIDE_CONTRACT = 'rules/override-contract.md';
+const DOCUMENTATION_CONTRACT = 'skills/doc-review/references/documentation-contract.md';
+
+function procedureHints(root, planes, dirtyPaths) {
+  const hints = new Set();
+  if (Object.values(planes).some(p => p.rounds >= STALL_ROUNDS)) LOOP_CONTRACTS.forEach(c => hints.add(c));
+  for (const p of dirtyPaths) {
+    // The two places an override lives: this checkout's rules/ and an install's .claude/rules/.
+    if (/^(\.claude\/)?rules\/[^/]+-project\.md$/.test(p)) hints.add(OVERRIDE_CONTRACT);
+    // A feature document past the size signal — records (request tickets) are exempt from it.
+    if (/^docs\/features\/.+\.md$/.test(p) && !/\/requests\//.test(p)) {
+      try {
+        // Dirty paths are latin1 strings carrying git's raw bytes (tree-digest.js); rebuild the raw
+        // path so a non-ASCII filename is read, not re-encoded into a path that does not exist.
+        const full = Buffer.concat([Buffer.from(root, 'utf8'), Buffer.from(path.sep), Buffer.from(p, 'latin1')]);
+        if (!fs.lstatSync(full).isFile()) continue;
+        const text = fs.readFileSync(full, 'utf8');
+        const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+        if (lines > DOC_LINE_SIGNAL) hints.add(DOCUMENTATION_CONTRACT);
+      } catch { /* deleted or unreadable reads as no hint — a hint is a reminder, never an obligation */ }
+    }
+  }
+  return [...hints].sort();
+}
+
 function statusToken(p) {
   if (!p.noted) return 'none';
   if (!p.digest_match) return 'stale';
@@ -149,7 +184,9 @@ function check(format) {
       .join(',');
     const hints = intentHints(root, dirtyPaths);
     const hintField = hints.length ? ` intent_hint=${hints.join(',')}` : '';
-    process.stdout.write(`[AUTO_LOOP_STATE] change=${change.length ? change.join(',') : 'none'} reviews=${reviews}${hintField} source=state\n`);
+    const procedures = procedureHints(root, planes, dirtyPaths);
+    const procField = procedures.length ? ` procedure_hint=${procedures.join(',')}` : '';
+    process.stdout.write(`[AUTO_LOOP_STATE] change=${change.length ? change.join(',') : 'none'} reviews=${reviews}${hintField}${procField} source=state\n`);
     return;
   }
   for (const [name, p] of Object.entries(planes)) {
