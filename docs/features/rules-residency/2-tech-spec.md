@@ -266,13 +266,20 @@ ship and task 9 lands.
     written into the repo at change close would move the code-plane digest (`tree-digest.js`
     classifies non-`.md` paths as code) and reopen the very gates the record just measured.
     Instead: (1) **staging** — at each change's close, append the record to an out-of-tree
-    append-only log at `~/.cache/sd0x-dev-flow/state/<repo-key>/canary-staging.jsonl` (same
-    location class as review-state; no digest impact). The measured change's gates and rounds are
+    append-only log at `~/.cache/sd0x-dev-flow/state/<repo-key>/canary-staging.jsonl` (the same
+    directory as review-state, which the tool resolves the same way; no digest impact), through
+    `scripts/dev/canary-stage.js record`, which refuses a second record for one change id and
+    any log it cannot vouch for — a line that is not exactly the nine-field record it writes, a
+    blank line, a repeated change id, or a last record without its newline. Shape is what it can
+    check; it cannot tell who wrote a well-formed line. The measured change's gates and rounds are
     those noted **before** the record is staged. (2) **import** — when a cohort completes, copy
     the frozen records into the committed `docs/features/rules-residency/canary-log.jsonl` as one
     separate, non-cohort change with its own gates (two imports total: baseline, candidate).
     Record schema: `{date, change_id, review_rounds, scope_expansions, deviations,
-    contracts_activated[], resident_tokens, hard_incidents[]}`. Staging is a behaviour-layer duty with an
+    contracts_activated[], resident_chars, resident_tokens, hard_incidents[]}` — `resident_chars`
+    is measured by the script (the checkout's always-loaded set, `instruction-budget.js`
+    accounting); `resident_tokens` is recorded only when measured and is `null` otherwise, so an
+    estimate never stands in for a measurement. Staging is a behaviour-layer duty with an
     explicit lifecycle: installed on the current layer by task 8a (its own gated change, before
     any baseline change is counted), carried into the candidate kernel by task 3 as a
     manifest-marked **temporary** block, and removed by task 8c's separately gated cleanup change

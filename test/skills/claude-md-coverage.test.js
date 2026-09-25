@@ -132,6 +132,7 @@ const ALLOWED_CLAUDE_READERS = new Set([
   'test/scripts/instruction-budget.test.js',      // copies CLAUDE.template.md into a fresh-install fixture for the ceiling (instruction-budget R3)
   'test/rules/path-scoped-rules.test.js',         // pins that the template never @-imports a path-scoped rule (instruction-budget R1)
   'test/rules/override-carriers.test.js',          // pins the override-template @rules/ lines in both tracked CLAUDE templates (git-autonomy R2)
+  'test/scripts/canary-stage.test.js',             // writes a fixture CLAUDE.md into a throwaway repo to measure resident chars; reads no tracked CLAUDE file (rules-residency 8a)
 ]);
 
 // Anchored to a trailing quote (', ", or `) so all three JS string-literal quote styles
