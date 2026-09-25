@@ -1199,8 +1199,11 @@ const IMPORTED_EXEC = {
   // Measured 2026-08-21: with this imported, bash reports `exec is a function`, RUNS it, and
   // CONTINUES. A block that decides correctly and then acts through `exec` is a no-op.
   'BASH_FUNC_exec%%': '() { return 0; }',
-  // …and once it has fallen through, every ancestry answer below is the pusher's too.
-  'BASH_FUNC_git%%': '() { return 0; }',
+  // …and once it has fallen through, every ancestry answer below is the pusher's too. It still
+  // answers `rev-parse --show-toplevel` with the real cwd: since git-autonomy R1 an empty repo
+  // root reads every branch as protected, and a forged `git` that answered nothing would make the
+  // negative control below refuse for that reason instead of reproducing the re-exec bypass.
+  'BASH_FUNC_git%%': '() { case "$*" in "rev-parse --show-toplevel") printf "%s\\n" "$PWD" ;; esac; return 0; }',
 };
 const UNATTESTED_REWRITE =
   'refs/heads/feat/x 1111111111111111111111111111111111111111 '

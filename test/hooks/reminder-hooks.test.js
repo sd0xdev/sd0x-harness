@@ -98,7 +98,18 @@ test('stop: state-driven — owed planes print, a noted-pass unchanged tree is s
   noteState(repo, home, 'precommit', 'pass');
   r = runHook(HOOKS.stop, repo, home);
   assert.equal(r.status, 0);
-  assert.equal(r.stdout, '', 'noted-pass on the current digest earns silence');
+  // No gate reminder is owed. The one line left is the git-autonomy R4 offer: gates passed with
+  // uncommitted work on a real branch — here `master`, protected, so a commit-only menu.
+  assert.doesNotMatch(r.stdout, /📋/, 'noted-pass on the current digest earns silence from the gate reminders');
+  assert.match(r.stdout, /^🟢 master：gate 皆已通過 → 用 AskUserQuestion 提供 commit 選單/);
+  assert.equal(r.stdout.trim().split('\n').length, 1, 'exactly one offer line');
+  // Once the menu has been shown at this digest, the hook is silent again.
+  const CHECKER = join(ROOT, 'scripts', 'review-state.js');
+  const digest = JSON.parse(execFileSync('node', [CHECKER, 'offer', '--format=json'],
+    { cwd: repo, env: { ...process.env, HOME: home } }).toString()).digest;
+  execFileSync('node', [CHECKER, 'offer-shown', digest], { cwd: repo, env: { ...process.env, HOME: home } });
+  r = runHook(HOOKS.stop, repo, home);
+  assert.equal(r.stdout, '', 'a shown offer is not repeated at the same digest');
 });
 
 test('stop: checker missing → git fallback prints plane lines with the ignore-if-done sentence', () => {
@@ -226,4 +237,18 @@ test('AUTO_LOOP_CHECK_TIMEOUT guard: 0 must not disable the bound (timeout 0 / a
     const src = readFileSync(hook, 'utf8');
     assert.match(src, /\[ "\$_T" -gt 0 \] \|\| _T=10/, `${hook}: strictly-positive timeout guard missing`);
   }
+});
+
+test('stop: a custom git flow with no override → one 🧭 line per session, from the hook input session id', () => {
+  const repo = makeRepo();
+  const home = tmp('rh-home-');
+  execFileSync('git', ['-C', repo, 'switch', '-q', '-c', 'JIRA-77']);
+  const input = (id) => JSON.stringify({ session_id: id, hook_event_name: 'Stop' });
+  const first = runHook(HOOKS.stop, repo, home, { input: input('sess-a') });
+  assert.equal(first.status, 0);
+  assert.match(first.stdout, /🧭 偵測到自訂 git 流程（branch-name）/);
+  assert.doesNotMatch(runHook(HOOKS.stop, repo, home, { input: input('sess-a') }).stdout, /🧭/, 'not twice in one session');
+  assert.doesNotMatch(runHook(HOOKS.stop, repo, home, { input: '{}' }).stdout, /🧭/, 'no session id, no custom-flow line');
+  assert.doesNotMatch(runHook(HOOKS.stop, repo, home, { input: '{"session_id":"x; rm -rf /"}' }).stdout, /🧭/,
+    'an id that is not a plain token is dropped, never passed on');
 });

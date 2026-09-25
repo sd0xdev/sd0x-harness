@@ -13,7 +13,7 @@ v4 在一个封闭、由测试钉住的 anchor 集合之内给予 Claude 自由�
 完整控制平面运行在 Claude Code 上。对 Codex CLI 与其他兼容 agent 提供 skills-only 分发。
 
 <!-- BEGIN:HERO-COUNT -->
-100 bundled · 100 public skills · 16 agents — 仅占 Claude context window 的 ~4%
+101 bundled · 101 public skills · 16 agents — 仅占 Claude context window 的 ~4%
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -29,7 +29,7 @@ v4 在一个封闭、由测试钉住的 anchor 集合之内给予 Claude 自由�
 /project-setup
 ```
 
-一个命令自动检测框架、包管理器、数据库、入口文件和脚本命令。安装部分 rules 和 hooks；完整插件包含 16 条 rules + 7 个 hooks。使用 `--lite` 仅配置 CLAUDE.md（跳过 rules/hooks）。
+一个命令自动检测框架、包管理器、数据库、入口文件和脚本命令。安装部分 rules 和 hooks；完整插件包含 17 条 rules + 7 个 hooks。使用 `--lite` 仅配置 CLAUDE.md（跳过 rules/hooks）。
 
 ```bash
 # Codex CLI / Cursor / Windsurf / Aider — 仅 skills
@@ -45,8 +45,8 @@ $codex-setup init
 <!-- BEGIN:INSTALL-COVERAGE -->
 | 方式 | 适用工具 | 覆盖范围 |
 |------|---------|---------|
-| 插件安装 | Claude Code | 完整（100 bundled skills、hooks、rules、auto-loop） |
-| `npx skills add` | Codex CLI、Cursor、Windsurf、Aider | 仅 Skills（100 public skills） |
+| 插件安装 | Claude Code | 完整（101 bundled skills、hooks、rules、auto-loop） |
+| `npx skills add` | Codex CLI、Cursor、Windsurf、Aider | 仅 Skills（101 public skills） |
 | `$codex-setup init` | Codex CLI | AGENTS.md kernel + commit-msg hook（pre-push 守卫为 opt-in） |
 <!-- END:INSTALL-COVERAGE -->
 
@@ -133,7 +133,7 @@ sd0x-dev-flow 是一个 reference implementation。下表的每一行都把一�
 | 2 | **Digest-bound reminder state** | Verdict 由模型记录（`node scripts/review-state.js note <plane> <pass\|fail>`）并与 tree digest 绑定——一次编辑会因 digest 变化而重新打开其 plane 的提醒；gate sentinel（`✅ Ready` / `## Overall: ✅ PASS`）保持为行为层信号 | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context recovery across compaction** | SessionStart(compact) 之后重新注入 git 基线（分支 + 未提交文件）与待偿 gate 提醒 | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
 | 4 | **Lifecycle interceptors** | 5 类 hook 事件分派到 7 个脚本——4 个建议性提醒 hook、1 个自动格式化、2 个会阻断的守卫（敏感路径编辑；启动方式错误的 Codex dispatch）（SessionStart 另外执行 `scripts/namespace-hint.sh`）：PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (7 个脚本) + [`.claude/settings.json`](.claude/settings.json) |
-| 5 | **Capability-based tool gating** | Skill frontmatter 的 `allowed-tools` — 例如 `/ask` 不具备 Edit/Write 权限 | 100 个公开 skills 中有 92 个声明了 `allowed-tools` |
+| 5 | **Capability-based tool gating** | Skill frontmatter 的 `allowed-tools` — 例如 `/ask` 不具备 Edit/Write 权限 | 101 个公开 skills 中有 93 个声明了 `allowed-tools` |
 | 6 | **Defense-in-depth safety** | 已安装的 git 层守卫保持硬性——commit-msg-guard 在 `/codex-setup init` 安装过的地方生效（Claude 插件加 `/project-setup` 不会安装它），走 `/dev/tty` 的 pre-push-gate 则在 opt-in 后生效；编辑期的 pre-edit-guard 仍会阻断敏感路径编辑（安全守卫，非工作流强制——需要 `jq`，缺 jq 时守卫不会启动）；Stop hook 只做提醒——把守不可逆操作的那几层保留了牙齿，审查层则按设计转为建议性 | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex 审查 Claude 写的东西，自行研究 repo——绝不喂结论让它确认 | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | 证据驱动的卡壳纪律：连续三轮 review 都没关掉任何 finding——由模型根据 review 报告自行计数——触发结构化的停滞分类与一次有边界的调整。按 tier 的轮次预算（默认 6 / 15 / 30，可覆写为 3–50）退居 runaway backstop，首次触发上限时跑同一套诊断，并保留列举出的人类出口 | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis；详见 `skills/codex-code-review/references/loop-diagnostics.md`) |
@@ -312,11 +312,11 @@ flowchart TD
 <!-- BEGIN:WHATS-INCLUDED-COUNT -->
 | 类别 | 数量 | 示例 |
 |------|------|------|
-| Skills | 100 public (100 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
+| Skills | 101 public (101 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | 代理 | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | 钩子 | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
-| 规则 | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
-| 脚本 | 23 | precommit runner, verify runner, review-state CLI, dep audit, namespace hint, skill runner, commit-msg guard, pre-push gate, build-codex-artifacts, resolve-feature (node entrypoint + shell shim + CLI), classify-docs, detect-scope, migration-audit, migrate-hook-lightweighting, security-redact, readme-catalog, check-doc-links, resolve-review-profile, codex-exec adapter |
+| 规则 | 17 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
+| 脚本 | 25 | precommit runner, verify runner, review-state CLI, dep audit, namespace hint, skill runner, commit-msg guard, pre-push gate, protected-branch resolver, build-codex-artifacts, resolve-feature (node entrypoint + shell shim + CLI), classify-docs, detect-scope, migration-audit, migrate-hook-lightweighting, security-redact, readme-catalog, check-doc-links, resolve-review-profile, instruction-budget, codex-exec adapter |
 <!-- END:WHATS-INCLUDED-COUNT -->
 
 ### 极小的 Context 占用
@@ -356,9 +356,9 @@ Skills 按需加载。闲置 Skill 不占用任何 Token。
 
 <!-- BEGIN:FULL-CATALOG -->
 <details>
-<summary>全部 100 个 public skills</summary>
+<summary>全部 101 个 public skills</summary>
 
-### 开发 (34)
+### 开发 (35)
 
 | Skill | Description |
 |-------|-------------|
@@ -373,6 +373,7 @@ Skills 按需加载。闲置 Skill 不占用任何 Token。
 | `/create-pr` | Create or update GitHub PR with gh CLI. |
 | `/debug` | Interactive debugging workflow with hypothesis-driven probe loop. |
 | `/deep-explore` | Multi-wave parallel code exploration orchestrator. |
+| `/deploy-flow` | Run the release flow a project declares in rules/git-workflow-project.md § Deploy Workflow: its git merge steps, and ... |
 | `/epic-merge` | 将堆叠的 PR 链顺序 squash-merge 合并到 epic 分支。 |
 | `/feature-dev` | Feature development workflow. |
 | `/feature-verify` | Feature verification (READ-ONLY, P0-P5). |
@@ -488,7 +489,7 @@ Skills 按需加载。闲置 Skill 不占用任何 Token。
 
 ## 规则与钩子
 
-16 条规则 + 7 个钩子。规则是分层级的契约：`discretion.md` 把 13 个由插件管理的 rule 文件中的每条指令解析为 Anchor / Default / Guidance 三者中的确切一个，2 个用户自有的 override 文件则在其父规则之下以 Anchor 优先的方式解析。Hook 的组成是 4 个建议性提醒 hook，加上 1 个自动格式化与 2 个会阻断的守卫。提醒角色各不相同：Stop 与 post-compact hook 从与 digest 绑定的状态（`review-state.js`）打印待偿 gate 提醒，prompt hook 打印 `[AUTO_LOOP_STATE]` 事实行，post-skill hook 打印固定的 gate 顺序行，post-compact hook 另外重新注入 git 基线；审查层永不阻断——pre-edit-guard 仍会阻断敏感路径编辑（安全守卫，需要 `jq`，缺 jq 时不会启动），pre-bash-codex-launch-guard 会阻断把进度导离任务面板的 Codex dispatch 启动命令，硬性 gate 位于 git 层（commit-msg-guard 由 `/codex-setup init` 安装；pre-push-gate 为 opt-in）。
+17 条规则 + 7 个钩子。规则是分层级的契约：`discretion.md` 把 13 个由插件管理的 rule 文件中的每条指令解析为 Anchor / Default / Guidance 三者中的确切一个，3 个用户自有的 override 文件则在其父规则之下以 Anchor 优先的方式解析。Hook 的组成是 4 个建议性提醒 hook，加上 1 个自动格式化与 2 个会阻断的守卫。提醒角色各不相同：Stop 与 post-compact hook 从与 digest 绑定的状态（`review-state.js`）打印待偿 gate 提醒，prompt hook 打印 `[AUTO_LOOP_STATE]` 事实行，post-skill hook 打印固定的 gate 顺序行，post-compact hook 另外重新注入 git 基线；审查层永不阻断——pre-edit-guard 仍会阻断敏感路径编辑（安全守卫，需要 `jq`，缺 jq 时不会启动），pre-bash-codex-launch-guard 会阻断把进度导离任务面板的 Codex dispatch 启动命令，硬性 gate 位于 git 层（commit-msg-guard 由 `/codex-setup init` 安装；pre-push-gate 为 opt-in）。
 
 > **定制化**：编辑 `auto-loop-project.md` 可覆写项目的 auto-loop 行为。插件更新不会冲突 — 详见 [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md)。
 
@@ -510,7 +511,7 @@ Skills 按需加载。闲置 Skill 不占用任何 Token。
 | `{BUILD_COMMAND}` | 构建命令 | yarn build |
 | `{TYPECHECK_COMMAND}` | 类型检查 | yarn typecheck |
 
-Override 以 **Anchor 优先**解析：用户自有的 override 文件（`auto-loop-project.md`、`testing-project.md`）只能定制 Default 与 Guidance 层级的行为——任何项目 override 都无法降级 Anchor Register 中的条目，尝试这样做会被报告为冲突，而不是被采纳。
+Override 以 **Anchor 优先**解析：用户自有的 override 文件（`auto-loop-project.md`、`testing-project.md`、`git-workflow-project.md`）只能定制 Default 与 Guidance 层级的行为——任何项目 override 都无法降级 Anchor Register 中的条目，尝试这样做会被报告为冲突，而不是被采纳。
 
 ## 展示：多 Agent 研究
 

@@ -1,7 +1,6 @@
 ---
 name: push-ci
 description: "Push to remote and monitor CI. Validates branch safety, executes git push WITH explicit user approval, then monitors CI run status via gh CLI. Use when: user says 'push', 'push and watch CI', 'ship it', 'push-ci'. Not for: committing (use /smart-commit), creating PRs (use /create-pr), merging (use /merge-prep)."
-disable-model-invocation: true
 allowed-tools: Bash(git:*), Bash(gh:*), Bash(bash:*), Bash(/bin/bash:*), Read, Grep, Glob, AskUserQuestion
 ---
 
@@ -18,16 +17,17 @@ Push to remote with user approval, then monitor CI run until completion.
 ⚠️ The second is /epic-merge (--force-with-lease for stacked PR chains, per-iteration AskUserQuestion gate).
 ⚠️ The third is /gh-stack, which pushes through `gh stack link|push|submit --auto` — a plain `--atomic` push for link, a per-branch `--force-with-lease` for the other two (per-use AskUserQuestion gate). It never pushes a branch directly.
 ⚠️ This skill may also use --force-with-lease, but only when the caller passes the flag — and NEVER onto a protected branch; bare --force is forbidden everywhere.
+⚠️ /deploy-flow never runs git push itself; a declared `run` step under `Run Steps: execute` may push on its own, outside this skill — the project's opted-in, stated risk.
 ⚠️ All other skills and rules MUST output push commands only (not execute).
 ⚠️ Push REQUIRES explicit user approval via AskUserQuestion — no exceptions.
 ```
 
-| Rule | This Skill | `/epic-merge` | `/gh-stack` | All Other Skills |
-|------|-----------|---------------|-------------|------------------|
-| `git push` | Execute (after user approval) | Forbidden (uses `--force-with-lease` only) | Never directly — only as what `gh stack link` runs underneath (`--atomic`, no force), after a per-use AskUserQuestion naming that form | Forbidden (output only) |
-| `git push --force` | Forbidden | Forbidden | Forbidden | Forbidden |
-| `git push --force-with-lease` | Execute — **only** when `--force-with-lease` is explicitly passed, after user approval naming the force form; **never onto a protected branch** (Phase 0 hard-aborts, Phase 2 re-asserts) | Execute (after per-iteration AskUserQuestion) | Execute **through the extension** (`gh stack push` / `submit --auto`, per-branch value-bearing lease), after the unshared attestation and a per-use AskUserQuestion naming the force form; a protected branch may be the stack's base, never a layer | Forbidden |
-| Push to protected branches (main/master/develop/release/*) | Warn + pre-approval via AskUserQuestion (final gate is the terminal hook when installed, otherwise this approval); with `--force-with-lease` → **hard abort**, no question asked | Protected PR heads rejected — Phase 0 validation, re-asserted before Step 5 and Rollback (a PR head is not inherently unprotected) | Refused as a stack layer in Phase 2; the chain's base may be one | Forbidden |
+| Rule | This Skill | `/epic-merge` | `/gh-stack` | `/deploy-flow` | All Other Skills |
+|------|-----------|---------------|-------------|----------------|------------------|
+| `git push` | Execute (after user approval) | Forbidden (uses `--force-with-lease` only) | Never directly — only as what `gh stack link` runs underneath (`--atomic`, no force), after a per-use AskUserQuestion naming that form | Never itself; a `run` step under `Run Steps: execute` may push outside this skill (run-script risk) | Forbidden (output only) |
+| `git push --force` | Forbidden | Forbidden | Forbidden | Forbidden | Forbidden |
+| `git push --force-with-lease` | Execute — **only** when `--force-with-lease` is explicitly passed, after user approval naming the force form; **never onto a protected branch** (Phase 0 hard-aborts, Phase 2 re-asserts) | Execute (after per-iteration AskUserQuestion) | Execute **through the extension** (`gh stack push` / `submit --auto`, per-branch value-bearing lease), after the unshared attestation and a per-use AskUserQuestion naming the force form; a protected branch may be the stack's base, never a layer | Forbidden | Forbidden |
+| Push to protected branches (main/master/develop/release/*) | Warn + pre-approval via AskUserQuestion (final gate is the terminal hook when installed, otherwise this approval); with `--force-with-lease` → **hard abort**, no question asked | Protected PR heads rejected — Phase 0 validation, re-asserted before Step 5 and Rollback (a PR head is not inherently unprotected) | Refused as a stack layer in Phase 2; the chain's base may be one | Never itself — a declared merge into one is local, and a later push goes through this skill | Forbidden |
 
 ## Defense in Depth: Push Safety
 
@@ -227,11 +227,26 @@ if [[ -z "$BRANCH" ]] || [[ "$BRANCH" = "HEAD" ]]; then
   : "${SD0X_PUSH_CI_REFUSED:?refusing — no branch name could be derived in Phase 0}"
 fi
 
-# 2. Protected branch detection
-# If main, master, develop, or release/* → warn + AskUserQuestion pre-approval
-# (do NOT hard-abort; let user decide) — EXCEPT when --force-with-lease was passed:
-# that combination hard-aborts, because force push to shared branches is prohibited
-# (rules/git-workflow.md § Prohibited) and no approval can authorize it
+# 2. Protected branch detection — PROTECTED is reported below as yes / no / unknown.
+# yes or unknown → warn + AskUserQuestion pre-approval (do NOT hard-abort; let user decide) —
+# EXCEPT when --force-with-lease was passed: that combination hard-aborts, because force push
+# to shared branches is prohibited (rules/git-workflow.md § Prohibited) and no approval can
+# authorize it.
+# Protected-set resolution (git-autonomy R1): the default set plus the project's additions in
+# git-workflow-project.md, answered by scripts/protected-branches.sh — 1 is the only "not
+# protected"; 0 and 2 (unknown) both refuse. Without the resolver installed, an override file on
+# disk means the answer is unknown; with none, the default set is the whole answer.
+PB_ROOT=$(/usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git rev-parse --show-toplevel) || PB_ROOT=
+PB_SCRIPT="$PB_ROOT/.claude/scripts/protected-branches.sh"
+[[ -r "$PB_SCRIPT" ]] || PB_SCRIPT="$PB_ROOT/scripts/protected-branches.sh"
+if [[ -z "$PB_ROOT" ]]; then PB_STATUS=2
+elif [[ -r "$PB_SCRIPT" ]]; then
+  if /bin/bash -p -- "$PB_SCRIPT" --root "$PB_ROOT" -- "$BRANCH"; then PB_STATUS=0; else PB_STATUS=$?; fi
+elif [[ -e "$PB_ROOT/.claude/rules/git-workflow-project.md" || -L "$PB_ROOT/.claude/rules/git-workflow-project.md" \
+   || -e "$PB_ROOT/rules/git-workflow-project.md" || -L "$PB_ROOT/rules/git-workflow-project.md" ]]; then PB_STATUS=2
+else case "$BRANCH" in main|master|develop|release/*) PB_STATUS=0 ;; *) PB_STATUS=1 ;; esac
+fi
+case "$PB_STATUS" in 0) PROTECTED=yes ;; 1) PROTECTED=no ;; *) PROTECTED=unknown ;; esac
 
 # 3. Remote exists. The status is CAPTURED and acted on, not discarded: this line used to
 # run bare with `>/dev/null 2>&1`, so a failing `ls-remote` left `$?` for the next command
@@ -553,8 +568,8 @@ if [[ -n "$PUSH_RECEIVEPACK" ]]; then PUSH_RECEIVEPACK_SET=yes; fi
 # whose name contains a slash (`error importing function definition for '/usr/bin/printf'`,
 # measured). If `/usr/bin/printf` is missing the fence prints no report at all, and that is the
 # correct failure: **a run with no report line is `unknown`, and unknown asks.**
-/usr/bin/printf 'BRANCH=[%s]\nSET_UPSTREAM=[%s]\nFORCE_WITH_LEASE=[%s]\nHEAD_SHA=[%s]\nPUSH_GATE=[%s]\nPUSH_URLS_SAFE=[%s]\nPUSH_URLS_DIGEST=[%s]\nPUSH_RECEIVEPACK_SET=[%s]\n' \
-  "$BRANCH" "$SET_UPSTREAM" "$FORCE_WITH_LEASE" "$HEAD_SHA" "$PUSH_GATE" "$PUSH_URLS_SAFE" "$PUSH_URLS_DIGEST" \
+/usr/bin/printf 'BRANCH=[%s]\nPROTECTED=[%s]\nSET_UPSTREAM=[%s]\nFORCE_WITH_LEASE=[%s]\nHEAD_SHA=[%s]\nPUSH_GATE=[%s]\nPUSH_URLS_SAFE=[%s]\nPUSH_URLS_DIGEST=[%s]\nPUSH_RECEIVEPACK_SET=[%s]\n' \
+  "$BRANCH" "$PROTECTED" "$SET_UPSTREAM" "$FORCE_WITH_LEASE" "$HEAD_SHA" "$PUSH_GATE" "$PUSH_URLS_SAFE" "$PUSH_URLS_DIGEST" \
     "$PUSH_RECEIVEPACK_SET"
 ```
 
@@ -578,11 +593,11 @@ was the only one there will be. Either way the approval is required first. Detec
 more than one line inside them means the push fans out to several repositories — say so wherever it
 is shown. Empty brackets mean the destination could not be resolved, which is not a reason to
 proceed quietly: say that too, and let Phase 2's comparison refuse rather than inventing a value.
-A push URL may carry `user:token@`, so the raw value never leaves the shell — see § Redaction.
+A push URL may carry `user:token@`, so the raw value never leaves the shell — see Phase 0 step 8, where the redaction is done.
 
 **Protected branch pre-approval flow** — advisory where the terminal hook is installed, and the authorization itself where it is not:
 
-When branch is `main`, `master`, `develop`, or `release/*`:
+When Phase 0 reports `PROTECTED=[yes]` or `PROTECTED=[unknown]` — the default set (`main`, `master`, `develop`, `release/*`) plus any branch the project added in `git-workflow-project.md`, with an unreadable override read as protected:
 
 0. **`--force-with-lease` hard-aborts here — no question is asked.** Force push to
    shared branches is prohibited (`rules/git-workflow.md` § Prohibited), and this
@@ -993,14 +1008,24 @@ fi
 # ⛔ Protected × force-with-lease is prohibited (rules/git-workflow.md: force push to
 # shared branches). Phase 0 already hard-aborted this combination; re-assert it here
 # so no approval path — cached, mis-run, or otherwise — can reach a prohibited push.
-case "$BRANCH" in
-  main|master|develop|release/*)
-    if [[ "$FORCE_WITH_LEASE" == "true" ]]; then
-      echo "⛔ --force-with-lease targets protected branch '$BRANCH' — force push to shared branches is prohibited" >&2
-      readonly PUSH_BLOCKED=1; exit 1
-    fi
-    ;;
-esac
+# Protected-set resolution (git-autonomy R1): the default set plus the project's additions in
+# git-workflow-project.md, answered by scripts/protected-branches.sh — 1 is the only "not
+# protected"; 0 and 2 (unknown) both refuse. Without the resolver installed, an override file on
+# disk means the answer is unknown; with none, the default set is the whole answer.
+PB_ROOT=$(/usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git rev-parse --show-toplevel) || PB_ROOT=
+PB_SCRIPT="$PB_ROOT/.claude/scripts/protected-branches.sh"
+[[ -r "$PB_SCRIPT" ]] || PB_SCRIPT="$PB_ROOT/scripts/protected-branches.sh"
+if [[ -z "$PB_ROOT" ]]; then PB_STATUS=2
+elif [[ -r "$PB_SCRIPT" ]]; then
+  if /bin/bash -p -- "$PB_SCRIPT" --root "$PB_ROOT" -- "$BRANCH"; then PB_STATUS=0; else PB_STATUS=$?; fi
+elif [[ -e "$PB_ROOT/.claude/rules/git-workflow-project.md" || -L "$PB_ROOT/.claude/rules/git-workflow-project.md" \
+   || -e "$PB_ROOT/rules/git-workflow-project.md" || -L "$PB_ROOT/rules/git-workflow-project.md" ]]; then PB_STATUS=2
+else case "$BRANCH" in main|master|develop|release/*) PB_STATUS=0 ;; *) PB_STATUS=1 ;; esac
+fi
+if [[ "$PB_STATUS" != 1 ]] && [[ "$FORCE_WITH_LEASE" == "true" ]]; then
+  echo "⛔ --force-with-lease targets protected branch '$BRANCH' (resolver status $PB_STATUS) — force push to shared branches is prohibited" >&2
+  readonly PUSH_BLOCKED=1; exit 1
+fi
 # The PLAN_BRANCH comparison answers "which branch", not "which commit" — and once the approval
 # and the push are separated in time those are different questions. A commit made on the same branch
 # between Phase 1 and here passes the name comparison unchanged, and the push then publishes work
@@ -1647,7 +1672,7 @@ terminal moves the question, it does not delete it (`rules/git-workflow.md` § P
 - Pushing when `remote.origin.receivepack` is configured, or emitting `--exec` / any `--receive-pack=` value other than the exact literal `git-receive-pack`. The flag names the program that receives the objects, and a program can ignore the repository the URL named — so a *chosen* value makes the destination digest true and meaningless at the same time. The canonical value is the opposite: it pins git's own default onto the command line, where it overrides configuration, which is what closes the window between the check above and the push (measured 2026-08-22 — `-c remote.<name>.receivepack=` does not override; the flag does)
 - Printing the value of `remote.origin.receivepack` anywhere. It is a command line and may carry a token; report only whether it is set
 - Pushing without `SD0X_PUSH_DEST_DIGEST="$PUSH_URLS_DIGEST"` on the push line. The direction is the opposite of the two ALLOW_* rules above and the contrast is the point: those attest a fact only the operator has, so this skill must never set them; this one is a constraint the skill puts on its own push — it names the destination the approval covered and can only cause a refusal, never an authorization. Omitting it leaves the destination checked in one process and pushed in another, which is a window, not a check. Setting it inline is also what stops an inherited value from deciding
-- Auto-triggering this skill (disable-model-invocation: true)
+- Pushing without this invocation's own AskUserQuestion approval. The model may invoke this skill, and invoke it again after new commits, but each invocation runs Phase 0 afresh and asks for its own approval — an earlier approval, a menu selection or a goal never stands in for it
 - Skipping preflight checks
 - Skipping `/watch-ci` delegation after successful push
 ```

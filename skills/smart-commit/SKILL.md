@@ -1,6 +1,6 @@
 ---
 name: smart-commit
-description: "Smart batch commit. Analyzes uncommitted changes, groups by cohesion, generates commit messages matching project style. Default: output git commands for manual execution. With --execute: directly run git add + git commit (requires user approval). Use when: user says 'commit', 'batch commit', 'prepare commit', 'write commit message', or /smart-commit"
+description: "Smart batch commit. Analyzes uncommitted changes, groups by cohesion, generates commit messages matching project style. Default: output git commands for manual execution. With --execute: directly run git add + git commit (requires user approval, except under a user-set goal — see Goal mode). Use when: user says 'commit', 'batch commit', 'prepare commit', 'write commit message', or /smart-commit"
 allowed-tools: Bash(git:*), Bash(bash:*), Bash(env:*), Read, Write, Grep, Glob, AskUserQuestion
 ---
 
@@ -23,7 +23,7 @@ sequenceDiagram
     C->>C: Step 3: Collect changes + exclude sensitive files
     C->>C: Step 4: Group (high cohesion)
     C->>U: Show commit plan (with Author/Signing/Guard)
-    U->>C: Confirm/adjust
+    U->>C: Confirm/adjust (Goal mode: printed with a [GOAL_COMMIT] record, not asked)
     loop Each commit group
         C->>C: Read diff → generate message
         C->>C: AI trailer sanitization
@@ -67,11 +67,30 @@ Read CLAUDE.md and `.claude/rules/git-workflow.md` to determine mode:
 | Mode | Condition | Behavior |
 |------|-----------|----------|
 | manual | No `--execute` flag (default) | Output commands only |
-| execute | `--execute` flag passed | Execute directly (with user approval via AskUserQuestion) |
+| execute | `--execute` flag passed | Execute directly (with user approval via AskUserQuestion — or, under § Goal mode, without it) |
 
 Default to **manual mode**. Direct execution requires explicit `--execute` flag regardless of project git restrictions.
 
-**`--execute` mode**: When `--execute` is passed, use `AskUserQuestion` to show the full commit plan and get explicit user approval before executing. This is a skill-level exception to git-workflow rules (same pattern as `/push-ci`).
+**`--execute` mode**: When `--execute` is passed, use `AskUserQuestion` to show the full commit plan and get explicit user approval before executing. This is a skill-level exception to git-workflow rules (same pattern as `/push-ci`). The one exception to asking is § Goal mode below.
+
+### Goal mode (git-autonomy FR-17)
+
+While a goal **the user** set or approved is active, and `rules/git-workflow.md` § Proactive Offer
+"Goal mode" says all four of its conditions hold — re-checked before every commit, including
+`review-state.js goal-commit --format=json` returning `ok: true` — `--execute` runs without the plan
+approval: the plan is **printed**, headed by one record line, and execution proceeds:
+
+```
+[GOAL_COMMIT] goal=<first 12 hex of `git hash-object --stdin` of the goal condition> | branch=<branch> | digest=<digest> | <ISO8601>
+```
+
+The goal text itself is never printed — a user may have put a secret in it. Everything else in this
+skill is unchanged: every diagnostic and HALT, the sensitive-file exclusion, the attribution guard
+on `smart-commit-execute.sh commit`, and every **judgement** question (an identity conflict, an
+ambiguous grouping, a `--sign`/`--no-sign` override) still asks. `--ai-co-author` is never passed on
+this path: when the user explicitly asks for it, Goal mode does not apply and the ordinary per-use
+approval runs, so the attribution whitelist is always reached through the user. `needs_branch_allowance: true` means the first goal-mode commit on that protected branch
+asks first (recommend a feature branch; if declined, ask to allow the branch for this goal).
 
 **1b. Learn Commit Style**
 
@@ -502,7 +521,7 @@ session-scoped filter: the hook-maintained `session_commit_scope` store retired 
 machine that wrote it (hook-lightweighting § 3.4), and nothing now records which files this
 session touched. What replaces it is not a narrower selection but a visible one: the Commit Plan
 in Step 4 lists every file it is about to group, and the user confirming that plan is the
-selection decision. A file the user does not want committed is removed at the plan, or fenced out
+selection decision — under § Goal mode the printed plan is. A file the user does not want committed is removed at the plan, or fenced out
 up front with `--scope`.
 
 ### Step 4: Group (High Cohesion)
@@ -533,7 +552,7 @@ INSPECT="$REPO_ROOT/.claude/scripts/smart-commit-inspect.sh"
 /bin/bash -p -- "$INSPECT" branch
 ```
 
-Show grouping plan and ask user to confirm. Include identity, signing, and AI guard metadata from
+Show grouping plan and ask user to confirm. Under § Goal mode, show it and do not ask. Include identity, signing, and AI guard metadata from
 Step 1c/1d/1e, and the pre-flight verdict from Step 2 — in `--execute` mode this is the same block
 `AskUserQuestion` shows, so the approval screen carries pre-flight state rather than only the
 grouping. **Pre-flight** is one of `passed` / `stale` / `not run`; when it is not `passed`, append
@@ -564,7 +583,7 @@ the same actionable gate+command list Step 2 warns with, and whether `--strict-p
 
 > To narrow the commit to one area: rerun with `--scope <path>`
 
-Adjust grouping?
+Adjust grouping?   ← ordinary mode only; under § Goal mode this line is omitted
 ```
 
 ### Step 5: Generate Commits (Loop)
@@ -653,8 +672,8 @@ SD0X_MSG_EOF
 
 **Execute mode** (`--execute`) — run commands directly:
 
-1. Use `AskUserQuestion` to show the full commit plan (all groups) and get approval once
-2. For each approved commit group, execute `<PREFIX> git -C "$REPO_ROOT" add -- ':(literal)<path>' …` (if needed), where `<PREFIX>` is the literal `env -u` list from § 1 — same prefix **and same `-C`** as every other command, so staging cannot target a different repository, index or path base than the commit
+1. Use `AskUserQuestion` to show the full commit plan (all groups) and get approval once — under § Goal mode, print the plan with its `[GOAL_COMMIT]` record instead
+2. For each commit group in the approved plan (or, under § Goal mode, the printed plan), execute `<PREFIX> git -C "$REPO_ROOT" add -- ':(literal)<path>' …` (if needed), where `<PREFIX>` is the literal `env -u` list from § 1 — same prefix **and same `-C`** as every other command, so staging cannot target a different repository, index or path base than the commit
 3. **Runtime validation and commit** — do not assemble this from bash. Allocate the message file, write the sanitized message into it **with the Write tool** (not a heredoc — see below), then hand it to the checked-in script, which validates against the canonical guard and commits in one process:
 
    Each call below is **one tool call, so one shell**. A variable set while allocating is gone by the time the commit runs — the Write tool sits between them — so every fence carries its own locator. Substituting the absolute path the locator resolved to is equally acceptable, and is the same thing written out; what is not acceptable is `"$EXECUTE"` in a shell that never assigned it, which invokes `bash` with an empty script path or with a value the caller chose.
@@ -779,8 +798,8 @@ trailer is added; with it, exactly one is: `Co-Authored-By: Claude <noreply@anth
 - **No omissions**: Must `git status` verify after completion
 - **No secrets**: Sensitive files must be warned about, never included
 - **No unauthorized execution**: Without `--execute` flag, **never** directly execute git add/commit
-- **No silent execution**: In `--execute` mode, must use `AskUserQuestion` for approval before executing commits
-- **No file the plan never showed**: Selection is the whole live git status, so the Commit Plan is the only filter — every file a commit will touch appears in the confirmed plan, and a file added after confirmation re-opens the plan
+- **No silent execution**: In `--execute` mode, must use `AskUserQuestion` for approval before executing commits — except under § Goal mode, where the plan is printed with its `[GOAL_COMMIT]` record, never silently
+- **No file the plan never showed**: Selection is the whole live git status, so the Commit Plan is the only filter — every file a commit will touch appears in the confirmed plan (under § Goal mode, the printed plan), and a file added after confirmation (or after printing) re-opens the plan
 
 ## Bundled References
 
@@ -809,3 +828,4 @@ Each basename carries the skill name because `/install-scripts` flattens every s
 | `/smart-commit` | Manual mode → pre-flight → 5 changes, all one feature → 1 commit |
 | `/smart-commit --execute` | Execute mode → pre-flight → group → AskUserQuestion approval → `git add` + `git commit` per group → `git status` verify |
 | `/smart-commit --execute --ai-co-author` | As above, plus the one permitted `Co-Authored-By` trailer |
+| `/smart-commit --execute` while a goal the user set is active (no `--ai-co-author`) | § Goal mode → `goal-commit` check → plan printed with a `[GOAL_COMMIT]` record → `git add` + `git commit` per group, no approval question → verify |

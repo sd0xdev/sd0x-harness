@@ -141,6 +141,7 @@ const KNOWN_UNJUSTIFIED = [
   'install-scripts: ls',
   'install-scripts: mkdir',
   'orchestrate: git check-ignore',
+  'orchestrate: git diff', // cited rules/codex-invocation.md carried `git diff` examples until instruction-budget R2 moved them
   'orchestrate: git log',
   'pr-review: git',
   'pr-summary: git',

@@ -45,7 +45,7 @@ Phase 4: Verify CLAUDE.md
 Phase 5: Install Rules + Backfill CLAUDE.md (unless --no-rules or --lite)
     │
     ├─ Locate plugin rules dir (3-level fallback)
-    ├─ mkdir -p .claude/rules/ → copy 14 managed rules + 2 override templates
+    ├─ mkdir -p .claude/rules/ → copy 14 managed rules + 3 override templates
     ├─ Backfill: ensure .claude/CLAUDE.md has @rules/ references
     └─ Output rules install report
     │
@@ -59,7 +59,7 @@ Phase 6: Install Hooks (unless --no-hooks or --lite)
 Phase 6.5: Install Scripts (unless --lite or --detect-only)
     │
     ├─ Locate plugin scripts dir (3-level fallback)
-    ├─ mkdir -p .claude/scripts/lib → copy 5 scripts
+    ├─ mkdir -p .claude/scripts/lib → copy 6 scripts
     ├─ Update manifest .sd0x/install-state.json
     └─ Output scripts install report
     │
@@ -198,7 +198,7 @@ Find the plugin's `rules/` directory using this priority (short-circuit on first
    | `context-management.md` | Data-driven context monitoring |
 
 3. Create override template (unmanaged, not manifest-tracked):
-   - `auto-loop-project.md` · `testing-project.md` — user-owned override templates (see Phase 3.6 in `/install-rules`)
+   - `auto-loop-project.md` · `testing-project.md` · `git-workflow-project.md` — user-owned override templates, copied when absent and stamped `Based on: <base> @ <installed base hash>` exactly as `/install-rules` Phase 4.5 does (never a byte copy of the shipped stamp)
 
 4. Conflict strategy:
 
@@ -217,18 +217,19 @@ Find the plugin's `rules/` directory using this priority (short-circuit on first
 
 > **Note**: `/project-setup` uses fresh-install semantics (install new / skip identical / warn on conflict; no smart merge).
 > For smart merge (section merge, legacy migration, `--legacy-strategy`), run `/install-rules` directly.
-> After rule installation, `/install-rules` automatically creates `auto-loop-project.md` (user-owned override template) if it doesn't exist. See `skills/install-rules/SKILL.md`.
+> After rule installation, `/install-rules` automatically creates each override template (`auto-loop-project.md`, `testing-project.md`, `git-workflow-project.md` — user-owned) if it doesn't exist. See `skills/install-rules/SKILL.md`.
 
 ### 5.3 Backfill CLAUDE.md (Closed-Loop Guarantee)
 
 Ensure `.claude/CLAUDE.md` contains `@rules/` references so the auto-loop engine can activate:
 
 1. Grep `.claude/CLAUDE.md` for `@rules/auto-loop.md`
-2. **Found** → check if `@rules/auto-loop-project.md` also present:
-   - **Both present** → skip (fully configured)
-   - **`auto-loop.md` present, `auto-loop-project.md` missing** → insert `- @rules/auto-loop-project.md -- Project-specific auto-loop overrides (user-owned)` after `auto-loop.md` line
-3. **Not found but file exists** → append `## Rules` block at end of file (16 `@rules/` references (14 managed + 2 override templates) from `CLAUDE.template.md` `## Rules` section)
-4. **File does not exist** (edge case: Phase 3 was skipped) → extract from `CLAUDE.template.md`: `## Required Checks` through `### Auto-Loop Rule` sections + `## Rules` section → create minimal `.claude/CLAUDE.md`
+2. **Found** → for each override template, check whether its line is also present, in the form the template uses — `@rules/auto-loop-project.md` after `auto-loop.md`, `@rules/git-workflow-project.md` after `git-workflow.md`, and the plain `` `rules/testing-project.md` `` reference after `` `rules/testing.md` `` (path-scoped: a legacy `@rules/testing.md` or `@rules/testing-project.md` line counts as present but is **rewritten** to the template's plain reference, since an `@` import loads it at launch):
+   - **Present** → skip that template (configured)
+   - **Base line present, override line missing** → insert the override's line from `CLAUDE.template.md` `## Rules` directly after its base line (e.g. `- @rules/git-workflow-project.md -- Project-specific git overrides (user-owned)`). A path-scoped template (`testing-project.md`) and its base are inserted as the template's **plain** `rules/<file>` references, never as `@` imports — an import would load them at launch
+   - **Base line missing too** → insert both lines from `CLAUDE.template.md` `## Rules` — the base line, then the override line — at the end of the file's `## Rules` list. An installed override whose base is unreferenced is not configured; never report it as present
+3. **Not found but file exists** → append `## Rules` block at end of file (17 rule references — 13 `@rules/` imports and 4 path-scoped plain references (14 managed + 3 override templates) from `CLAUDE.template.md` `## Rules` section)
+4. **File does not exist** (edge case: Phase 3 was skipped) → extract from `CLAUDE.template.md`: `## Required Checks` through the `### Auto-Loop` section (up to the next `##` heading) + `## Rules` section → create minimal `.claude/CLAUDE.md`
 
 When extracting from template, remove ecosystem block markers and leave unresolved placeholders as `{PLACEHOLDER}`.
 
@@ -368,7 +369,7 @@ Same 3-level fallback as Phase 5.1, but search for `scripts/precommit-runner.js`
 ### 6.5.2 Copy Scripts
 
 1. `mkdir -p ${REPO_ROOT}/.claude/scripts/lib`
-2. Copy 5 scripts:
+2. Copy 6 scripts:
 
 | Script | Purpose | Dependencies |
 |--------|---------|--------------|
@@ -377,6 +378,7 @@ Same 3-level fallback as Phase 5.1, but search for `scripts/precommit-runner.js`
 | `review-state.js` | Reminder-state checker/noter (single slot per plane under `~/.cache/sd0x-dev-flow/`) read by the locally installed hooks and by `/remind`, `/next-step`, `/pre-pr-audit` | `lib/tree-digest.js` |
 | `lib/utils.js` | Shared utilities | None |
 | `lib/tree-digest.js` | Per-plane content digests (binds a noted verdict to the tree that earned it) | None |
+| `protected-branches.sh` | Protected-branch resolver (defaults ∪ `git-workflow-project.md` additions) read by `/push-ci`, `/epic-merge`, `/gh-stack`; without it an installed override makes every branch read as protected | None |
 
 1. Conflict strategy: same as Phase 5.2.
 
@@ -410,6 +412,7 @@ Same 3-level fallback as Phase 5.1, but search for `scripts/precommit-runner.js`
 | review-state.js | Installed/Skipped/Conflict |
 | lib/utils.js | Installed/Skipped/Conflict |
 | lib/tree-digest.js | Installed/Skipped/Conflict |
+| protected-branches.sh | Installed/Skipped/Conflict |
 
 **Installed**: N / **Skipped**: M / **Conflicts**: K
 ```
@@ -528,9 +531,9 @@ Summarize all phases and perform closed-loop check:
 |-------|--------|
 | Detection | ✅ Framework: X, PM: Y, DB: Z |
 | CLAUDE.md | ✅ Configured (0 remaining placeholders) |
-| Rules | ✅ 14/14 managed rules + 2 override templates |
+| Rules | ✅ 14/14 managed rules + 3 override templates |
 | Hooks | ✅ 7/7 installed + settings merged |
-| Scripts | ✅ 5/5 scripts installed |
+| Scripts | ✅ 6/6 scripts installed |
 | Env Config | ✅ AUTO_COMPACT_WINDOW=320000 (1M) |
 
 ### Closed-Loop Status
@@ -551,10 +554,10 @@ Summarize all phases and perform closed-loop check:
 - [ ] All 9 auto-detected placeholders detected or marked N/A
 - [ ] User confirmed detection results before writing
 - [ ] No remaining auto-detected `{UPPER_CASE}` placeholders in `.claude/CLAUDE.md` after setup (manual placeholders like `{TICKET_PATTERN}` are acceptable)
-- [ ] `.claude/rules/` contains 16 `.md` files (14 managed + 2 override templates) (unless `--no-rules` or `--lite`)
+- [ ] `.claude/rules/` contains 17 `.md` files (14 managed + 3 override templates) (unless `--no-rules` or `--lite`)
 - [ ] `.claude/hooks/` contains 7 `.sh` files with execute permission (unless `--no-hooks` or `--lite`)
 - [ ] `.claude/settings.json` contains hook definitions (unless `--no-hooks` or `--lite`)
-- [ ] `.claude/scripts/` contains `precommit-runner.js`, `verify-runner.js`, `review-state.js`, `lib/utils.js`, and `lib/tree-digest.js` (unless `--lite` or `--detect-only`)
+- [ ] `.claude/scripts/` contains `precommit-runner.js`, `verify-runner.js`, `review-state.js`, `lib/utils.js`, `lib/tree-digest.js`, and `protected-branches.sh` (unless `--lite` or `--detect-only`)
 - [ ] `.claude/CLAUDE.md` contains `@rules/auto-loop.md` reference (unless `--lite`)
 - [ ] `env.CLAUDE_CODE_AUTO_COMPACT_WINDOW` is set in target settings file when 1M model detected (unless `--detect-only` or `--lite`)
 

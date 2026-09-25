@@ -71,7 +71,7 @@ Manages `*-project.md` companion files for user overrides:
 
 ### Override Template Copy Contract (R8)
 
-Both override templates are copied from `rules/` on install when absent (`override_templates` in `docs/features/rule-override-pattern/2-tech-spec.md` maps `auto-loop.md → auto-loop-project.md` and `testing.md → testing-project.md`). This is the **only install or re-install path** that writes them — they are excluded from the managed set above, so no merge, upgrade, or `--force` reaches them. (The one other writer is the user-invoked `--reset`, below.)
+All three override templates are copied from `rules/` on install when absent (`override_templates` in `docs/features/rule-override-pattern/2-tech-spec.md` maps `auto-loop.md → auto-loop-project.md`, `testing.md → testing-project.md` and `git-workflow.md → git-workflow-project.md`). This is the **only install or re-install path** that writes them — they are excluded from the managed set above, so no merge, upgrade, or `--force` reaches them. (The one other writer is the user-invoked `--reset`, below.)
 
 The copy and `--reset` regeneration produce the **live-precedence header** (a live `Precedence:` paragraph before the first `##` — HTML comments are stripped from model context, so a comment-form declaration never reaches the model), and stamp `<!-- Based on: <base> @ <hash> -->` with the base rule's blob hash **at copy time** rather than carrying the template's recorded value, so a fresh install starts at zero drift instead of inheriting whatever hash the shipped template happened to record.
 

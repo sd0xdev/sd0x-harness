@@ -85,9 +85,10 @@ const PHASE_65_SCRIPTS = [
   'review-state.js',
   'lib/utils.js',
   'lib/tree-digest.js',
+  'protected-branches.sh',
 ];
 
-test('project-setup Phase 6.5 installs all 5 scripts (copy table, report, checklist)', () => {
+test('project-setup Phase 6.5 installs all 6 scripts (copy table, report, checklist)', () => {
   const phase65Start = skillMd.indexOf('## Phase 6.5');
   const phase7Start = skillMd.indexOf('## Phase 7');
   assert.ok(phase65Start !== -1 && phase7Start > phase65Start, 'Phase 6.5 and Phase 7 sections must exist in order');
@@ -97,7 +98,7 @@ test('project-setup Phase 6.5 installs all 5 scripts (copy table, report, checkl
   const copyEnd = phase65.indexOf('### 6.5.3');
   assert.ok(copyStart !== -1 && copyEnd > copyStart, '6.5.2 copy section must exist');
   const copyTable = phase65.slice(copyStart, copyEnd);
-  assert.ok(copyTable.includes('Copy 5 scripts'), '6.5.2 must state the 5-script count');
+  assert.ok(copyTable.includes('Copy 6 scripts'), '6.5.2 must state the 6-script count');
 
   // The copy table's FIRST column, as an exact set — `includes()` over the whole
   // section is satisfiable from another row's dependency cell, so a deleted copy
@@ -112,7 +113,7 @@ test('project-setup Phase 6.5 installs all 5 scripts (copy table, report, checkl
   assert.deepEqual(
     [...copyRowScripts].sort(),
     [...PHASE_65_SCRIPTS].sort(),
-    '6.5.2 copy table first column must be exactly the 5-script set'
+    '6.5.2 copy table first column must be exactly the 6-script set'
   );
 
   const reportStart = phase65.indexOf('### 6.5.4');

@@ -100,7 +100,8 @@ Collect **metadata only** — Codex reads the actual diffs and file contents its
 
 `TASK_DESCRIPTION` is the original task in one or two sentences, captured here and **frozen for
 the whole review session** — every first, fallback, and rotated dispatch carries the same value,
-and it is never rewritten from review findings (`rules/codex-invocation.md`, the three-part
+and it is never rewritten from review findings (`rules/codex-invocation.md`, full contract in
+`skills/codex-code-review/references/codex-invocation-contract.md` — read it before the first dispatch; the three-part
 dispatch shape).
 
 `CHANGED_FILES` is the **frozen baseline set itself**, not a narrower query — the two are computed

@@ -399,10 +399,10 @@ Output a chain table:
 - Any PR is not OPEN
 - Any PR has uncommitted local changes on its head branch
 - Working tree is dirty (`git status --porcelain` non-empty)
-- **Any PR's head branch is protected** (`main`, `master`, `develop`, `release/*`) — a PR
+- **Any PR's head branch is protected** — the default set (`main`, `master`, `develop`, `release/*`) plus the project's additions, answered by `scripts/protected-branches.sh` (exit 1 is the only "not protected"; the same resolution block Step 5 carries) — a PR
   head is not inherently unprotected (a PR can be opened *from* `main`), Step 5 force-pushes
   every head, and force push to shared branches is prohibited (`rules/git-workflow.md`
-  § Prohibited). Exact match only: `feat/main-menu` and `release-notes` are not protected.
+  § Prohibited). Matching is by exact name or `<prefix>/*`, so **by default** `feat/main-menu` and `release-notes` are not protected — but a project may add either, and the resolver's answer is the Phase 0 verdict exactly as it is at Step 5.
   Step 5 and Rollback re-assert this guard, so a chain that slipped past Phase 0 still
   cannot rewrite a **protected** branch. **That is not the same as "cannot rewrite a shared
   branch"**, and the difference is not pedantry: `rules/git-workflow.md` § Prohibited forbids
@@ -706,13 +706,25 @@ if ! /usr/bin/diff "${MANIFEST_DIR}/expected-pr-<N>.manifest" "${MANIFEST_DIR}/a
 fi
 
 # Step 5: Force-push (--force-with-lease, NEVER --force) — and never to a protected
-# branch: re-assert the Phase 0 check right before the push, exact match only
-case "$head" in
-  main|master|develop|release/*)
-    echo "⛔ PR head '$head' is a protected branch — force push to shared branches is prohibited" >&2
-    readonly PUSH_BLOCKED=1; exit 1
-    ;;
-esac
+# branch: re-assert the Phase 0 check right before the push, through the same resolver
+# Protected-set resolution (git-autonomy R1): the default set plus the project's additions in
+# git-workflow-project.md, answered by scripts/protected-branches.sh — 1 is the only "not
+# protected"; 0 and 2 (unknown) both refuse. Without the resolver installed, an override file on
+# disk means the answer is unknown; with none, the default set is the whole answer.
+PB_ROOT=$(/usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git rev-parse --show-toplevel) || PB_ROOT=
+PB_SCRIPT="$PB_ROOT/.claude/scripts/protected-branches.sh"
+[[ -r "$PB_SCRIPT" ]] || PB_SCRIPT="$PB_ROOT/scripts/protected-branches.sh"
+if [[ -z "$PB_ROOT" ]]; then PB_STATUS=2
+elif [[ -r "$PB_SCRIPT" ]]; then
+  if /bin/bash -p -- "$PB_SCRIPT" --root "$PB_ROOT" -- "$head"; then PB_STATUS=0; else PB_STATUS=$?; fi
+elif [[ -e "$PB_ROOT/.claude/rules/git-workflow-project.md" || -L "$PB_ROOT/.claude/rules/git-workflow-project.md" \
+   || -e "$PB_ROOT/rules/git-workflow-project.md" || -L "$PB_ROOT/rules/git-workflow-project.md" ]]; then PB_STATUS=2
+else case "$head" in main|master|develop|release/*) PB_STATUS=0 ;; *) PB_STATUS=1 ;; esac
+fi
+if [[ "$PB_STATUS" != 1 ]]; then
+  echo "⛔ PR head '$head' is a protected branch (resolver status $PB_STATUS) — force push to shared branches is prohibited" >&2
+  readonly PUSH_BLOCKED=1; exit 1
+fi
 # The rebase above makes this push non-fast-forward by construction, and the opt-in
 # pre-push hook refuses that outright (`exit 1`, no prompt) unless the caller declares
 # the lease form — so without this prefix the skill cannot complete on a gated repo.
@@ -1996,12 +2008,24 @@ fi
 # 2. Restore branch from backup tag — the rollback force-pushes <head> too, so the
 #    same protected-branch guard applies; a protected head means manual recovery
 head=<quoted head>   # bind once, as in Step 0 — § Names in commands
-case "$head" in
-  main|master|develop|release/*)
-    echo "⛔ PR head '$head' is a protected branch — rollback push refused, recover manually" >&2
-    readonly PUSH_BLOCKED=1; exit 1
-    ;;
-esac
+# Protected-set resolution (git-autonomy R1): the default set plus the project's additions in
+# git-workflow-project.md, answered by scripts/protected-branches.sh — 1 is the only "not
+# protected"; 0 and 2 (unknown) both refuse. Without the resolver installed, an override file on
+# disk means the answer is unknown; with none, the default set is the whole answer.
+PB_ROOT=$(/usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git rev-parse --show-toplevel) || PB_ROOT=
+PB_SCRIPT="$PB_ROOT/.claude/scripts/protected-branches.sh"
+[[ -r "$PB_SCRIPT" ]] || PB_SCRIPT="$PB_ROOT/scripts/protected-branches.sh"
+if [[ -z "$PB_ROOT" ]]; then PB_STATUS=2
+elif [[ -r "$PB_SCRIPT" ]]; then
+  if /bin/bash -p -- "$PB_SCRIPT" --root "$PB_ROOT" -- "$head"; then PB_STATUS=0; else PB_STATUS=$?; fi
+elif [[ -e "$PB_ROOT/.claude/rules/git-workflow-project.md" || -L "$PB_ROOT/.claude/rules/git-workflow-project.md" \
+   || -e "$PB_ROOT/rules/git-workflow-project.md" || -L "$PB_ROOT/rules/git-workflow-project.md" ]]; then PB_STATUS=2
+else case "$head" in main|master|develop|release/*) PB_STATUS=0 ;; *) PB_STATUS=1 ;; esac
+fi
+if [[ "$PB_STATUS" != 1 ]]; then
+  echo "⛔ PR head '$head' is a protected branch (resolver status $PB_STATUS) — rollback push refused, recover manually" >&2
+  readonly PUSH_BLOCKED=1; exit 1
+fi
 if ! /usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git switch -C "$head" "refs/tags/backup/pr-<N>"; then
   echo "⛔ the local restore from refs/tags/backup/pr-<N> did not happen — refs/heads/${head}" >&2
   echo "   still holds whatever the rollback was called to replace. Pushing it now would" >&2

@@ -322,7 +322,11 @@ const CANONICAL_LOGS = [
 ];
 
 function extractGuards() {
-  const guards = [...readSkill().matchAll(/case "\$head" in[\s\S]*?esac/g)].map((m) => m[0]);
+  // Since git-autonomy R1 the guard is the protected-set resolution block plus its refusal: the
+  // resolver (scripts/protected-branches.sh) answers, and exit 1 is the only "not protected".
+  const guards = [...readSkill().matchAll(
+    /# Protected-set resolution \(git-autonomy R1\)[\s\S]*?\nif \[\[ "\$PB_STATUS" != 1 \]\]; then[\s\S]*?\nfi/g,
+  )].map((m) => m[0]);
   assert.equal(
     guards.length,
     2,
@@ -340,8 +344,8 @@ function extractGuards() {
 // that reproduces the defect cannot detect it.
 //
 // argv-passing, not string interpolation: a name containing a quote would otherwise break
-// the fixture rather than the guard. The guard block alone is extracted (case…esac), so a
-// passing guard runs no git command.
+// the fixture rather than the guard. The guard block alone is extracted (resolution block plus its
+// refusal); run from this repository it resolves through scripts/protected-branches.sh.
 function runGuard(guard, head) {
   return spawnSync('bash', ['-c', `head=$1\n${guard}\necho GUARD_PASSED`, '_', head], {
     encoding: 'utf8',
@@ -697,7 +701,7 @@ test('Phase 0 validation gate rejects protected PR heads before any destructive 
   const skill = readSkill();
   assert.match(
     skill,
-    /\*\*Any PR's head branch is protected\*\* \(`main`, `master`, `develop`, `release\/\*`\)/,
+    /\*\*Any PR's head branch is protected\*\* — the default set \(`main`, `master`, `develop`, `release\/\*`\) plus the project's additions/,
     'the validation gate must name the protected-head abort condition'
   );
   assert.match(
@@ -1187,7 +1191,7 @@ test('every git command in the document → carries the canonical prefix', () =>
     'a table cell naming git is not a command and must not be judged as one');
 });
 
-const SKILL_DIGEST = "3132628b93745ccd709164cc9e0a19aea0b6724db9b7300f49691d1f1e4a05a2";
+const SKILL_DIGEST = "28e05bb11a60dc2cbcaf36e4f5c0bac2eac5f85f08ac11e0831435aa9e162f34";
 
 test('the skill document when read → matches its pinned digest', () => {
   assert.equal(createHash('sha256').update(readSkill()).digest('hex'), SKILL_DIGEST,

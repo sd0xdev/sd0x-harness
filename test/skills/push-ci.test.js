@@ -39,7 +39,7 @@ function readSkill() {
 // The section pins below survive because they give a precise message for the common case; the
 // digest is what makes the claim complete.
 
-const SKILL_DIGEST = "5c8136aeb068395a6b638ee88073a223e98fb8b56f8dbdefd1eadf883b8e6d55";
+const SKILL_DIGEST = "1cc977c3170a191308635460a2535bf762f1f1899bd9def368f0386192d29722";
 
 function digestOf(text) {
   return createHash('sha256').update(text).digest('hex');
@@ -977,6 +977,9 @@ const FAKE_GIT = [
   // one exit and one SHA serve every rev-parse. Ahead of the generic arm below, like the pair above.
   'case "$1${2+ }${2-}" in "rev-parse --verify") printf \'%s\\n\' "${FAKE_BRANCH_SHA-1111111111111111111111111111111111111111}"; exit 0 ;; esac',
   'case "$1${2+ }${2-}" in "rev-parse --abbrev-ref") printf \'%s\\n\' "${FAKE_BRANCH-feat/x}"; exit 0 ;; esac',
+  // git-autonomy R1: the protected-set block asks for the worktree root. The fake answers the
+  // harness dir, which holds no resolver and no override, so the fence takes its default-set arm.
+  'case "$1${2+ }${2-}" in "rev-parse --show-toplevel") printf \'%s\\n\' "${FAKE_TOPLEVEL-$PWD}"; exit 0 ;; esac',
   'case "$1" in rev-parse) printf \'%s\\n\' "${FAKE_HEAD_SHA-0000000000000000000000000000000000000000}"; exit 0 ;; esac',
   'exit "${FAKE_GIT_EXIT-0}"',
   '',
@@ -1191,7 +1194,7 @@ test('Phase 2 when executed → each flag combination issues exactly one exact p
     // no topology to re-check and the block is skipped for it. That asymmetry is asserted, not
     // assumed — running the extra reads unconditionally would be a behaviour change nobody asked
     // for, and skipping them on the lease path would be the defect.
-    const REDERIVATIONS = [['rev-parse', '--abbrev-ref', 'HEAD'], ['rev-parse', 'HEAD'],
+    const REDERIVATIONS = [['rev-parse', '--abbrev-ref', 'HEAD'], ['rev-parse', '--show-toplevel'], ['rev-parse', 'HEAD'],
       ['remote', 'get-url', '--push', '--all', 'origin'],
       ['config', '--get', 'remote.origin.receivepack']];
     // ONE read, not two. Round 74 removed the `rev-parse --verify --quiet refs/heads/feat/x`
@@ -1377,14 +1380,24 @@ const CANONICAL_PHASE2_SECTION = [
   "# ⛔ Protected × force-with-lease is prohibited (rules/git-workflow.md: force push to",
   "# shared branches). Phase 0 already hard-aborted this combination; re-assert it here",
   "# so no approval path — cached, mis-run, or otherwise — can reach a prohibited push.",
-  "case \"$BRANCH\" in",
-  "  main|master|develop|release/*)",
-  "    if [[ \"$FORCE_WITH_LEASE\" == \"true\" ]]; then",
-  "      echo \"⛔ --force-with-lease targets protected branch '$BRANCH' — force push to shared branches is prohibited\" >&2",
-  "      readonly PUSH_BLOCKED=1; exit 1",
-  "    fi",
-  "    ;;",
-  "esac",
+  "# Protected-set resolution (git-autonomy R1): the default set plus the project's additions in",
+  "# git-workflow-project.md, answered by scripts/protected-branches.sh — 1 is the only \"not",
+  "# protected\"; 0 and 2 (unknown) both refuse. Without the resolver installed, an override file on",
+  "# disk means the answer is unknown; with none, the default set is the whole answer.",
+  "PB_ROOT=$(/usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git rev-parse --show-toplevel) || PB_ROOT=",
+  "PB_SCRIPT=\"$PB_ROOT/.claude/scripts/protected-branches.sh\"",
+  "[[ -r \"$PB_SCRIPT\" ]] || PB_SCRIPT=\"$PB_ROOT/scripts/protected-branches.sh\"",
+  "if [[ -z \"$PB_ROOT\" ]]; then PB_STATUS=2",
+  "elif [[ -r \"$PB_SCRIPT\" ]]; then",
+  "  if /bin/bash -p -- \"$PB_SCRIPT\" --root \"$PB_ROOT\" -- \"$BRANCH\"; then PB_STATUS=0; else PB_STATUS=$?; fi",
+  "elif [[ -e \"$PB_ROOT/.claude/rules/git-workflow-project.md\" || -L \"$PB_ROOT/.claude/rules/git-workflow-project.md\" \\",
+  "   || -e \"$PB_ROOT/rules/git-workflow-project.md\" || -L \"$PB_ROOT/rules/git-workflow-project.md\" ]]; then PB_STATUS=2",
+  "else case \"$BRANCH\" in main|master|develop|release/*) PB_STATUS=0 ;; *) PB_STATUS=1 ;; esac",
+  "fi",
+  "if [[ \"$PB_STATUS\" != 1 ]] && [[ \"$FORCE_WITH_LEASE\" == \"true\" ]]; then",
+  "  echo \"⛔ --force-with-lease targets protected branch '$BRANCH' (resolver status $PB_STATUS) — force push to shared branches is prohibited\" >&2",
+  "  readonly PUSH_BLOCKED=1; exit 1",
+  "fi",
   "# The PLAN_BRANCH comparison answers \"which branch\", not \"which commit\" — and once the approval",
   "# and the push are separated in time those are different questions. A commit made on the same branch",
   "# between Phase 1 and here passes the name comparison unchanged, and the push then publishes work",
@@ -2128,7 +2141,7 @@ test('Phase 2 when read → sets no variable and passes no option that could red
     // only effect is that instruction's non-zero exit. It is how the refusal arm terminates without
     // `exit` — `PUSH_BLOCKED` above makes the push unreachable, this makes the fence SAY so. git
     // never consults it, and the empty value means no later expansion of it can carry anything.
-    ['ALLOW_FORCE_UNSHARED', 'ALLOW_FORCE_WITH_LEASE', 'ALLOW_PUSH_PROTECTED', 'AUTH', 'BRANCH', 'D', 'DIGEST_TOOL_OK', 'FINAL_ANCESTRY', 'FINAL_LOCAL', 'FINAL_LOOKUP_FAILED', 'FINAL_LS', 'FINAL_READING', 'FINAL_REPROBE', 'FINAL_TIP', 'FORCE_WITH_LEASE', 'GIT_GRAFT_FILE', 'GIT_NO_REPLACE_OBJECTS', 'HEAD_SHA', 'IFS', 'PLAN_BRANCH', 'PLAN_HEAD_SHA', 'PLAN_PUSH_DIGEST', 'PLAN_PUSH_URLS', 'PLAN_REMOTE_TIP', 'PUSH_BLOCKED', 'PUSH_RECEIVEPACK', 'PUSH_STATUS', 'PUSH_URLS', 'PUSH_URLS_DIGEST', 'PUSH_URLS_SAFE', 'REST', 'SD0X_PUSH_CI_REFUSED', 'SD0X_PUSH_DEST_DIGEST', 'SET_UPSTREAM', 'U', 'UNSHARED_ATTESTED', 'UPSTREAM_OWED', 'UPSTREAM_STATUS', '_H', '_pre'],
+    ['ALLOW_FORCE_UNSHARED', 'ALLOW_FORCE_WITH_LEASE', 'ALLOW_PUSH_PROTECTED', 'AUTH', 'BRANCH', 'D', 'DIGEST_TOOL_OK', 'FINAL_ANCESTRY', 'FINAL_LOCAL', 'FINAL_LOOKUP_FAILED', 'FINAL_LS', 'FINAL_READING', 'FINAL_REPROBE', 'FINAL_TIP', 'FORCE_WITH_LEASE', 'GIT_GRAFT_FILE', 'GIT_NO_REPLACE_OBJECTS', 'HEAD_SHA', 'IFS', 'PB_ROOT', 'PB_SCRIPT', 'PB_STATUS', 'PLAN_BRANCH', 'PLAN_HEAD_SHA', 'PLAN_PUSH_DIGEST', 'PLAN_PUSH_URLS', 'PLAN_REMOTE_TIP', 'PUSH_BLOCKED', 'PUSH_RECEIVEPACK', 'PUSH_STATUS', 'PUSH_URLS', 'PUSH_URLS_DIGEST', 'PUSH_URLS_SAFE', 'REST', 'SD0X_PUSH_CI_REFUSED', 'SD0X_PUSH_DEST_DIGEST', 'SET_UPSTREAM', 'U', 'UNSHARED_ATTESTED', 'UPSTREAM_OWED', 'UPSTREAM_STATUS', '_H', '_pre'],
     'Phase 2 may set the three gate variables it clears or binds, the replace-ref guard, plus the '
     + 'five inputs, the destination re-resolution and the destination binding, and nothing else — '
     + 'any other assignment can redirect the push');
@@ -2282,8 +2295,9 @@ test('Phase 2 when executed → protected × force-with-lease is refused before 
     assert.equal(pushes.length, 0, `${branch} × force-with-lease must reach no push at all`);
     // Nothing that changes anything runs either. The branch re-derivation is the one read the
     // refusal needs in order to know which branch it is refusing, so it is named rather than
-    // counted away — anything else appearing here would be a command the refusal did not stop.
-    assert.deepEqual(calls.map((x) => x.argv), [['rev-parse', '--abbrev-ref', 'HEAD']],
+    // counted away, and so is the worktree-root read the protected-set resolution needs (git-autonomy
+    // R1) — anything else appearing here would be a command the refusal did not stop.
+    assert.deepEqual(calls.map((x) => x.argv), [['rev-parse', '--abbrev-ref', 'HEAD'], ['rev-parse', '--show-toplevel']],
       `${branch} × force-with-lease: only the branch re-derivation may precede the refusal`);
   }
 });
@@ -5177,4 +5191,17 @@ test('the Overwrites line on an unknown reading that printed a tip → names tha
   assert.match(line, /On `unknown-tip` or `unknown-ancestry`[^.]*: that same full object ID followed by `\(topology unverified — <the ASK_REASON word>\)`/,
     'unknown readings with a printed tip must name it');
   assert.doesNotMatch(line, /On every other reading: `nothing/, 'the blanket "nothing" mapping must not return');
+});
+
+test('frontmatter when read → push-ci is model-invocable while /epic-merge is not (git-autonomy R3)', () => {
+  // FR-3: the model may invoke /push-ci — its per-invocation AskUserQuestion stays the credential.
+  // /epic-merge keeps the flag: R3 widens who may invoke /push-ci only. (/gh-stack never carried
+  // it; its per-use approval was already its only gate.)
+  const front = (p) => readFileSync(resolve(__dirname, '../..', p), 'utf8').split('\n---\n')[0];
+  assert.doesNotMatch(front('skills/push-ci/SKILL.md'), /disable-model-invocation/);
+  assert.match(front('skills/epic-merge/SKILL.md'), /disable-model-invocation: true/);
+  const skill = readSkill();
+  assert.match(skill, /Pushing without this invocation's own AskUserQuestion approval/,
+    'the prohibition that replaced "Auto-triggering" names the per-invocation approval');
+  assert.doesNotMatch(skill, /Auto-triggering this skill/);
 });

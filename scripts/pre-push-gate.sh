@@ -316,20 +316,93 @@ SD0X_REMOTES
 fi
 
 # ── Protected branch patterns ──────────────────────────────────────
-PROTECTED_EXACT=("main" "master" "develop")
-# release/* matched separately via prefix
+# The default set plus whatever the project added in git-workflow-project.md. The block between
+# the markers is byte-identical to scripts/protected-branches.sh (one copied hook file cannot source
+# a sibling); test/scripts/protected-branches.test.js compares the two. git runs pre-push with the
+# worktree root as cwd and no GIT_DIR (measured 2026-09-24), so show-toplevel is the root; if it
+# cannot answer, the root is empty and every branch reads as protected.
+# BEGIN protected-set — keep byte-identical with scripts/pre-push-gate.sh
+# The default set is fixed; a project may only ADD names or `<prefix>/*` patterns under
+# `## Protected Branches` in the first EXISTING of .claude/rules/git-workflow-project.md and
+# rules/git-workflow-project.md. A selected file that cannot be read or parsed answers 2 with no
+# fallback to the other path — falling back could drop its additions. HTML comments are ignored;
+# any other line in the section that is not `- <name>` or `- <prefix>/*` (a `- !main` removal
+# attempt included) is a parse error. Pure bash 3.2: no awk, no associative arrays.
+sd0x_protected_patterns() {
+  local root="$1" f="" cand line in_c=0 in_sec=0 seen=0 name
+  [ -n "$root" ] || return 2
+  printf '%s\n' main master develop 'release/*'
+  for cand in "$root/.claude/rules/git-workflow-project.md" "$root/rules/git-workflow-project.md"; do
+    if [ -e "$cand" ] || [ -L "$cand" ]; then f="$cand"; break; fi
+  done
+  [ -n "$f" ] || return 0
+  if [ ! -f "$f" ] || [ ! -r "$f" ]; then return 2; fi
+  while IFS= read -r line || [ -n "$line" ]; do
+    line=${line%$'\r'}
+    if [ "$in_c" = 1 ]; then
+      case "$line" in *'-->'*) in_c=0; line=${line#*-->} ;; *) continue ;; esac
+    fi
+    while :; do
+      case "$line" in
+        *'<!--'*)
+          case "${line#*<!--}" in
+            *'-->'*) line="${line%%<!--*}${line#*-->}" ;;
+            *) line=${line%%<!--*}; in_c=1; break ;;
+          esac ;;
+        *) break ;;
+      esac
+    done
+    if [[ "$line" =~ ^##[[:space:]] ]]; then
+      if [[ "$line" =~ ^##[[:space:]]+Protected[[:space:]]+Branches[[:space:]]*$ ]]; then
+        [ "$seen" = 0 ] || return 2
+        seen=1; in_sec=1
+      else
+        in_sec=0
+      fi
+      continue
+    fi
+    [ "$in_sec" = 1 ] || continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    if [[ "$line" =~ ^-[[:space:]]+([A-Za-z0-9_][A-Za-z0-9._/-]*)(/\*)?[[:space:]]*$ ]]; then
+      name=${BASH_REMATCH[1]}
+      if [ -n "${BASH_REMATCH[2]}" ]; then
+        git check-ref-format --branch "$name/x" >/dev/null 2>&1 || return 2
+        printf '%s/*\n' "$name"
+      else
+        git check-ref-format --branch "$name" >/dev/null 2>&1 || return 2
+        printf '%s\n' "$name"
+      fi
+    else
+      return 2
+    fi
+  done < "$f" || return 2
+  # An HTML comment still open at EOF hides whatever followed it — refuse rather than read on.
+  [ "$in_c" = 0 ] || return 2
+  return 0
+}
+sd0x_protected_status() {
+  local branch="$1" root="$2" pats p rc=0
+  pats=$(sd0x_protected_patterns "$root") || rc=$?
+  [ "$rc" = 0 ] || return 2
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    case "$p" in
+      */\*) case "$branch" in "${p%/\*}"/*) return 0 ;; esac ;;
+      *) [ "$branch" = "$p" ] && return 0 ;;
+    esac
+  done <<SD0X_PB_EOF
+$pats
+SD0X_PB_EOF
+  return 1
+}
+# END protected-set
+SD0X_REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || SD0X_REPO_ROOT=""
 
 is_protected() {
-  local branch="$1"
-  for p in "${PROTECTED_EXACT[@]}"; do
-    if [ "$branch" = "$p" ]; then
-      return 0
-    fi
-  done
-  if [[ "$branch" == release/* ]]; then
-    return 0
-  fi
-  return 1
+  local rc=0
+  sd0x_protected_status "$1" "$SD0X_REPO_ROOT" || rc=$?
+  # 0 protected, 2 unknown — both protected; only 1 is not.
+  [ "$rc" -ne 1 ]
 }
 
 # ── Read stdin for ref info ───────────────────────────────────────
@@ -430,7 +503,7 @@ fi
 
 # ── Shared-branch attestation for force-form pushes ───────────────
 # `rules/git-workflow.md` prohibits force-pushing a *shared* branch, but the protected
-# set (main/master/develop/release/*) is only the part of "shared" a name can decide.
+# set (main/master/develop/release/*, plus the project's additions) is only the part of "shared" a name can decide.
 # A two-person `feat/*` head is shared and no name says so — and git cannot tell us:
 # nothing in a ref line, an ancestry test or a lease check reports who else has the
 # branch. So the class is defined by **attestation, not inference**: the operator says

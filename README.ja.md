@@ -13,7 +13,7 @@ v4 は、テストで固定された閉じた Anchor セットの内側で Claud
 Claude Code ではフルコントロールプレーン。Codex CLI やその他の互換エージェントにはスキルのみを配布します。
 
 <!-- BEGIN:HERO-COUNT -->
-100 bundled · 100 public skills · 16 agents — Claude の context window のわずか ~4%
+101 bundled · 101 public skills · 16 agents — Claude の context window のわずか ~4%
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -29,7 +29,7 @@ Claude Code ではフルコントロールプレーン。Codex CLI やその他�
 /project-setup
 ```
 
-1つのコマンドでフレームワーク、パッケージマネージャー、データベース、エントリポイント、スクリプトを自動検出します。ルールとフックのサブセットをインストールします。完全なプラグインには 16 ルール + 7 フックが含まれます。`--lite` で CLAUDE.md のみ設定（ルール/フックをスキップ）。
+1つのコマンドでフレームワーク、パッケージマネージャー、データベース、エントリポイント、スクリプトを自動検出します。ルールとフックのサブセットをインストールします。完全なプラグインには 17 ルール + 7 フックが含まれます。`--lite` で CLAUDE.md のみ設定（ルール/フックをスキップ）。
 
 ```bash
 # Codex CLI / Cursor / Windsurf / Aider — スキルのみ
@@ -45,8 +45,8 @@ $codex-setup init
 <!-- BEGIN:INSTALL-COVERAGE -->
 | 方法 | 対応ツール | カバー範囲 |
 |------|-----------|-----------|
-| プラグインインストール | Claude Code | フル（100 bundled skills、フック、ルール、auto-loop） |
-| `npx skills add` | Codex CLI、Cursor、Windsurf、Aider | スキルのみ（100 public skills） |
+| プラグインインストール | Claude Code | フル（101 bundled skills、フック、ルール、auto-loop） |
+| `npx skills add` | Codex CLI、Cursor、Windsurf、Aider | スキルのみ（101 public skills） |
 | `$codex-setup init` | Codex CLI | AGENTS.md カーネル + commit-msg フック（pre-push ゲートはオプトイン） |
 <!-- END:INSTALL-COVERAGE -->
 
@@ -133,7 +133,7 @@ sd0x-dev-flow は reference implementation です。以下の各行は、harness
 | 2 | **Digest-bound reminder state** | verdict はモデルが note し（`node scripts/review-state.js note <plane> <pass\|fail>`）、ツリーの digest に束縛される — 編集すると digest が変わるため、そのプレーンのリマインダーが再オープンする。ゲート sentinel（`✅ Ready` / `## Overall: ✅ PASS`）は動作レイヤーのシグナルのまま | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context recovery across compaction** | SessionStart(compact) 後に git ベースライン（ブランチ + 未コミットファイル）と未完了ゲートのリマインダーを再注入 | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
 | 4 | **Lifecycle interceptors** | 5 種類の hook event を 7 本のスクリプトへディスパッチ — 4 本の advisory リマインダーフック、1 本の自動フォーマッタ、2 本のブロックするガード（機密パスの編集、起動方法を誤った Codex dispatch）（SessionStart は追加で `scripts/namespace-hint.sh` を実行）: PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (7 scripts) + [`.claude/settings.json`](.claude/settings.json) |
-| 5 | **Capability-based tool gating** | Skill frontmatter の `allowed-tools` — 例: `/ask` には Edit/Write が無い | 100 個の公開 skill のうち 92 個が `allowed-tools` を宣言 |
+| 5 | **Capability-based tool gating** | Skill frontmatter の `allowed-tools` — 例: `/ask` には Edit/Write が無い | 101 個の公開 skill のうち 93 個が `allowed-tools` を宣言 |
 | 6 | **Defense-in-depth safety** | インストール済みの git レベルのガードはハードなまま — commit-msg-guard は `/codex-setup init` でインストールした環境で有効になり（Claude プラグインと `/project-setup` ではインストールされません）、`/dev/tty` 経由の pre-push-gate はオプトインした場合に有効です。編集時の pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガードであり、ワークフロー強制ではない — `jq` が必要で、jq が無いとガードは作動しない）、Stop hook はリマインドする — 不可逆な操作をゲートする層は牙を残し、レビュー層は設計として advisory になった | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex が Claude の書いたコードをレビュー。リポジトリを自力で調査し、結論を渡されて追認することはない | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | 証拠にもとづくストール規律：finding を 1 つも閉じないレビューラウンドが 3 回続くと — モデルがレビューレポートから数えます — 構造化されたストール分類と 1 回の限定的な調整を起動します。Tier ごとのラウンド予算（デフォルト 6 / 15 / 30、3〜50 でオーバーライド可）は暴走用のバックストップに退き、初回の上限到達でも同じ診断を行い、列挙された human exit を備える | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; 詳細は `skills/codex-code-review/references/loop-diagnostics.md`) |
@@ -312,11 +312,11 @@ flowchart TD
 <!-- BEGIN:WHATS-INCLUDED-COUNT -->
 | カテゴリ | 数 | 例 |
 |----------|-----|-----|
-| スキル | 100 public (100 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
+| スキル | 101 public (101 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | エージェント | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | フック | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
-| ルール | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
-| スクリプト | 23 | precommit runner, verify runner, review-state CLI, dep audit, namespace hint, skill runner, commit-msg guard, pre-push gate, build-codex-artifacts, resolve-feature (node entrypoint + shell shim + CLI), classify-docs, detect-scope, migration-audit, migrate-hook-lightweighting, security-redact, readme-catalog, check-doc-links, resolve-review-profile, codex-exec adapter |
+| ルール | 17 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
+| スクリプト | 25 | precommit runner, verify runner, review-state CLI, dep audit, namespace hint, skill runner, commit-msg guard, pre-push gate, protected-branch resolver, build-codex-artifacts, resolve-feature (node entrypoint + shell shim + CLI), classify-docs, detect-scope, migration-audit, migrate-hook-lightweighting, security-redact, readme-catalog, check-doc-links, resolve-review-profile, instruction-budget, codex-exec adapter |
 <!-- END:WHATS-INCLUDED-COUNT -->
 
 ### 極小の Context 使用量
@@ -356,9 +356,9 @@ Claude の 200k context window のわずか ~4% — 96% はコードに使えま
 
 <!-- BEGIN:FULL-CATALOG -->
 <details>
-<summary>全 100 public skills</summary>
+<summary>全 101 public skills</summary>
 
-### 開発 (34)
+### 開発 (35)
 
 | Skill | Description |
 |-------|-------------|
@@ -373,6 +373,7 @@ Claude の 200k context window のわずか ~4% — 96% はコードに使えま
 | `/create-pr` | Create or update GitHub PR with gh CLI. |
 | `/debug` | Interactive debugging workflow with hypothesis-driven probe loop. |
 | `/deep-explore` | Multi-wave parallel code exploration orchestrator. |
+| `/deploy-flow` | Run the release flow a project declares in rules/git-workflow-project.md § Deploy Workflow: its git merge steps, and ... |
 | `/epic-merge` | スタックされた PR チェーンをエピックブランチへ順次スカッシュマージします。 |
 | `/feature-dev` | Feature development workflow. |
 | `/feature-verify` | Feature verification (READ-ONLY, P0-P5). |
@@ -488,7 +489,7 @@ Claude の 200k context window のわずか ~4% — 96% はコードに使えま
 
 ## ルール & フック
 
-16 ルール + 7 フック。ルールは tier 付きの契約です：`discretion.md` が、プラグイン管理の 13 のルールファイル内のすべての指示を Anchor / Default / Guidance のいずれかちょうど 1 つに解決し、ユーザー所有の 2 つのオーバーライドファイルは親ルールの下で Anchor-first に解決されます。フック構成は 4 本の advisory リマインダーフックに、自動フォーマッタ 1 本とブロックするガード 2 本を加えたものです。リマインダーの役割はフックごとに異なります：Stop と post-compact フックは digest 束縛の状態（`review-state.js`）から未完了ゲートのリマインダーを描画し、prompt フックは `[AUTO_LOOP_STATE]` の事実行を、post-skill フックは固定のゲート順序行を出力し、post-compact フックはさらに git ベースラインを再注入します。レビュー層は何もブロックしません — pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガード、`jq` 必須 — 無いと作動しない）、pre-bash-codex-launch-guard は進捗をタスクパネルから逸らす Codex dispatch の起動をブロックし、ハードなゲートは git レベルにあります（commit-msg-guard は `/codex-setup init` でインストール、pre-push-gate はオプトイン）。
+17 ルール + 7 フック。ルールは tier 付きの契約です：`discretion.md` が、プラグイン管理の 13 のルールファイル内のすべての指示を Anchor / Default / Guidance のいずれかちょうど 1 つに解決し、ユーザー所有の 3 つのオーバーライドファイルは親ルールの下で Anchor-first に解決されます。フック構成は 4 本の advisory リマインダーフックに、自動フォーマッタ 1 本とブロックするガード 2 本を加えたものです。リマインダーの役割はフックごとに異なります：Stop と post-compact フックは digest 束縛の状態（`review-state.js`）から未完了ゲートのリマインダーを描画し、prompt フックは `[AUTO_LOOP_STATE]` の事実行を、post-skill フックは固定のゲート順序行を出力し、post-compact フックはさらに git ベースラインを再注入します。レビュー層は何もブロックしません — pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガード、`jq` 必須 — 無いと作動しない）、pre-bash-codex-launch-guard は進捗をタスクパネルから逸らす Codex dispatch の起動をブロックし、ハードなゲートは git レベルにあります（commit-msg-guard は `/codex-setup init` でインストール、pre-push-gate はオプトイン）。
 
 > **カスタマイズ**：`auto-loop-project.md` を編集してプロジェクトの auto-loop 動作をオーバーライドできます。プラグイン更新と競合しません — [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md) 参照。
 
@@ -510,7 +511,7 @@ Claude の 200k context window のわずか ~4% — 96% はコードに使えま
 | `{BUILD_COMMAND}` | ビルドコマンド | yarn build |
 | `{TYPECHECK_COMMAND}` | 型チェック | yarn typecheck |
 
-オーバーライドは **Anchor-first** で解決されます：ユーザー所有のオーバーライドファイル（`auto-loop-project.md`、`testing-project.md`）がカスタマイズできるのは Default tier と Guidance tier の動作のみです — どのプロジェクトオーバーライドも Anchor Register のエントリをダウングレードできず、その試みは黙って受け入れられるのではなく競合として報告されます。
+オーバーライドは **Anchor-first** で解決されます：ユーザー所有のオーバーライドファイル（`auto-loop-project.md`、`testing-project.md`、`git-workflow-project.md`）がカスタマイズできるのは Default tier と Guidance tier の動作のみです — どのプロジェクトオーバーライドも Anchor Register のエントリをダウングレードできず、その試みは黙って受け入れられるのではなく競合として報告されます。
 
 ## ショーケース：マルチエージェントリサーチ
 

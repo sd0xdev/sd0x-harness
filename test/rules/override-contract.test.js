@@ -20,6 +20,8 @@ const autoLoop = readFileSync(resolve(root, 'rules/auto-loop.md'), 'utf8');
 const testing = readFileSync(resolve(root, 'rules/testing.md'), 'utf8');
 const autoLoopTpl = readFileSync(resolve(root, 'rules/auto-loop-project.md'), 'utf8');
 const testingTpl = readFileSync(resolve(root, 'rules/testing-project.md'), 'utf8');
+const gitWorkflow = readFileSync(resolve(root, 'rules/git-workflow.md'), 'utf8');
+const gitTpl = readFileSync(resolve(root, 'rules/git-workflow-project.md'), 'utf8');
 // The tech spec is read through liveText with fences KEPT live: the `override_templates` JSON
 // mapping is legitimately documented as a code block and a reader sees it. HTML comments are
 // blanked, because prose moved into one is gone from the rendered document while every raw
@@ -378,6 +380,8 @@ test('guarded documents when validated → stay inside the structure the scanner
     ['rules/testing.md', testing],
     ['rules/auto-loop-project.md', autoLoopTpl],
     ['rules/testing-project.md', testingTpl],
+    ['rules/git-workflow.md', gitWorkflow],
+    ['rules/git-workflow-project.md', gitTpl],
     ['rules/discretion.md', readFileSync(resolve(root, 'rules/discretion.md'), 'utf8')],
     ['docs/features/rule-override-pattern/2-tech-spec.md', specRaw],
     ['skills/install-rules/SKILL.md', readFileSync(resolve(root, 'skills/install-rules/SKILL.md'), 'utf8')],
@@ -493,6 +497,37 @@ const CANONICAL_AUTO_LOOP_OVERRIDE =
   'restates that section\'s exact heading — the mechanism is available, the scaffold just does not ' +
   'ship one.';
 
+const CANONICAL_GIT_CUSTOMIZATION =
+  'Project-specific settings belong in `git-workflow-project.md` (not this file). See ' +
+  '`@rules/git-workflow-project.md` for your project\'s git conventions. Override contract: an ' +
+  'active `##` section there customizes this file — **Default and Guidance tiers only**. ' +
+  'Anchor-tier instructions (Anchor Register #4 — the forbidden-operation list, the enumerated ' +
+  'workflow grants, the attribution rule, the default protected branches and § Push safety — and ' +
+  '#2 for secrets) are never overridable: on conflict the Anchor wins and the conflict is ' +
+  'reported. Resolution is **Anchor-first**, since tier is decided by `discretion.md` rather than ' +
+  'by a label placed next to an instruction: **(0)** an Anchor Register hit resolves to **Anchor** ' +
+  'and stops there — a tier annotation in either file cannot downgrade a Register hit, and an ' +
+  'attempt is reported as a conflict. Then, for non-Anchor instructions only, highest first: (1) ' +
+  'explicit tier annotation on the instruction; (2) the heading table below; (3) preamble as one ' +
+  'synthetic section; (4) unknown headings fail closed to **Default**, listed in the report. ' +
+  'Kinds, as in `auto-loop.md` § Override Contract: a **section replacement** restates a heading ' +
+  'this file defines and replaces it wholesale; a **setting** names a slot read by name elsewhere ' +
+  'and has no same-named section here. The shipped scaffold is settings-only. | Override heading | ' +
+  'Kind — consumed by | Tier | |------------------|--------------------|------| | preamble ' +
+  '(synthetic section) | Header — the live precedence declaration, resolved as one synthetic ' +
+  'section | Default | | `## Branch Naming` | Setting — replaces this file\'s `Branches:` line | ' +
+  'Default | | `## Commit Format` | Setting — replaces this file\'s `Commit:` line | Default | | ' +
+  '`## Protected Branches` | Setting — an additions list unioned with the default set, read by ' +
+  '`scripts/protected-branches.sh`; there is no removal syntax, and a removal attempt or parse ' +
+  'error makes every branch read as protected | Default — the default set itself is Anchor ' +
+  '(Register #4) and cannot shrink | | `## Offer Mode` | Setting — `on` (default) · `commit-only` ' +
+  '· `off`, read by `review-state.js offer` (§ Proactive Offer); `/claude-health` validates the ' +
+  'value | Default | | `## Deploy Workflow` | Setting — the declared `merge` / `run` steps, read ' +
+  'by `/deploy-flow`; `/claude-health` validates the lines | Default — the steps run only under ' +
+  '`/deploy-flow`\'s own Register #4 entry and its per-step approval | | `## Run Steps` | Setting — ' +
+  '`print` (default) · `execute`, read by `/deploy-flow`; the scaffold states the run-script risk ' +
+  '| Default | | `## Goal Commit` | Setting — `on` (default) · `off`, read by `review-state.js ' +
+  'goal-commit` (§ Proactive Offer, "Goal mode"); `off` only narrows | Default |';
 const CANONICAL_TESTING_CUSTOMIZATION =
   'Project-specific overrides belong in `testing-project.md` (not this file). See ' +
   '`@rules/testing-project.md` for your project\'s custom testing conventions. Override contract: an ' +
@@ -533,6 +568,8 @@ test('the parent override sections when reworded → still say what the template
       CANONICAL_AUTO_LOOP_OVERRIDE],
     ['rules/testing.md § Project Customization', testing, 'Project Customization',
       CANONICAL_TESTING_CUSTOMIZATION],
+    ['rules/git-workflow.md § Project Customization', gitWorkflow, 'Project Customization',
+      CANONICAL_GIT_CUSTOMIZATION],
   ]) {
     assert.equal(normalizeSection(section(doc, heading)), canonical,
       `${what} changed — read the diff, confirm it is not a deletion, a hedge, or an inversion of Anchor supremacy, then update the pinned value in the same commit`);
@@ -1009,7 +1046,7 @@ test('override templates when read → precedence declaration is live text in th
   // shared parser rather than a local line filter. The previous filter dropped only the `<!--` and
   // `-->` delimiter lines, so a Precedence paragraph wrapped in a multiline comment — the exact
   // regression this test names — sat between them and matched.
-  for (const [name, tpl] of [['auto-loop-project.md', autoLoopTpl], ['testing-project.md', testingTpl]]) {
+  for (const [name, tpl] of [['auto-loop-project.md', autoLoopTpl], ['testing-project.md', testingTpl], ['git-workflow-project.md', gitTpl]]) {
     assert.match(liveText(preamble(tpl)), /^Precedence:/m,
       `${name}: the Precedence: declaration must be live text — commented or fenced, it never reaches the model`);
     assert.ok(!/<!--\s*Precedence:/.test(tpl), `${name}: the old comment-form Precedence declaration must be gone`);
@@ -1017,7 +1054,7 @@ test('override templates when read → precedence declaration is live text in th
 
   // …and the guard must actually notice when it is hidden, or it is only asserting that the words
   // exist somewhere in the file.
-  for (const [name, tpl] of [['auto-loop-project.md', autoLoopTpl], ['testing-project.md', testingTpl]]) {
+  for (const [name, tpl] of [['auto-loop-project.md', autoLoopTpl], ['testing-project.md', testingTpl], ['git-workflow-project.md', gitTpl]]) {
     const hidden = tpl.replace(/^Precedence:/m, '<!--\nPrecedence:').replace(/^(<!-- Based on:)/m, '-->\n$1');
     assert.doesNotMatch(liveText(preamble(hidden)), /^Precedence:/m,
       `${name}: a Precedence paragraph inside a multiline comment must not count as live`);
@@ -1025,7 +1062,7 @@ test('override templates when read → precedence declaration is live text in th
 });
 
 test('override templates when declaring precedence → carry the Anchor exception, not unconditional supremacy', () => {
-  for (const [name, tpl] of [['auto-loop-project.md', autoLoopTpl], ['testing-project.md', testingTpl]]) {
+  for (const [name, tpl] of [['auto-loop-project.md', autoLoopTpl], ['testing-project.md', testingTpl], ['git-workflow-project.md', gitTpl]]) {
     // Masked, not raw: this is the precedence contract itself. Moving any of these four clauses
     // into a comment leaves the file byte-identical to a `grep` while the model reads a template
     // that claims unconditional supremacy over Anchors.
@@ -1039,6 +1076,7 @@ test('override templates when declaring precedence → carry the Anchor exceptio
   // Tool-path metadata stays in comment form — that reader parses the file, not the context.
   assert.match(autoLoopTpl, /<!-- Based on: auto-loop\.md @ [0-9a-f]{7,}/);
   assert.match(testingTpl, /<!-- Based on: testing\.md @ [0-9a-f]{7,}/);
+  assert.match(gitTpl, /<!-- Based on: git-workflow\.md @ [0-9a-f]{7,}/);
 });
 
 // --- Resolution hierarchy published in both parents ---
@@ -1047,6 +1085,7 @@ test('parent rules when publishing the hierarchy → Anchor-first, then all four
   for (const [name, text] of [
     ['auto-loop.md § Override Contract', section(autoLoop, 'Override Contract')],
     ['testing.md § Project Customization', section(testing, 'Project Customization')],
+    ['git-workflow.md § Project Customization', section(gitWorkflow, 'Project Customization')],
   ]) {
     // Step 0 must come FIRST and must be the Anchor Register, not an annotation. Publishing
     // "explicit tier annotation" as the top step contradicted discretion.md's own order and left
@@ -1241,6 +1280,15 @@ const CANONICAL_AUTO_LOOP_TPL_PREAMBLE =
   'Override Contract. Every heading below is a **setting** — it names a value that `auto-loop.md` ' +
   'or a hook reads, not a section of `auto-loop.md` to be restated.';
 
+const CANONICAL_GIT_TPL_PREAMBLE =
+  '# Git Workflow Project Overrides Precedence: an active (non-comment) `##` section in this file ' +
+  'customizes `git-workflow.md` — for **Default- and Guidance-tier** instructions only. Anchor-tie' +
+  'r instructions (`rules/discretion.md` § Anchor Register #4 — forbidden operations, workflow gra' +
+  'nts, attribution, default protected branches, push safety) cannot be overridden here: on confli' +
+  'ct the Anchor wins and the conflict is reported, and a tier annotation written in this file can' +
+  'not downgrade a Register hit. Resolution is Anchor-first; the heading → tier mapping is publish' +
+  'ed in `git-workflow.md` § Project Customization. Every heading below is a **setting** — no sect' +
+  'ion of `git-workflow.md` is replaced from here.';
 const CANONICAL_TESTING_TPL_PREAMBLE =
   '# Testing Project Overrides Precedence: an active (non-comment) `##` section in this file ' +
   'customizes `testing.md` — for **Default- and Guidance-tier** instructions only. Anchor-tier ' +
@@ -1266,6 +1314,7 @@ const CANONICAL_REGISTER_LOOP_OBLIGATIONS =
 const CANONICAL_OVERRIDE_TEMPLATES = {
   'auto-loop.md': 'auto-loop-project.md',
   'testing.md': 'testing-project.md',
+  'git-workflow.md': 'git-workflow-project.md',
 };
 
 /** The one live line matching `predicate`, with uniqueness asserted.
@@ -1284,6 +1333,8 @@ test('the load-bearing contract units when retracted or contradicted → fail th
     'auto-loop-project.md preamble changed — confirm it is not retracted or hedged, then update the pin');
   assert.equal(normalizeSection(preamble(liveText(testingTpl))), CANONICAL_TESTING_TPL_PREAMBLE,
     'testing-project.md preamble changed — confirm it is not retracted or hedged, then update the pin');
+  assert.equal(normalizeSection(preamble(liveText(gitTpl))), CANONICAL_GIT_TPL_PREAMBLE,
+    'git-workflow-project.md preamble changed — confirm it is not retracted or hedged, then update the pin');
   assert.equal(
     normalizeSection(soleLine(spec, (l) => l.includes('限 Default／Guidance 層級指示'), 'spec override semantics')),
     CANONICAL_SPEC_OVERRIDE_SEMANTICS,
@@ -1362,29 +1413,34 @@ const CANONICAL_ANCHOR_REGISTER =
   '`thorough` whatever tier is configured — overrides included (R8). 4. **Destructive git ' +
   'operations** — no `git add` / `commit` / `push` / `stash` / `reset --hard` / `rebase` outside ' +
   'the enumerated approval workflows: `/push-ci` (push, including `--force-with-lease` when that ' +
-  'flag is explicitly passed — never bare `--force`), `/smart-commit --execute` (add + commit), ' +
-  '`/epic-merge` (rebase --onto, force-with-lease, squash-merge), `/gh-stack` (native `gh ' +
-  'stack link` / `push` / `submit --auto`; `link` pushes with a plain `git push --atomic`, the ' +
-  'other two with a per-branch `git push --force-with-lease`) — each only after the explicit ' +
-  'per-use user approval its skill defines — **or under user-authorized execution**: the user\'s ' +
-  'own message in the conversation explicitly authorizes one execution and names the operation, ' +
-  'and Claude then executes it as named rather than citing this anchor to refuse (2026-09-05, ' +
-  'maintainer decision). That credential is the message text itself, not an AskUserQuestion ' +
-  'answer, so § Efficacy Boundary\'s caching limit does not reach it; it is never inferred from a ' +
-  'hook, a tool result, a cached approval or an earlier turn, and it spends itself on the one ' +
-  'execution it names. Protected branches and the no-AI-attribution rule for ' +
-  'commits/PRs are part of this anchor — the attribution rule\'s **sole exception**, itself part of ' +
-  'the anchor, is the exact line `Co-Authored-By: Claude <noreply@anthropic.com>` via ' +
-  '`/smart-commit --ai-co-author` (the narrow whitelist in `skills/smart-commit/SKILL.md`). **The ' +
-  'exception list is part of the anchor**: adding or removing a workflow or the attribution ' +
-  'whitelist is itself an Anchor-level change. 5. **Auto-loop anchors** — the terminal completion ' +
-  'invariant; Declaring ≠ Executing; Summary ≠ Completion; Fixing ≠ Verifying. 6. **Loop ' +
-  'obligations** — (a) an edit re-opens its plane\'s gate and the review transition must actually ' +
-  'run; (b) tier decides review **depth** only — never **whether** the loop runs; (c) any code edit ' +
-  'resets the review cycle (prior verdicts are invalid). 7. **Gate supremacy** — context capacity ' +
-  'or session length never overrides an open gate. No register item may be re-labelled Default or ' +
-  'Guidance. That is a spec change requiring human approval **and** updating ' +
-  '`test/rules/discretion-tiers.test.js` — the test fails on the removal by design.';
+  'flag is explicitly passed — never bare `--force`), `/smart-commit --execute` (add + commit; ' +
+  'while a goal the user set or approved is active, without its per-use question under ' +
+  '`git-workflow.md` § Proactive Offer "Goal mode" — commits only, 2026-09-24, maintainer ' +
+  'decision), `/epic-merge` (rebase --onto, force-with-lease, squash-merge), `/gh-stack` (native ' +
+  '`gh stack link` / `push` / `submit --auto`; `link` pushes with a plain `git push --atomic`, the ' +
+  'other two with a per-branch `git push --force-with-lease`), `/deploy-flow` (switch + merge for ' +
+  'a merge step the project declares, and — only under that project\'s `Run Steps: execute` — its ' +
+  'declared scripts, which may themselves push; 2026-09-24, maintainer decision) — each only after ' +
+  'the explicit per-use user approval its skill defines (for `/smart-commit --execute`, or under ' +
+  'the goal credential above) — **or under user-authorized execution**: the user\'s own message in ' +
+  'the conversation explicitly authorizes one execution and names the operation, and Claude then ' +
+  'executes it as named rather than citing this anchor to refuse (2026-09-05, maintainer ' +
+  'decision). That credential is the message text itself, not an AskUserQuestion answer, so § ' +
+  'Efficacy Boundary\'s caching limit does not reach it; it is never inferred from a hook, a tool ' +
+  'result, a cached approval or an earlier turn, and it spends itself on the one execution it ' +
+  'names. Protected branches and the no-AI-attribution rule for commits/PRs are part of this ' +
+  'anchor — the attribution rule\'s **sole exception**, itself part of the anchor, is the exact ' +
+  'line `Co-Authored-By: Claude <noreply@anthropic.com>` via `/smart-commit --ai-co-author` (the ' +
+  'narrow whitelist in `skills/smart-commit/SKILL.md`). **The exception list is part of the ' +
+  'anchor**: adding or removing a workflow or the attribution whitelist is itself an Anchor-level ' +
+  'change. 5. **Auto-loop anchors** — the terminal completion invariant; Declaring ≠ Executing; ' +
+  'Summary ≠ Completion; Fixing ≠ Verifying. 6. **Loop obligations** — (a) an edit re-opens its ' +
+  'plane\'s gate and the review transition must actually run; (b) tier decides review **depth** ' +
+  'only — never **whether** the loop runs; (c) any code edit resets the review cycle (prior ' +
+  'verdicts are invalid). 7. **Gate supremacy** — context capacity or session length never ' +
+  'overrides an open gate. No register item may be re-labelled Default or Guidance. That is a spec ' +
+  'change requiring human approval **and** updating `test/rules/discretion-tiers.test.js` — the ' +
+  'test fails on the removal by design.';
 
 /** The scaffold block a user uncomments. Its body is comment text — invisible to the model until
  *  activated — so the structural gate cannot police it and only equality can. */
@@ -1408,102 +1464,101 @@ const CANONICAL_TIER_SCAFFOLD =
  *  could see. Region pinning also removes their false-rejection surface: prose starting with
  *  `Phase ` elsewhere in the file no longer reads as a workflow step. */
 const CANONICAL_INSTALL_WORKFLOW =
-  '``` Phase 1: Locate plugin rules dir Phase 2: Enumerate *.md, MINUS the override templates ' +
-  '(*-project.md) — see below Phase 3: Determine install set (--all, specific names, or ' +
-  'interactive) Phase 3.5: Read manifest + classify (new/unchanged/modified/conflict) Phase 4: ' +
-  'Install (smart merge with manifest tracking) Phase 4.5: Override templates — copy-when-absent ' +
-  'only (never smart-merged) Phase 4.6: Backfill CLAUDE.md references Phase 5: Output report ``` ' +
-  '**Managed-set exclusion (required)**: `*-project.md` files are user-owned and must be excluded ' +
-  'from the Phase 2 enumeration, so they never enter the manifest, the classification in Phase 3.5, ' +
-  'or the smart merge in Phase 4. They are handled only by Phase 4.5 below. Routing them through ' +
-  'the managed path would let `--force`, a conflict resolution, or an auto-upgrade rewrite a file ' +
-  'the user owns. ### Arguments ``` $ARGUMENTS ``` | Argument | Description | ' +
-  '|----------|-------------| | `--all` | Install all available rules | | `--list` | List available ' +
-  'rules without installing | | `--dry-run` | Show what would be installed, no changes | | ' +
-  '`--force` | Overwrite modified rules | | `--legacy-strategy <strategy>` | Handle pre-manifest ' +
-  'installs (ask/overwrite/skip) | | `--customize <rule>` | Customize a project-override rule | | ' +
-  '`rule-names...` | Specific rules to install | ### Manifest Tracking Uses ' +
-  '`.sd0x/install-state.json` to track installed file hashes. Smart merge logic: | Status | Action ' +
-  '| |--------|--------| | New (not installed) | Copy | | Unchanged (hash match) | Auto-upgrade | | ' +
-  'Modified by user | Skip (preserve edits) | | Conflict (both changed) | AskUserQuestion | ### ' +
-  'Customize Mode (`--customize`) Manages `*-project.md` companion files for user overrides: | ' +
-  'Sub-flag | Action | |----------|--------| | (none) | Show section status | | `--add-section` | ' +
-  'Add a new section | | `--update-section <name>` | Update specific section | | `--reset` | ' +
-  'Regenerate from template | ### Override Template Copy Contract (R8) Both override templates are ' +
-  'copied from `rules/` on install when absent (`override_templates` in ' +
-  '`docs/features/rule-override-pattern/2-tech-spec.md` maps `auto-loop.md → auto-loop-project.md` ' +
-  'and `testing.md → testing-project.md`). This is the **only install or re-install path** that ' +
-  'writes them — they are excluded from the managed set above, so no merge, upgrade, or `--force` ' +
-  'reaches them. (The one other writer is the user-invoked `--reset`, below.) The copy and ' +
-  '`--reset` regeneration produce the **live-precedence header** (a live `Precedence:` paragraph ' +
-  'before the first `##` — HTML comments are stripped from model context, so a comment-form ' +
-  'declaration never reaches the model), and stamp `<!-- Based on: <base> @ <hash> -->` with the ' +
-  'base rule\'s blob hash **at copy time** rather than carrying the template\'s recorded value, so a ' +
-  'fresh install starts at zero drift instead of inheriting whatever hash the shipped template ' +
-  'happened to record. An already-installed `.claude/rules/*-project.md` is user-owned and is ' +
-  '**never rewritten by install or re-install** — including `--force`, which governs the managed ' +
-  'set only. The single exception is `--customize <rule> --reset`, which the user invokes ' +
-  'explicitly against a named file to regenerate it; that is a requested overwrite, not an ' +
-  'install-time one. A legacy comment-only header is therefore *reported* by `/claude-health` S2.5 ' +
-  'check #6 and never migrated on the user\'s behalf — `--reset` is offered as the remedy the user ' +
-  'may choose, not an action the install path takes.';
+  '``` Phase 1: Locate plugin rules dir Phase 2: Enumerate *.md, MINUS the override templates (*-p' +
+  'roject.md) — see below Phase 3: Determine install set (--all, specific names, or interactive) P' +
+  'hase 3.5: Read manifest + classify (new/unchanged/modified/conflict) Phase 4: Install (smart me' +
+  'rge with manifest tracking) Phase 4.5: Override templates — copy-when-absent only (never smart-' +
+  'merged) Phase 4.6: Backfill CLAUDE.md references Phase 5: Output report ``` **Managed-set exclu' +
+  'sion (required)**: `*-project.md` files are user-owned and must be excluded from the Phase 2 en' +
+  'umeration, so they never enter the manifest, the classification in Phase 3.5, or the smart merg' +
+  'e in Phase 4. They are handled only by Phase 4.5 below. Routing them through the managed path w' +
+  'ould let `--force`, a conflict resolution, or an auto-upgrade rewrite a file the user owns. ###' +
+  ' Arguments ``` $ARGUMENTS ``` | Argument | Description | |----------|-------------| | `--all` |' +
+  ' Install all available rules | | `--list` | List available rules without installing | | `--dry-' +
+  'run` | Show what would be installed, no changes | | `--force` | Overwrite modified rules | | `-' +
+  '-legacy-strategy <strategy>` | Handle pre-manifest installs (ask/overwrite/skip) | | `--customi' +
+  'ze <rule>` | Customize a project-override rule | | `rule-names...` | Specific rules to install ' +
+  '| ### Manifest Tracking Uses `.sd0x/install-state.json` to track installed file hashes. Smart m' +
+  'erge logic: | Status | Action | |--------|--------| | New (not installed) | Copy | | Unchanged ' +
+  '(hash match) | Auto-upgrade | | Modified by user | Skip (preserve edits) | | Conflict (both cha' +
+  'nged) | AskUserQuestion | ### Customize Mode (`--customize`) Manages `*-project.md` companion f' +
+  'iles for user overrides: | Sub-flag | Action | |----------|--------| | (none) | Show section st' +
+  'atus | | `--add-section` | Add a new section | | `--update-section <name>` | Update specific se' +
+  'ction | | `--reset` | Regenerate from template | ### Override Template Copy Contract (R8) All t' +
+  'hree override templates are copied from `rules/` on install when absent (`override_templates` i' +
+  'n `docs/features/rule-override-pattern/2-tech-spec.md` maps `auto-loop.md → auto-loop-project.m' +
+  'd`, `testing.md → testing-project.md` and `git-workflow.md → git-workflow-project.md`). This is' +
+  ' the **only install or re-install path** that writes them — they are excluded from the managed ' +
+  'set above, so no merge, upgrade, or `--force` reaches them. (The one other writer is the user-i' +
+  'nvoked `--reset`, below.) The copy and `--reset` regeneration produce the **live-precedence hea' +
+  'der** (a live `Precedence:` paragraph before the first `##` — HTML comments are stripped from m' +
+  'odel context, so a comment-form declaration never reaches the model), and stamp `<!-- Based on:' +
+  ' <base> @ <hash> -->` with the base rule\'s blob hash **at copy time** rather than carrying the ' +
+  'template\'s recorded value, so a fresh install starts at zero drift instead of inheriting whatev' +
+  'er hash the shipped template happened to record. An already-installed `.claude/rules/*-project.' +
+  'md` is user-owned and is **never rewritten by install or re-install** — including `--force`, wh' +
+  'ich governs the managed set only. The single exception is `--customize <rule> --reset`, which t' +
+  'he user invokes explicitly against a named file to regenerate it; that is a requested overwrite' +
+  ', not an install-time one. A legacy comment-only header is therefore *reported* by `/claude-hea' +
+  'lth` S2.5 check #6 and never migrated on the user\'s behalf — `--reset` is offered as the remedy' +
+  ' the user may choose, not an action the install path takes.';
 
 /** The complete published implementation region, not just the one subsection that carries the
  *  mapping. Pinning § 3.4.1 alone left a sibling free: `#### 3.4.1a Override Redirect` inserted
  *  between 3.4.1 and 3.4.2 ended `sectionAt()` before the contradictory pseudocode while the
  *  extracted 3.4.1 body stayed byte-identical. § 3.4 is the boundary the contract actually has. */
 const CANONICAL_SPEC_CORE_LOGIC =
-  '#### 3.4.1 `/install-rules` Changes **Phase 3.5 extension** — after managed rule classification, ' +
-  'add: ``` # Exclusion: *-project.md files are NOT part of the managed install set. # They are ' +
-  'copied as templates only, with no manifest hash entry written. managed_rules = rules/*.md ' +
-  'EXCLUDING *-project.md # Explicit override template mapping (not suffix-derived from ' +
-  'managed_rules) # Both distribution paths are defined here (R8): testing-project.md previously ' +
-  'had no # defined path — it IS copied, same contract as auto-loop-project.md. override_templates ' +
-  '= { "auto-loop.md": "auto-loop-project.md", "testing.md": "testing-project.md" } For each ' +
-  '(base_rule, project_file) in override_templates: if project_file NOT exists in .claude/rules/: ' +
-  'Copy from rules/{project_file} as template # Stamp provenance at COPY TIME, not byte-for-byte ' +
-  '(R8): the shipped template records # whatever hash it was authored against, so copying it ' +
-  'verbatim makes /claude-health # check #1 report drift on a brand-new install with zero overrides ' +
-  'written. base_hash = git hash-object --no-filters .claude/rules/{base_rule} | cut -c1-7 Rewrite ' +
-  'the copy\'s "<!-- Based on: {base_rule} @ <hash> -->" comment with base_hash Do NOT write ' +
-  'manifest entry for project_file Log: "Created project override template: {project_file} (based ' +
-  'on {base_rule} @ {base_hash})" else: Skip (user already has it — never rewritten by install or ' +
-  're-install, --force included; the only other writer is the user-invoked --customize <rule> ' +
-  '--reset) ``` > **Important**: `/install-rules` must explicitly exclude `*-project.md` from the ' +
-  'managed rule enumeration (`rules/*.md`) to prevent accidental manifest tracking. The template ' +
-  'source `rules/auto-loop-project.md` is only a copy source, never a managed rule. **New flag**: ' +
-  '`--customize <rule-name>` — creates fuller template with examples. #### 3.4.2 `/claude-health` ' +
-  'Safeguard Checks > **Shipped state is 6 checks, in `skills/claude-health/SKILL.md` § S2.5 — that ' +
-  'skill is canonical for this subsection.** The v1 table below is the original 4; R8 added #5 ' +
-  '(duplicate heading) and #6 (legacy precedence header), and amended #1 twice: the base file is ' +
-  '**derived from the `Based on:` comment\'s own filename** (never hard-coded to `auto-loop.md`, ' +
-  'since `testing-project.md` also ships), and drift is only evaluated when the override file has ' +
-  '**active content** — a fully commented-out scaffold has no overrides to review. 4 checks as ' +
-  'originally specified (v1): | # | Check | Severity | Detection | Recommendation | ' +
-  '|---|-------|----------|-----------|----------------| | 1 | Override drift | P2 | `based_on` ' +
-  'hash in project file vs current base hash | "Base auto-loop updated; review your overrides" | | ' +
-  '2 | Policy contradiction | P1 | Override disables required check that hook enforces | "Override ' +
-  'conflicts with stop-guard enforcement" | | 3 | Missing reference | P1 | CLAUDE.md references ' +
-  '`@rules/auto-loop-project.md` but file missing, OR file exists but not referenced in CLAUDE.md | ' +
-  '`/install-rules` to recreate or add reference | | 4 | Wrong-layer edit | P2 | Base ' +
-  '`auto-loop.md` has `LOCAL_MODIFIED`, `CONFLICT`, or `LEGACY` doctor state (user modified base) | ' +
-  '"Move customization to auto-loop-project.md" | **Policy contradiction detection contract**: ' +
-  '~~Parse the project override\'s Auto-Trigger table~~ — the Auto-Trigger table was retired by R3, ' +
-  'so there is nothing to parse there. The shipped contract keys on **any restated `##` section**: ' +
-  'extract the backticked check commands from the same-heading section of the base rule and require ' +
-  'the restatement to keep every one of them; a restatement that drops one is P1. Routing itself ' +
-  'now lives in an unheaded paragraph, which the exact-heading mechanism cannot restate, so it is ' +
-  'not overridable and is out of scope. See `skills/claude-health/SKILL.md` § S2.5. #### 3.4.3 Base ' +
-  '`auto-loop.md` Redirect Add at bottom of `rules/auto-loop.md`: ```markdown ## Project ' +
-  'Customization Project-specific overrides belong in `auto-loop-project.md` (not this file). See ' +
-  '`@rules/auto-loop-project.md` for your project\'s custom auto-loop behavior. ``` #### 3.4.4 ' +
-  'CLAUDE.md / Template Updates ```markdown ## Rules - @rules/auto-loop.md -- Auto review loop ' +
-  '(highest priority) - @rules/auto-loop-project.md -- Project-specific auto-loop overrides ' +
-  '(user-owned) ``` **Backfill for existing projects**: `/install-rules` must perform idempotent ' +
-  'missing-reference repair: if `@rules/auto-loop.md` reference exists in `## Rules` but ' +
-  '`@rules/auto-loop-project.md` is absent, insert only the missing line. This ensures existing ' +
-  'projects receive the reference on next `/install-rules` run without requiring manual CLAUDE.md ' +
-  'edits.';
+  '#### 3.4.1 `/install-rules` Changes **Phase 3.5 extension** — after managed rule classification' +
+  ', add: ``` # Exclusion: *-project.md files are NOT part of the managed install set. # They are ' +
+  'copied as templates only, with no manifest hash entry written. managed_rules = rules/*.md EXCLU' +
+  'DING *-project.md # Explicit override template mapping (not suffix-derived from managed_rules) ' +
+  '# Every distribution path is defined here (R8): testing-project.md previously had no # defined ' +
+  'path — it IS copied, same contract as auto-loop-project.md. git-workflow-project.md # joined in' +
+  ' git-autonomy R2 (2026-09-24), same contract. override_templates = { "auto-loop.md": "auto-loop' +
+  '-project.md", "testing.md": "testing-project.md", "git-workflow.md": "git-workflow-project.md" ' +
+  '} For each (base_rule, project_file) in override_templates: if project_file NOT exists in .clau' +
+  'de/rules/: Copy from rules/{project_file} as template # Stamp provenance at COPY TIME, not byte' +
+  '-for-byte (R8): the shipped template records # whatever hash it was authored against, so copyin' +
+  'g it verbatim makes /claude-health # check #1 report drift on a brand-new install with zero ove' +
+  'rrides written. base_hash = git hash-object --no-filters .claude/rules/{base_rule} | cut -c1-7 ' +
+  'Rewrite the copy\'s "<!-- Based on: {base_rule} @ <hash> -->" comment with base_hash Do NOT writ' +
+  'e manifest entry for project_file Log: "Created project override template: {project_file} (base' +
+  'd on {base_rule} @ {base_hash})" else: Skip (user already has it — never rewritten by install o' +
+  'r re-install, --force included; the only other writer is the user-invoked --customize <rule> --' +
+  'reset) ``` > **Important**: `/install-rules` must explicitly exclude `*-project.md` from the ma' +
+  'naged rule enumeration (`rules/*.md`) to prevent accidental manifest tracking. The template sou' +
+  'rce `rules/auto-loop-project.md` is only a copy source, never a managed rule. **New flag**: `--' +
+  'customize <rule-name>` — creates fuller template with examples. #### 3.4.2 `/claude-health` Saf' +
+  'eguard Checks > **Shipped state is 6 checks, in `skills/claude-health/SKILL.md` § S2.5 — that s' +
+  'kill is canonical for this subsection.** The v1 table below is the original 4; R8 added #5 (dup' +
+  'licate heading) and #6 (legacy precedence header), and amended #1 twice: the base file is **der' +
+  'ived from the `Based on:` comment\'s own filename** (never hard-coded to `auto-loop.md`, since `' +
+  'testing-project.md` also ships), and drift is only evaluated when the override file has **activ' +
+  'e content** — a fully commented-out scaffold has no overrides to review. 4 checks as originally' +
+  ' specified (v1): | # | Check | Severity | Detection | Recommendation | |---|-------|----------|' +
+  '-----------|----------------| | 1 | Override drift | P2 | `based_on` hash in project file vs cu' +
+  'rrent base hash | "Base auto-loop updated; review your overrides" | | 2 | Policy contradiction ' +
+  '| P1 | Override disables required check that hook enforces | "Override conflicts with stop-guar' +
+  'd enforcement" | | 3 | Missing reference | P1 | CLAUDE.md references `@rules/auto-loop-project.' +
+  'md` but file missing, OR file exists but not referenced in CLAUDE.md | `/install-rules` to recr' +
+  'eate or add reference | | 4 | Wrong-layer edit | P2 | Base `auto-loop.md` has `LOCAL_MODIFIED`,' +
+  ' `CONFLICT`, or `LEGACY` doctor state (user modified base) | "Move customization to auto-loop-p' +
+  'roject.md" | **Policy contradiction detection contract**: ~~Parse the project override\'s Auto-T' +
+  'rigger table~~ — the Auto-Trigger table was retired by R3, so there is nothing to parse there. ' +
+  'The shipped contract keys on **any restated `##` section**: extract the backticked check comman' +
+  'ds from the same-heading section of the base rule and require the restatement to keep every one' +
+  ' of them; a restatement that drops one is P1. Routing itself now lives in an unheaded paragraph' +
+  ', which the exact-heading mechanism cannot restate, so it is not overridable and is out of scop' +
+  'e. See `skills/claude-health/SKILL.md` § S2.5. #### 3.4.3 Base `auto-loop.md` Redirect Add at b' +
+  'ottom of `rules/auto-loop.md`: ```markdown ## Project Customization Project-specific overrides ' +
+  'belong in `auto-loop-project.md` (not this file). See `@rules/auto-loop-project.md` for your pr' +
+  'oject\'s custom auto-loop behavior. ``` #### 3.4.4 CLAUDE.md / Template Updates ```markdown ## R' +
+  'ules - @rules/auto-loop.md -- Auto review loop (highest priority) - @rules/auto-loop-project.md' +
+  ' -- Project-specific auto-loop overrides (user-owned) ``` **Backfill for existing projects**: `' +
+  '/install-rules` must perform idempotent missing-reference repair: if `@rules/auto-loop.md` refe' +
+  'rence exists in `## Rules` but `@rules/auto-loop-project.md` is absent, insert only the missing' +
+  ' line. This ensures existing projects receive the reference on next `/install-rules` run withou' +
+  't requiring manual CLAUDE.md edits.';
 
 
 test('the contract sections when an exception is added beside them → fail their section pins', () => {
@@ -1643,4 +1698,69 @@ test('spec when recording the carrier decision → documents comment invisibilit
   // reads — blanking it would force the spec to duplicate its own example in prose.
   assert.match(liveText(specRaw, { fencesCount: true }), /"testing\.md": "testing-project\.md"/,
     'fenced documentation is visible and still counts');
+});
+
+// --- git-autonomy R2: the third override file ---
+
+test('git-workflow mapping table when parsed → covers preamble plus every template heading exactly once, all Default', () => {
+  const rows = parseMappingTable(section(gitWorkflow, 'Project Customization'));
+  const headings = rows.map((r) => r[0]);
+  assert.deepEqual(headings, [
+    'preamble (synthetic section)',
+    '`## Branch Naming`',
+    '`## Commit Format`',
+    '`## Protected Branches`',
+    '`## Offer Mode`',
+    '`## Deploy Workflow`',
+    '`## Run Steps`',
+    '`## Goal Commit`',
+  ], 'the mapping is closed: exactly these rows, in template order');
+  for (const [heading, kind, tier] of rows) {
+    assert.match(tier, /^Default/, `${heading}: baseline tier must be Default`);
+    if (heading !== 'preamble (synthetic section)') assert.match(kind, /^Setting/, `${heading}: the scaffold is settings-only`);
+  }
+  const tplHeadings = templateHeadings(gitTpl);
+  assert.deepEqual(tplHeadings, ['Branch Naming', 'Commit Format', 'Protected Branches', 'Offer Mode', 'Deploy Workflow', 'Run Steps', 'Goal Commit'],
+    'template heading inventory drifted — update the mapping table AND this test together');
+  // A setting has no same-named parent section; restating one would silently become a section replacement.
+  for (const h of tplHeadings) {
+    assert.equal(documentSections(liveText(gitWorkflow)).filter((d) => d === h).length, 0,
+      `"${h}" must not also be a git-workflow.md section`);
+  }
+});
+
+test('git-workflow Protected Branches row when read → the default set is Anchor and only widens', () => {
+  const row = parseMappingTable(section(gitWorkflow, 'Project Customization'))
+    .find((r) => r[0] === '`## Protected Branches`');
+  assert.match(row[1], /additions list/, 'the setting adds, it never replaces');
+  assert.match(row[1], /no removal syntax/, 'removal is not expressible');
+  assert.match(row[1], /every branch read as protected/, 'a parse error fails closed');
+  assert.match(row[2], /Anchor \(Register #4\) and cannot shrink/, 'the default set is Anchor');
+  // Negative control: a row that granted removal would lose every one of these phrases.
+  const forged = row[1].replace('there is no removal syntax', 'a `- !name` bullet removes a default');
+  assert.doesNotMatch(forged, /no removal syntax/);
+});
+
+test('git-workflow-project template when resolved by the protected-set resolver → shipped scaffold adds nothing', () => {
+  const { spawnSync } = require('node:child_process');
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('node:fs');
+  const { tmpdir } = require('node:os');
+  const { join } = require('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'sd0x-gwp-'));
+  try {
+    mkdirSync(join(dir, 'rules'));
+    writeFileSync(join(dir, 'rules', 'git-workflow-project.md'), gitTpl);
+    const list = spawnSync('/bin/bash', [resolve(root, 'scripts/protected-branches.sh'), '--root', dir, '--list'], { encoding: 'utf8' });
+    assert.equal(list.status, 0, `the shipped scaffold must parse: ${list.stderr}`);
+    assert.deepEqual(list.stdout.trim().split('\n'), ['main', 'master', 'develop', 'release/*'],
+      'the commented examples are not additions');
+    // Uncommenting the example bullets must take effect — the scaffold teaches a working syntax.
+    const live = gitTpl.replace(/(## Protected Branches[\s\S]*?)<!--[\s\S]*?(- staging\n- hotfix\/\*\n)-->/, '$1$2');
+    assert.notEqual(live, gitTpl, 'fixture: the example block was found');
+    writeFileSync(join(dir, 'rules', 'git-workflow-project.md'), live);
+    const widened = spawnSync('/bin/bash', [resolve(root, 'scripts/protected-branches.sh'), '--root', dir, '--', 'staging'], { encoding: 'utf8' });
+    assert.equal(widened.status, 0, 'an uncommented example bullet protects that branch');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

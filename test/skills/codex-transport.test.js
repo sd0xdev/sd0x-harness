@@ -13,7 +13,7 @@ const { spawnSync } = require('node:child_process');
 const ROOT = resolve(__dirname, '../..');
 const REF = join(ROOT, 'skills/codex-code-review/references/codex-transport.md');
 const ref = readFileSync(REF, 'utf8');
-const invocation = readFileSync(join(ROOT, 'rules/codex-invocation.md'), 'utf8');
+const invocation = readFileSync(join(ROOT, 'skills/codex-code-review/references/codex-invocation-contract.md'), 'utf8');
 const autoLoop = readFileSync(join(ROOT, 'rules/auto-loop.md'), 'utf8');
 const project = readFileSync(join(ROOT, 'rules/auto-loop-project.md'), 'utf8');
 

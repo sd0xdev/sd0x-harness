@@ -1,7 +1,7 @@
 ---
 name: claude-health
 description: "Claude Code config health check + plugin sync. Use when: auditing .claude/ structure, checking naming, verifying hook setup, detecting plugin version drift, syncing installed assets. Not for: skill quality (use skill-health-check), code review (use codex-code-review). Output: health report + fix recommendations."
-allowed-tools: Read, Grep, Glob, Bash(ls:*), Bash(find:*), Bash(wc:*), Bash(du:*), Bash(rm:*), Bash(git:*)
+allowed-tools: Read, Grep, Glob, Bash(ls:*), Bash(find:*), Bash(wc:*), Bash(du:*), Bash(rm:*), Bash(git:*), Bash(/bin/bash:*), Bash(node:*)
 context: fork
 ---
 
@@ -23,7 +23,8 @@ context: fork
 |----------|-------------|
 | `--scope hygiene` | Only run C1-C7 hygiene checks |
 | `--scope sync` | Only run S1-S3 sync checks |
-| `--scope all` | Run both modules (**default**) |
+| `--scope budget` | Only run the Instruction Budget Module (B1-B3) |
+| `--scope all` | Run every module — hygiene, sync and budget (**default**) |
 
 ## Workflow
 
@@ -176,20 +177,21 @@ plugin_hash    = git hash-object --no-filters <plugin-path>  # source of truth
 |----------|-----------|--------------|-------|
 | Rules | `.claude/rules/*.md` | `rules/*.md` | `auto-loop.md`, `codex-invocation.md`, `fix-all-issues.md`, `framework.md`, `testing.md`, `security.md`, `git-workflow.md`, `logging.md`, `docs-writing.md`, `docs-numbering.md`, `self-improvement.md`, `context-management.md` |
 | Hooks | `.claude/hooks/*.sh` | `hooks/*.sh` | `pre-edit-guard.sh`, `pre-bash-codex-launch-guard.sh`, `post-edit-format.sh`, `post-skill-auto-loop.sh`, `post-compact-auto-loop.sh`, `stop-guard.sh`, `user-prompt-review-guard.sh` |
-| Scripts | `.claude/scripts/` | `scripts/` | `precommit-runner.js`, `verify-runner.js`, `review-state.js`, `dep-audit.sh`, `commit-msg-guard.sh`, `pre-push-gate.sh`, `lib/utils.js`, `lib/tree-digest.js` |
+| Scripts | `.claude/scripts/` | `scripts/` | `precommit-runner.js`, `verify-runner.js`, `review-state.js`, `dep-audit.sh`, `commit-msg-guard.sh`, `pre-push-gate.sh`, `protected-branches.sh`, `lib/utils.js`, `lib/tree-digest.js` |
 
 #### S2.5: Override Safeguard Checks
 
-6 checks for project override files (e.g., `auto-loop-project.md`):
+7 checks for project override files (e.g., `auto-loop-project.md`):
 
 | # | Check | Severity | Detection | Recommendation |
 |---|-------|----------|-----------|----------------|
-| 1 | Override drift | P2 | `based_on` hash comment in project file vs the hash of **the base file that comment names** (derived, never hard-coded — both `auto-loop-project.md` and `testing-project.md` ship) — **only when the override file has active content**; a scaffold with every section still commented out has no overrides to review, so drift is not reported | "Base `<rule>` updated since override authored; review your overrides" |
+| 1 | Override drift | P2 | `based_on` hash comment in project file vs the hash of **the base file that comment names** (derived, never hard-coded — `auto-loop-project.md`, `testing-project.md` and `git-workflow-project.md` all ship) — **only when the override file has active content**; a scaffold with every section still commented out has no overrides to review, so drift is not reported | "Base `<rule>` updated since override authored; review your overrides" |
 | 2 | Policy contradiction | P1 | An overridden section omits a required check command that the **same section** of the base rule contains | "Override drops a required check command its base section carries" |
-| 3 | Missing reference or base | P1 | For **each** shipped override file (`auto-loop-project.md`, `testing-project.md`): `.claude/CLAUDE.md` has `@rules/<file>` but the file is missing, OR the file exists but is not referenced, OR the file exists but the base rule its `Based on:` comment names is missing from `.claude/rules/` | `/install-rules` to recreate the missing file or base, or add the reference |
+| 3 | Missing reference or base | P1 | For **each** shipped override file (`auto-loop-project.md`, `testing-project.md`, `git-workflow-project.md`): `.claude/CLAUDE.md` has `@rules/<file>` but the file is missing, OR the file exists but is not referenced (by `@rules/<file>`, or — for a template carrying `paths:` frontmatter — by a plain `rules/<file>` mention; an `@` import of a path-scoped template is reported **P2** instead, because it loads the file at launch and defeats the scoping), OR the file exists but the base rule its `Based on:` comment names is missing from `.claude/rules/` | `/install-rules` to recreate the missing file or base, or add the reference |
 | 4 | Wrong-layer edit | P2 | Base `auto-loop.md` has `LOCAL_MODIFIED`, `CONFLICT`, or `LEGACY` state while project override exists | "Move customization to auto-loop-project.md" |
 | 5 | Duplicate heading | P2 | Override file has multiple active `## <heading>` with same text | "Keep one, remove duplicates. Last occurrence takes effect." |
 | 6 | Legacy precedence header | P2 | Precedence declaration exists only inside an HTML comment (`<!-- Precedence:` present, no live `Precedence:` line before the first `##`) — HTML comments are stripped from model context (R8), so the declaration never reaches its only reader | "Header predates the live-precedence contract; migrate the precedence line to live text by hand or regenerate via `/install-rules --customize <rule> --reset`. This check is **read-only** — it never edits the user-owned file" |
+| 7 | Git override conflict | P1 / P2 | `git-workflow-project.md` only. **P1** whenever the file exists, active content or not — two empty duplicate `## Protected Branches` headings are already a parse error: when `/bin/bash -p -- <resolver> --root <repo> --list` exits 2, where `<resolver>` is the **plugin install's** copy — `${CLAUDE_PLUGIN_ROOT}/scripts/protected-branches.sh` when that variable is set and its real path lies outside the audited repository, else `~/.claude/plugins/**/sd0x-dev-flow/scripts/protected-branches.sh` (one match) — **never** a copy inside the audited repository (`.claude/scripts/`, `scripts/`, `node_modules/`), because this check is read-only and the repository controls those files; no plugin install found → execute nothing and report check #7 as not run (P2), while S2 still classifies the local copy by hash — a removal attempt (`- !main`), a malformed bullet or a duplicate heading in `## Protected Branches`, which makes every branch read as protected; an **omitted** default is never reported, since the set only widens. **P2**, active content only, when a `## Deploy Workflow` line matches neither `merge <source> -> <target> [--no-ff\|--ff-only]` nor `run <path> [args…]` with every token in `^[A-Za-z0-9._/@:=+,-]+$`, or when `## Offer Mode` / `## Run Steps` carries a value outside `on\|commit-only\|off` / `print\|execute` | "Fix the named line; until then the protected set reads every branch as protected / the deploy block is ignored / the setting keeps its default" |
 
 **Policy contradiction detection**: For each `## <heading>` section the override restates, extract the backticked check commands (`/codex-review-fast`, `/codex-review-doc`, `/precommit`) from the **same-heading section of the base `auto-loop.md`** and require the restated section to keep every one of them. A verbatim copy therefore never flags; only a restatement that *drops* a command its base section carries is P1. (The base's Auto-Trigger table was retired by R3 — code/doc routing now lives in the unheaded terminal-invariant paragraph, which the exact-`##`-heading override mechanism cannot restate, so routing itself is not overridable and is out of this check's scope.) No restated section → check passes vacuously.
 
@@ -241,6 +243,34 @@ Applied to both: settings.json and settings.local.json
 
 **Argument conflict**: `--fix` and `--fix-safe` are mutually exclusive. If both specified, error.
 
+### Instruction Budget Module
+
+Claude Code adds up every always-loaded instruction file at launch and warns when the sum passes a
+total limit. The check reproduces that accounting (2.1.281) so the user learns it here first, with
+the plugin's share separated out. Runs under `--scope budget` and `--scope all` (the default), never
+under `--scope hygiene` or `--scope sync`. The script is the **plugin install's** copy — `$CLAUDE_PLUGIN_ROOT`
+when its real path lies outside the audited repository — **never** a copy inside the audited
+repository (`.claude/scripts/`, `scripts/`), because this check is read-only and the repository
+controls those files. No plugin install found → skip the module with a note:
+
+```bash
+REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "instruction budget: skipped — not in a git repository"; exit 0; }
+PR="${CLAUDE_PLUGIN_ROOT:-}"
+case "$(cd "$PR" 2>/dev/null && pwd -P)/" in "$(cd "$REPO_ROOT" && pwd -P)/"*|/) PR="" ;; esac
+[ -n "$PR" ] && [ -r "$PR/scripts/instruction-budget.js" ] \
+  && node "$PR/scripts/instruction-budget.js" --root "$REPO_ROOT" --plugin-root "$PR" \
+  || echo "instruction budget: skipped — no plugin install outside this repository"
+```
+
+| # | Check | Severity | Recommendation |
+|---|-------|----------|----------------|
+| B1 | Always-loaded total over the limit (total = `max(120000, per-file)`; pass `--per-file` for the model in use — the default is the 150,000 observed on 2.1.281) | P2 | Move a rule on demand (`paths:` frontmatter) or trim it; the three largest files are listed |
+| B2 | A file over the per-file limit | P2 | Claude Code warns on it alone and leaves it out of the total; split or trim it |
+| B3 | A lessons, archive, log or history file in `.claude/rules/` | P2 | Move it out of `rules/` — the lessons log lives at `.claude/sd0x-dev-flow-lessons.md` — or give it `paths:` frontmatter |
+
+The script is read-only; it never edits or moves a file. A missing script skips the module with a
+note rather than guessing a total.
+
 ## Output
 
 ```markdown
@@ -282,6 +312,13 @@ Applied to both: settings.json and settings.local.json
 | Entry integrity | ✅/⛔ | All matched / N missing |
 | Orphan entries | ✅/⛔ | None / N orphans |
 
+## Budget Summary (B1-B3)
+| Check | Status | Detail |
+|-------|--------|--------|
+| B1 Total | ✅/⚠️ | 89,472 / 150,000 chars; plugin share 89,472 |
+| B2 Per-file | ✅/⚠️ | None over / .claude/rules/big.md (152,000) |
+| B3 Lessons in rules/ | ✅/⚠️ | None / .claude/rules/lessons.md → move to .claude/sd0x-dev-flow-lessons.md |
+
 ## Statistics
 
 | Category | Count |
@@ -307,9 +344,10 @@ Applied to both: settings.json and settings.local.json
 
 - [ ] Hygiene: All 7 checks executed (when scope includes hygiene)
 - [ ] Sync: S1-S3 checks executed (when scope includes sync)
+- [ ] Budget: B1-B3 reported, or the skip note printed (when scope is `budget` or `all`)
 - [ ] Each check has clear ✅/⛔ status
 - [ ] P1 issues have specific fix commands
-- [ ] S2 classification covers every file in the managed inventory above (27 today: 12 rules, 7 hooks, 8 scripts)
+- [ ] S2 classification covers every file in the managed inventory above (28 today: 12 rules, 7 hooks, 9 scripts)
 - [ ] Fix delegation uses targeted file names (not `--all`)
 
 ## References

@@ -59,7 +59,7 @@ Every granted subcommand pushes, two of them with force, and the `pre-push` hook
 | The **unshared attestation** — *is anybody else working on the branches this push rewrites* | For `gh stack push` and `gh stack submit --auto`, Phase 3 asks it **by name and before the force approval**, listing the branches, and refuses the invocation when the answer is not the attestation. An installed hook may ask again over `/dev/tty`; that is defence in depth, never a reason to skip the question, because where the hook is absent nothing else asks. `gh stack link` rewrites nothing: its push carries no force, so a branch that diverged on the remote is refused by git itself and the run stops there (§ Force form) |
 | `ALLOW_PUSH_PROTECTED` and `ALLOW_FORCE_UNSHARED` are developer-set only | Never set by this skill, and **cleared on every invocation it executes** — a value exported earlier in the shell answers the hook's question without anybody being asked now |
 | `ALLOW_FORCE_WITH_LEASE` | Set **only** on the single approved `gh stack push` or `gh stack submit --auto` line, in the same phase that obtained the force-form approval — the same shape `/push-ci` uses — and **never on `gh stack link`**, which does not force. Without it the hook refuses the force-form push outright, which is a refusal, not an authorization of anything |
-| Protected branches | A protected branch (`main`/`master`/`develop`/`release/*`) may be the stack's **base** and may never appear as a stack **layer**. Phase 2 hard-aborts if one does |
+| Protected branches | A protected branch (`main`/`master`/`develop`/`release/*`, plus the project's additions — Phase 2's resolver) may be the stack's **base** and may never appear as a stack **layer**. Phase 2 hard-aborts if one does |
 
 **Why this skill is model-invocable when `/push-ci` and `/epic-merge` are not.** Both set
 `disable-model-invocation: true`; this one deliberately does not, because `/create-pr --stack`
@@ -331,11 +331,39 @@ prefix, so the prefix is not silently dropped when a row is edited:
 | Check | Refusal |
 |-------|---------|
 | Every layer exists locally (`git rev-parse --verify --quiet 'refs/heads/<b>'`) | abort — a typo is not fixed by pushing |
-| No layer is a protected branch | abort — protected branches are bases, never layers |
+| No layer is a protected branch — the fence below, once per layer. Exit 1 is the only "not protected" | abort — protected branches (the default set plus the project's `git-workflow-project.md` additions) are bases, never layers; an unknown answer aborts too |
 | Linear ancestry between adjacent layers (`git merge-base --is-ancestor`) | abort — a stack is linear by definition; `is-ancestor` answers 0/1 and **anything else aborts**, so an unreadable graph never reads as "not an ancestor" |
 | ≥ 2 layers | 1 layer → use `/create-pr`; 0 → error |
 | `--link`: no branch operand parses as an integer (`^[+]?[0-9]+$` — a leading `+` included, since `git check-ref-format` accepts `+400` and Go's `strconv.Atoi` reads it as `400`) | abort — `link` tries a numeric operand as a Stack number in first position and as a PR number everywhere **before** it tries it as a branch (`cmd/link.go` `detectAddMode`, `findExistingPR`), so branch `400` would retarget, mark ready and stack whatever PR #400 is. Rename the branch, or pass PR URLs. (`submit` and `push` take no operands, so a numeric layer name is no hazard there) |
 | The bottom layer's base | `--base '<trunk>'` when given — it must exist as `refs/remotes/origin/<trunk>` and must not itself be a layer; **without it the extension uses the repository's default branch**, which is why a caller whose target branch is not the default must pass it. `/create-pr --stack` resolves it as `--base` → `{TARGET_BRANCH}` → `main` and hands the resolved value over (§ Delegation) |
+
+The protected-layer check, run once per layer with `<b>` written as one single-quoted word (an
+apostrophe inside it written `'\''`). It is the same resolution block `/push-ci` and `/epic-merge`
+carry, and it refuses on anything but exit 1:
+
+```bash
+layer='<b>'
+# Protected-set resolution (git-autonomy R1): the default set plus the project's additions in
+# git-workflow-project.md, answered by scripts/protected-branches.sh — 1 is the only "not
+# protected"; 0 and 2 (unknown) both refuse. Without the resolver installed, an override file on
+# disk means the answer is unknown; with none, the default set is the whole answer.
+PB_ROOT=$(/usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git rev-parse --show-toplevel) || PB_ROOT=
+PB_SCRIPT="$PB_ROOT/.claude/scripts/protected-branches.sh"
+[[ -r "$PB_SCRIPT" ]] || PB_SCRIPT="$PB_ROOT/scripts/protected-branches.sh"
+if [[ -z "$PB_ROOT" ]]; then PB_STATUS=2
+elif [[ -r "$PB_SCRIPT" ]]; then
+  if /bin/bash -p -- "$PB_SCRIPT" --root "$PB_ROOT" -- "$layer"; then PB_STATUS=0; else PB_STATUS=$?; fi
+elif [[ -e "$PB_ROOT/.claude/rules/git-workflow-project.md" || -L "$PB_ROOT/.claude/rules/git-workflow-project.md" \
+   || -e "$PB_ROOT/rules/git-workflow-project.md" || -L "$PB_ROOT/rules/git-workflow-project.md" ]]; then PB_STATUS=2
+else case "$layer" in main|master|develop|release/*) PB_STATUS=0 ;; *) PB_STATUS=1 ;; esac
+fi
+if [[ "$PB_STATUS" != 1 ]]; then
+  echo "⛔ layer '$layer' is a protected branch (resolver status $PB_STATUS) — protected branches are bases, never layers" >&2
+  SD0X_GH_STACK_REFUSED=
+  : "${SD0X_GH_STACK_REFUSED:?refusing — a protected branch cannot be a stack layer}"
+fi
+echo "layer '$layer': not protected"
+```
 
 **Branch operands and PR operands validate through different sources, and the table above is the
 branch column.** `--link` is the only form that accepts a PR number or PR URL (`gh stack link`
@@ -345,7 +373,7 @@ is branches only, and a PR operand there is a parameter error.
 | Operand | How it is validated |
 |---------|---------------------|
 | `<branch>` | the table above, in full |
-| `<pr-number>` / PR URL | `gh pr view '<n>' --json number,state,headRefName,baseRefName,url` — the PR must exist and be **OPEN**, its `url` must name **this** repository (`gh repo view --json nameWithOwner`), its `headRefName` must not be a protected branch, and adjacency is read over the chain's own fields: layer *n+1*'s `baseRefName` must equal layer *n*'s `headRefName`. **The executed line renders the operand as that `url`, never as the number**: `link` pushes every operand that names a local branch *before* it resolves PR numbers (`cmd/link.go` `pushBranchArgs`), so a local branch that happens to be called `400` would be published under an approval that named PR #400 — while a URL is always resolved as a PR and never as a branch. A head ref absent locally is therefore not a refusal: nothing local is pushed for a PR operand |
+| `<pr-number>` / PR URL | `gh pr view '<n>' --json number,state,headRefName,baseRefName,url` — the PR must exist and be **OPEN**, its `url` must name **this** repository (`gh repo view --json nameWithOwner`), its `headRefName` must not be a protected branch — checked by the protected-layer fence above with `layer` bound to that `headRefName`, so statuses 0 and 2 refuse exactly as they do for a branch operand, and adjacency is read over the chain's own fields: layer *n+1*'s `baseRefName` must equal layer *n*'s `headRefName`. **The executed line renders the operand as that `url`, never as the number**: `link` pushes every operand that names a local branch *before* it resolves PR numbers (`cmd/link.go` `pushBranchArgs`), so a local branch that happens to be called `400` would be published under an approval that named PR #400 — while a URL is always resolved as a PR and never as a branch. A head ref absent locally is therefore not a refusal: nothing local is pushed for a PR operand |
 | any chain (`--link`, `--submit`) | one extra read per layer, **before** Phase 3 — `gh pr list --head '<b>' --state open --json number,url,isDraft,baseRefName,autoMergeRequest --limit 100` — because the approval must enumerate every change the subcommand makes to a PR that **already exists** (§ Force form, the mutation table): a base it retargets, auto-merge it disables (`submit`; `link` refuses such a PR instead), a draft it marks ready (`--open`). Nothing else in this skill reads that state |
 | `--submit`: a pending `gh stack modify` | `<git-dir>/gh-stack-modify-state` exists → **STOP**. `submit` resolves it before pushing, and without a terminal it does so by unstacking the Stack that file records — any Stack, not necessarily this one (`cmd/submit.go` `handlePendingModify`, `internal/modify/state.go`). The user finishes or abandons the modify; checked again immediately before execution |
 | a chain **mixing** the two | **refused in v1** — the extension itself accepts a mixed chain, but half the adjacency would come from git and half from the API, and a half-resolved chain is not a validated one. Give one form or the other |

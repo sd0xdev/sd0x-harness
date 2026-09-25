@@ -13,7 +13,7 @@ v4 da a Claude discreción dentro de un conjunto cerrado de anchors fijado por t
 Control plane completo en Claude Code. Distribución solo de skills para Codex CLI y otros agentes compatibles.
 
 <!-- BEGIN:HERO-COUNT -->
-100 bundled · 100 public skills · 16 agents — ~4% de la ventana de contexto de Claude
+101 bundled · 101 public skills · 16 agents — ~4% de la ventana de contexto de Claude
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -29,7 +29,7 @@ Control plane completo en Claude Code. Distribución solo de skills para Codex C
 /project-setup
 ```
 
-Un solo comando autodetecta framework, package manager, base de datos, entry points y scripts. Instala un subconjunto de rules y hooks; el plugin completo incluye 16 rules + 7 hooks. Usa `--lite` para solo configurar CLAUDE.md (sin rules/hooks).
+Un solo comando autodetecta framework, package manager, base de datos, entry points y scripts. Instala un subconjunto de rules y hooks; el plugin completo incluye 17 rules + 7 hooks. Usa `--lite` para solo configurar CLAUDE.md (sin rules/hooks).
 
 ```bash
 # Codex CLI / Cursor / Windsurf / Aider — solo skills
@@ -45,8 +45,8 @@ $codex-setup init
 <!-- BEGIN:INSTALL-COVERAGE -->
 | Método | Herramientas | Cobertura |
 |--------|-------------|-----------|
-| Instalar plugin | Claude Code | Completa (100 bundled skills, hooks, rules, auto-loop) |
-| `npx skills add` | Codex CLI, Cursor, Windsurf, Aider | Solo Skills (100 public skills) |
+| Instalar plugin | Claude Code | Completa (101 bundled skills, hooks, rules, auto-loop) |
+| `npx skills add` | Codex CLI, Cursor, Windsurf, Aider | Solo Skills (101 public skills) |
 | `$codex-setup init` | Codex CLI | Kernel AGENTS.md + hook commit-msg (la puerta pre-push es opt-in) |
 <!-- END:INSTALL-COVERAGE -->
 
@@ -133,7 +133,7 @@ sd0x-dev-flow es una reference implementation. Cada fila de la tabla mapea un su
 | 2 | **Digest-bound reminder state** | Los veredictos los anota el modelo (`node scripts/review-state.js note <plane> <pass\|fail>`) y quedan ligados al digest del árbol — una edición reabre el recordatorio de su plano porque el digest cambió; los sentinels de gate (`✅ Ready` / `## Overall: ✅ PASS`) siguen siendo señales de la capa de comportamiento | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context recovery across compaction** | Línea base de git (rama + archivos sin commit) y recordatorios de gates pendientes re-inyectados tras SessionStart(compact) | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
 | 4 | **Lifecycle interceptors** | 5 tipos de hook event despachados a 7 scripts — cuatro hooks de recordatorio consultivos, un auto-formateador y dos guards bloqueantes (ediciones de rutas sensibles; un Codex dispatch mal lanzado) (SessionStart ejecuta además `scripts/namespace-hint.sh`): PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (7 scripts) + [`.claude/settings.json`](.claude/settings.json) |
-| 5 | **Capability-based tool gating** | Frontmatter de skill `allowed-tools` — p. ej., `/ask` no tiene Edit/Write | 92 de 100 skills públicas declaran `allowed-tools` |
+| 5 | **Capability-based tool gating** | Frontmatter de skill `allowed-tools` — p. ej., `/ask` no tiene Edit/Write | 93 de 101 skills públicas declaran `allowed-tools` |
 | 6 | **Defense-in-depth safety** | Los guards a nivel de git instalados siguen siendo duros — commit-msg-guard allí donde lo instaló `/codex-setup init` (el plugin de Claude con `/project-setup` no lo instala), y pre-push-gate sobre `/dev/tty` cuando se ha optado por él; pre-edit-guard sigue bloqueando las ediciones de rutas sensibles (un guard de seguridad, no enforcement de workflow — requiere `jq`; sin jq, el guard no se activa); el Stop hook recuerda — las capas que custodian acciones irreversibles conservaron sus dientes, la capa de review se volvió consultiva por diseño | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex revisa lo que escribió Claude e investiga el repositorio por su cuenta — nunca recibe una conclusión que confirmar | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | Disciplina de estancamiento basada en evidencia: tres rondas de revisión que no cierran ningún hallazgo — contadas por el modelo a partir de los reportes de review — disparan una clasificación estructurada más un ajuste acotado. El presupuesto de rondas por tier (por defecto 6 / 15 / 30, sobrescribible 3–50) queda como red de seguridad ante un bucle desbocado y ejecuta el mismo diagnóstico en su primer hit, con salidas humanas enumeradas | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; detalles en `skills/codex-code-review/references/loop-diagnostics.md`) |
@@ -312,11 +312,11 @@ Escenarios reales que muestran qué habilidades combinar y en qué orden.
 <!-- BEGIN:WHATS-INCLUDED-COUNT -->
 | Categoría | Cantidad | Ejemplos |
 |-----------|----------|----------|
-| Skills | 100 public (100 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
+| Skills | 101 public (101 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | Agents | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | Hooks | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
-| Rules | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
-| Scripts | 23 | precommit runner, verify runner, review-state CLI, dep audit, namespace hint, skill runner, commit-msg guard, pre-push gate, build-codex-artifacts, resolve-feature (node entrypoint + shell shim + CLI), classify-docs, detect-scope, migration-audit, migrate-hook-lightweighting, security-redact, readme-catalog, check-doc-links, resolve-review-profile, codex-exec adapter |
+| Rules | 17 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
+| Scripts | 25 | precommit runner, verify runner, review-state CLI, dep audit, namespace hint, skill runner, commit-msg guard, pre-push gate, protected-branch resolver, build-codex-artifacts, resolve-feature (node entrypoint + shell shim + CLI), classify-docs, detect-scope, migration-audit, migrate-hook-lightweighting, security-redact, readme-catalog, check-doc-links, resolve-review-profile, instruction-budget, codex-exec adapter |
 <!-- END:WHATS-INCLUDED-COUNT -->
 
 ### Mínimo consumo de context
@@ -356,9 +356,9 @@ Los skills se cargan bajo demanda. Los skills inactivos no consumen tokens.
 
 <!-- BEGIN:FULL-CATALOG -->
 <details>
-<summary>Las 100 public skills</summary>
+<summary>Las 101 public skills</summary>
 
-### Desarrollo (34)
+### Desarrollo (35)
 
 | Skill | Descripción |
 |-------|-------------|
@@ -373,6 +373,7 @@ Los skills se cargan bajo demanda. Los skills inactivos no consumen tokens.
 | `/create-pr` | Create or update GitHub PR with gh CLI. |
 | `/debug` | Interactive debugging workflow with hypothesis-driven probe loop. |
 | `/deep-explore` | Multi-wave parallel code exploration orchestrator. |
+| `/deploy-flow` | Run the release flow a project declares in rules/git-workflow-project.md § Deploy Workflow: its git merge steps, and ... |
 | `/epic-merge` | Squash-merge secuencial de cadenas de PRs apiladas en una epic branch. |
 | `/feature-dev` | Feature development workflow. |
 | `/feature-verify` | Feature verification (READ-ONLY, P0-P5). |
@@ -488,7 +489,7 @@ Los skills se cargan bajo demanda. Los skills inactivos no consumen tokens.
 
 ## Reglas & Hooks
 
-16 reglas + 7 hooks. Las reglas son contratos por tiers: `discretion.md` resuelve cada instrucción de los 13 archivos de reglas gestionados por el plugin a exactamente uno de Anchor / Default / Guidance, y los 2 archivos de override propiedad del usuario se resuelven Anchor-first bajo sus reglas padre. El conjunto de hooks consta de cuatro hooks de recordatorio consultivos más un auto-formateador y dos guards bloqueantes. Los roles de recordatorio difieren por hook: los hooks de Stop y post-compact renderizan recordatorios de gates pendientes a partir del estado ligado al digest (`review-state.js`), el hook de prompt imprime la línea de hechos `[AUTO_LOOP_STATE]`, el hook post-skill imprime una línea estática con el orden de gates, y el hook post-compact además re-inyecta la línea base de git tras la compactación; la capa de review nunca bloquea — pre-edit-guard sigue bloqueando las ediciones de rutas sensibles (un guard de seguridad; requiere `jq` y sin jq no se activa), pre-bash-codex-launch-guard bloquea un Codex dispatch lanzado con su progreso desviado del panel de tareas, y los gates duros viven a nivel de git (commit-msg-guard, instalado por `/codex-setup init`; pre-push-gate, opt-in).
+17 reglas + 7 hooks. Las reglas son contratos por tiers: `discretion.md` resuelve cada instrucción de los 13 archivos de reglas gestionados por el plugin a exactamente uno de Anchor / Default / Guidance, y los 3 archivos de override propiedad del usuario se resuelven Anchor-first bajo sus reglas padre. El conjunto de hooks consta de cuatro hooks de recordatorio consultivos más un auto-formateador y dos guards bloqueantes. Los roles de recordatorio difieren por hook: los hooks de Stop y post-compact renderizan recordatorios de gates pendientes a partir del estado ligado al digest (`review-state.js`), el hook de prompt imprime la línea de hechos `[AUTO_LOOP_STATE]`, el hook post-skill imprime una línea estática con el orden de gates, y el hook post-compact además re-inyecta la línea base de git tras la compactación; la capa de review nunca bloquea — pre-edit-guard sigue bloqueando las ediciones de rutas sensibles (un guard de seguridad; requiere `jq` y sin jq no se activa), pre-bash-codex-launch-guard bloquea un Codex dispatch lanzado con su progreso desviado del panel de tareas, y los gates duros viven a nivel de git (commit-msg-guard, instalado por `/codex-setup init`; pre-push-gate, opt-in).
 
 > **Personalización**: Edita `auto-loop-project.md` para sobrescribir el comportamiento de auto-loop por proyecto. Las actualizaciones del plugin no conflictuarán — ver [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md).
 
@@ -510,7 +511,7 @@ Ejecuta `/project-setup` para autodetectar y configurar todos los placeholders, 
 | `{BUILD_COMMAND}` | Comando de build | yarn build |
 | `{TYPECHECK_COMMAND}` | Type checking | yarn typecheck |
 
-Los overrides se resuelven **Anchor-first**: los archivos de override propiedad del usuario (`auto-loop-project.md`, `testing-project.md`) personalizan solo el comportamiento de tier Default y Guidance — ningún override de proyecto puede degradar una entrada del Anchor Register, y un intento se reporta como conflicto en lugar de aceptarse.
+Los overrides se resuelven **Anchor-first**: los archivos de override propiedad del usuario (`auto-loop-project.md`, `testing-project.md`, `git-workflow-project.md`) personalizan solo el comportamiento de tier Default y Guidance — ningún override de proyecto puede degradar una entrada del Anchor Register, y un intento se reporta como conflicto en lugar de aceptarse.
 
 ## Demostración: Investigación Multi-Agente
 

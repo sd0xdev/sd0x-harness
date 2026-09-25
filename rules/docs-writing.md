@@ -1,3 +1,10 @@
+---
+paths:
+  - "**/*.md"
+  - "hooks/**"
+  - "scripts/**"
+  - "skills/**"
+---
 # Documentation Writing Rules
 
 | Principle          | Description                                         |
