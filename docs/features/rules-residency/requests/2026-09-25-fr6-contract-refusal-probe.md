@@ -2,7 +2,7 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md`.
 > **Created**: 2026-09-25
-> **Status**: Pending
+> **Status**: Completed
 > **Note**: tech spec task 2 的 FR-6 部分，涵蓋 r1、r2、r4 搬出的全部契約
 > **Priority**: P1
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) <- Technical detail (primary source)
@@ -20,22 +20,32 @@ r1、r2、r4 各自只釘住了「規則與 skill 寫明先讀契約、讀不到
 - 覆蓋的契約：`scope-contract.md`、`loop-diagnostics.md`（r1）、`testing-contract.md`、`documentation-contract.md`（r2）、`rules/override-contract.md`（r4）
 - 每個契約兩個方向：契約存在時照常執行；契約移除時，在產生審查結論或動手之前回報讀取失敗
 - 結果記成觀察到的行為（含 Claude Code 版本與日期），不寫成保證
+- probe 找到的缺口（契約移除後 workflow 仍照做）在本票修正：受影響的常駐指標補上讀不到時的停止條件，修正後重跑該案例
+
+## Related Files
+
+| File | Action | Description |
+| ---- | ------ | ----------- |
+| `docs/features/rules-residency/review-log-fr6-probe.md` | Create | 觀察結果、修正、限制，以及可重跑的 probe script |
+| `rules/scope-discipline.md` · `rules/auto-loop.md` | Modify | r1 兩個契約指標補上讀不到時的停止條件 |
+| `test/rules/contract-read-failure.test.js` | Create | 釘住每個常駐契約指標的停止條件（含負控制） |
 
 ## Acceptance Criteria
 
-- [ ] probe 可重跑，涵蓋上列五個契約
-- [ ] 每個契約都有「契約存在」與「契約移除」兩個方向的觀察結果
-- [ ] 結果記錄在 feature docs，標明版本與日期
-- [ ] 文件閘門：`/codex-review-doc` ✅ Mergeable
+- [x] probe 可重跑，涵蓋上列五個契約
+- [x] 每個契約都有「契約存在」與「契約移除」兩個方向的觀察結果
+- [x] 結果記錄在 feature docs，標明版本與日期
+- [x] 契約移除後沒有拒絕的案例，在本票補上讀不到時的停止條件，重跑確認拒絕；`contract-read-failure.test.js` 釘住每個契約各一個常駐指標的「先讀」與停止條件
+- [x] 文件閘門：`/codex-review-doc` ✅ Mergeable
 
 ## Progress
 
 | Phase | Status | Note |
 | ----- | ------ | ---- |
-| Analysis | - | |
-| Development | - | |
-| Testing | - | |
-| Acceptance | - | |
+| Analysis | Done | 五個契約、兩個方向，三輪共 15 次 headless session |
+| Development | Done | r2、r4 的三個契約第一次就拒絕；r1 的 scope 與 loop 契約沒有拒絕。第一版停止條件讓 loop 拒絕，但 scope 仍給出「應修」的結論（fail-closed，但仍是沒有契約下的審查結論）；文件審查指出後把 scope 的停止條件擴大到整個受治理的動作，第三輪兩者都拒絕 |
+| Testing | Done | `contract-read-failure.test.js` 通過；`/codex-test-review` ✅ Tests sufficient；程式碼閘門 `/codex-review-fast` ✅ Ready → `/precommit` ✅ PASS。Adequacy Gate（advisory）為 ⛔ Inadequate：行為證據是 § 6 指定的 headless probe，而不是 `/feature-verify` L3+；AC trace 當時檢查的是前兩輪的十二份輸出，確認它們支持每一項觀察、沒有矛盾；第三輪的三份輸出之後由程式碼與文件審查檢查 |
+| Acceptance | Done | 程式碼閘門與文件閘門皆通過；Adequacy Gate 為 advisory（見 Testing） |
 
 ## References
 

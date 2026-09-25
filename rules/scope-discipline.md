@@ -65,3 +65,7 @@ options, the helper-sweep boundary, circuit-breaker counters and thresholds, the
 candidate predicate and obligation set, the normalization-first
 gate derivation (the routing matrix itself stays in the review skill's § Step 4.5), and the
 enumerated human exits E1 and E2.
+
+Read it before declaring a finding out of scope, deferring a candidate, or deriving a gate. If that
+Read fails, stop: decide no fix obligation, declare nothing out of scope, defer nothing and derive
+no gate — report that the contract could not be read, and leave the gate open until it can be.

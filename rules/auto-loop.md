@@ -53,7 +53,8 @@ closed class table (`ARCHITECTURE`, `DOC_TOO_LONG`, `ATTENTION_DIFFUSION`, `UNVE
 constraints on `/refactor` as a bounded adjustment, the two `ATTENTION_DIFFUSION` subtypes —
 `SCATTER` (fix-batch partition inside one fix phase) and `REFERENCE_DRIFT`
 (reference-stability pass) — and the banking sequence (adjustment → gate pass → note →
-user-approved commit).
+user-approved commit). Read it before diagnosing. If that Read fails, make no diagnosis and no
+adjustment — report the trigger and the failed Read, and take ⚠️ Need Human.
 
 ## Sub-Threshold Findings
 
