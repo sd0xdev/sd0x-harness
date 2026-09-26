@@ -1,5 +1,5 @@
 {
-  "about": "Residency manifest (rules-residency tech spec § 3.5). One entry per always-loaded block of a rendered fresh install, plus the temporary blocks carried only by this checkout's CLAUDE.md. Each entry records its measured contribution (characters and lines; the template as rendered for the worst ecosystem with representative values). test/rules/residency-budget.test.js re-measures every entry, fails on a stale one, and holds the plugin-managed total to the budget below.",
+  "about": "Residency manifest (rules-residency tech spec § 3.5). One entry per always-loaded block of a rendered fresh install. Each entry records its measured contribution (characters and lines; the template as rendered for the worst ecosystem with representative values). test/rules/residency-budget.test.js re-measures every entry, fails on a stale one, and holds the plugin-managed total to the budget below.",
   "budget": {
     "plugin_managed_chars": 50000,
     "plugin_managed_lines": 600,
@@ -174,23 +174,6 @@
       ],
       "chars": 3430,
       "lines": 79
-    },
-    {
-      "file": "CLAUDE.md",
-      "block": "**Temporary — rules-residency canary (tasks 8a–8c, removed by 8c)**",
-      "owner": "plugin-dev",
-      "tier": "Default",
-      "temporary": true,
-      "removed_by": "task 8c",
-      "justification": "The canary's staging duty must fire at every change close in this checkout; it is carried only by this repository's CLAUDE.md and never ships in the template.",
-      "detail": [
-        "docs/features/rules-residency/2-tech-spec.md"
-      ],
-      "carrier": [
-        "scripts/dev/canary-stage.js"
-      ],
-      "chars": 435,
-      "lines": 1
     }
   ]
 }

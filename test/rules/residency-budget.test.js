@@ -140,10 +140,6 @@ function contribution(block, readFile = read) {
     templateWorst = templateWorst || worstOf(installs());
     return { chars: templateWorst.claude.length, lines: lines(templateWorst.claude) };
   }
-  if (block.temporary) {
-    const line = readFile(block.file).split('\n').find((l) => l.includes(block.block)) || '';
-    return { chars: line.length, lines: line ? 1 : 0 };
-  }
   const text = readFile(block.file);
   return { chars: text.length, lines: lines(text) };
 }
@@ -151,14 +147,14 @@ function contribution(block, readFile = read) {
 /** Manifest entries that disagree with the resident set on disk, or with themselves. */
 function manifestProblems(manifest, residentFiles, readFile = read) {
   const problems = [];
-  // Identity is the file, or the file plus the marker for a temporary block inside a file.
-  const ids = manifest.blocks.map((b) => (b.temporary ? `${b.file} § ${b.block}` : b.file));
-  for (const id of new Set(ids)) if (ids.filter((x) => x === id).length > 1) problems.push(`duplicate entry: ${id}`);
-  const listed = manifest.blocks.filter((b) => !b.temporary).map((b) => b.file);
+  const listed = manifest.blocks.map((b) => b.file);
+  for (const f of new Set(listed)) if (listed.filter((x) => x === f).length > 1) problems.push(`duplicate entry: ${f}`);
   for (const f of residentFiles) if (!listed.includes(f)) problems.push(`resident but unlisted: ${f}`);
   for (const f of new Set(listed)) if (!residentFiles.includes(f)) problems.push(`listed but not resident: ${f}`);
   for (const b of manifest.blocks) {
-    const expectedOwner = b.temporary ? 'plugin-dev' : b.file.endsWith('-project.md') ? 'user' : 'plugin';
+    // Temporary blocks retired with the canary (task 8c); an entry carrying the metadata is stale.
+    if ('temporary' in b || 'removed_by' in b) problems.push(`${b.file}: temporary-block metadata is no longer supported`);
+    const expectedOwner = b.file.endsWith('-project.md') ? 'user' : 'plugin';
     if (b.owner !== expectedOwner) problems.push(`${b.file}: owner ${b.owner}, expected ${expectedOwner}`);
     for (const key of ['tier', 'justification']) {
       if (typeof b[key] !== 'string' || !b[key].trim()) problems.push(`${b.file}: no ${key}`);
@@ -166,10 +162,6 @@ function manifestProblems(manifest, residentFiles, readFile = read) {
     for (const key of ['detail', 'carrier']) {
       if (!Array.isArray(b[key])) { problems.push(`${b.file}: ${key} is not a list`); continue; }
       for (const p of b[key]) if (!existsSync(join(ROOT, p))) problems.push(`${b.file}: reference ${p} does not exist`);
-    }
-    if (b.temporary && !(b.removed_by && b.block && readFile(b.file).includes(b.block))) {
-      problems.push(`${b.file}: temporary block without its removal task or live marker`);
-      continue;
     }
     const now = contribution(b, readFile);
     if (b.chars !== now.chars || b.lines !== now.lines) {
@@ -181,8 +173,6 @@ function manifestProblems(manifest, residentFiles, readFile = read) {
 
 test('the residency manifest → names every resident block once, with owner, tier, justification, live references and its measured contribution', () => {
   assert.deepEqual(manifestProblems(MANIFEST, residentSet()), []);
-  assert.ok(MANIFEST.blocks.some((b) => b.temporary && b.removed_by === 'task 8c'),
-    'the canary staging duty is carried as a temporary block until task 8c removes it');
 });
 
 test('the manifest check when an entry is dropped, duplicated, malformed or stale → names it (negative control)', () => {
@@ -191,9 +181,11 @@ test('the manifest check when an entry is dropped, duplicated, malformed or stal
   const cases = [
     [{ ...MANIFEST, blocks: MANIFEST.blocks.filter((b) => b.file !== 'rules/logging.md') }, ['resident but unlisted: rules/logging.md']],
     [{ ...MANIFEST, blocks: [...MANIFEST.blocks, at('rules/logging.md')] }, ['duplicate entry: rules/logging.md']],
-    [{ ...MANIFEST, blocks: [...MANIFEST.blocks, { ...MANIFEST.blocks.find((b) => b.temporary) }] },
-      [`duplicate entry: CLAUDE.md § ${MANIFEST.blocks.find((b) => b.temporary).block}`]],
+    [{ ...MANIFEST, blocks: [...MANIFEST.blocks, { ...at('rules/logging.md'), file: 'rules/testing.md' }] },
+      ['listed but not resident: rules/testing.md', `rules/testing.md: contribution ${at('rules/logging.md').chars}/${at('rules/logging.md').lines} recorded, `
+        + `${read('rules/testing.md').length}/${read('rules/testing.md').split('\n').length} measured`]],
     [swap('rules/security.md', { detail: ['skills/nowhere.md'] }), ['rules/security.md: reference skills/nowhere.md does not exist']],
+    [swap('rules/security.md', { temporary: true }), ['rules/security.md: temporary-block metadata is no longer supported']],
     [swap('rules/security.md', { carrier: undefined }), ['rules/security.md: carrier is not a list']],
     [swap('rules/logging.md', { owner: 'user' }), ['rules/logging.md: owner user, expected plugin']],
     [swap('rules/logging.md', { chars: at('rules/logging.md').chars - 1 }),
