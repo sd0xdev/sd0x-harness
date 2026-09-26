@@ -1376,15 +1376,12 @@ function installCoverageClaim(blockText, where, index, noun) {
 //
 // Measured across all six READMEs before this was written: HERO `{4, 15, 99, 99}`, INSTALL-COVERAGE
 // `{99, 99}`, WHATS-INCLUDED `{6, 15, 15, 21, 99, 99}` — identical multisets in every locale, and
-// every member a count derived below except HERO's `4`. That one is the hand-written `~4%` tail,
-// pinned here as a literal because it is not derived from anything; the request record carries it
-// as a deferred finding, and this constant is where a future derivation would land.
+// every member a count derived below except HERO's `4`, a hand-written `~4%` tail. 5.0 removed that
+// tail (no repository command reproduced it), so every integer the hero publishes is now derived.
 //
 // FULL-CATALOG is read at its `<summary>` only. The rest of that block quotes skill descriptions,
 // whose digits are prose rather than counts (`sd0x` → 0, `P0-P5` → 0 and 5, `Top 10` → 10, `v1` and
 // `1Password` → 1), and its category headings are already compared row by row above.
-const HERO_CONTEXT_PERCENT = 4;
-
 // Numerals as the READER sees them, and in both directions: a numeral the reader sees must not slip
 // past, and a digit the reader never sees must not be counted against the block.
 //
@@ -1412,7 +1409,7 @@ const HERO_CONTEXT_PERCENT = 4;
 // silently implied to be covered.
 const NON_ASCII_DIGIT = /(?![0-9])\p{Nd}/u;
 // Mathematical signs only: ASCII, Unicode minus, full-width and small forms. En and em dashes are
-// deliberately absent — the hero line every README ships publishes `— ~4%`, so a class that
+// deliberately absent — the hero line every README ships publishes `— <tail>`, so a class that
 // swallowed them would refuse all six on their correct shape.
 
 // TWO QUESTIONS, NOT ONE, and neither subsumes the other:
@@ -1635,7 +1632,7 @@ function assertBlockIntegers(text, where, key, expected) {
 // THIS function against a four-region fixture, so a region that stops being checked turns one red.
 function assertDocumentCounts(text, where, counts) {
   const regions = {
-    'HERO-COUNT': [counts.bundled, counts.pub, counts.agents, HERO_CONTEXT_PERCENT],
+    'HERO-COUNT': [counts.bundled, counts.pub, counts.agents],
     'INSTALL-COVERAGE': [counts.bundled, counts.pub],
     'WHATS-INCLUDED-COUNT': [counts.pub, counts.bundled, counts.agents, counts.hooks, counts.rules, counts.scripts],
   };
@@ -1721,10 +1718,10 @@ const withRow = (rows, i, row) => rows.map((r, k) => (k === i ? row : r));
 // that the extractor extracts rather than that any README is checked against the derived counts.
 const HERO_FIXTURE = (tail) => [
   '<!-- BEGIN:HERO-COUNT -->',
-  `99 bundled · 99 public skills · 15 agents — ~4%${tail}`,
+  `99 bundled · 99 public skills · 15 agents — procedures load on demand${tail}`,
   '<!-- END:HERO-COUNT -->',
 ].join('\n');
-const HERO_EXPECTED = [4, 15, 99, 99];
+const HERO_EXPECTED = [15, 99, 99];
 
 test('a count block refuses an integer it was not built to publish', () => {
   assert.doesNotThrow(
@@ -1853,13 +1850,13 @@ test('a count block refuses a numeral the reader sees but ASCII matching misses'
   // line is skipped as a delimiter, and the code span then keeps the number question from ever
   // seeing `99`. Both blind spots at once — which is how the escape was built.
   assert.throws(
-    () => assertBlockIntegers('<!-- BEGIN:HERO-COUNT -->\n|-\n`99` bundled · 99 public skills · 15 agents — ~4%\n<!-- END:HERO-COUNT -->', 'fixture', 'HERO-COUNT', HERO_EXPECTED),
+    () => assertBlockIntegers('<!-- BEGIN:HERO-COUNT -->\n|-\n`99` bundled · 99 public skills · 15 agents — procedures load on demand\n<!-- END:HERO-COUNT -->', 'fixture', 'HERO-COUNT', HERO_EXPECTED),
     /signed number/,
     'a delimiter-shaped line with no header row above it delimits nothing, so its sign is still a sign'
   );
   assert.doesNotThrow(
     () => assertBlockIntegers(HERO_FIXTURE(''), 'fixture', 'HERO-COUNT', HERO_EXPECTED),
-    'negative control: the hero line every README ships writes `— ~4%`, and an em dash is not a sign'
+    'negative control: the hero line every README ships writes `— <tail>`, and an em dash is not a sign'
   );
 });
 
@@ -2069,7 +2066,7 @@ test('ordinary CJK prose that happens to contain a numeral character is not a co
 const DOC_COUNTS = { bundled: 101, pub: 97, agents: 13, hooks: 7, rules: 11, scripts: 23 };
 const DOC_FIXTURE = (strays = {}) => [
   '<!-- BEGIN:HERO-COUNT -->',
-  `101 bundled · 97 public skills · 13 agents — ~4%${strays['HERO-COUNT'] || ''}`,
+  `101 bundled · 97 public skills · 13 agents — procedures load on demand${strays['HERO-COUNT'] || ''}`,
   '<!-- END:HERO-COUNT -->',
   '<!-- BEGIN:INSTALL-COVERAGE -->',
   COVERAGE_FIXTURE([
@@ -2278,11 +2275,11 @@ test('the hero and summary guards reject a second, contradicting claim', () => {
   // in prose rather than in a table.
   const hero = (body) => visibleMarkerBlockIn(
     `<!-- BEGIN:HERO-COUNT -->\n${body}\n<!-- END:HERO-COUNT -->`, 'HERO-COUNT', 'fixture');
-  const one = '99 bundled · 99 public skills · 15 agents — ~4%';
+  const one = '99 bundled · 99 public skills · 15 agents — procedures load on demand';
   assert.equal(heroCountsIn(hero(one), 'fixture').publicSkills, 99,
     'positive control: a single hero claim is read');
   assert.throws(
-    () => heroCountsIn(hero(`${one}\n777 bundled · 777 public skills · 777 agents — ~4%`), 'fixture'),
+    () => heroCountsIn(hero(`${one}\n777 bundled · 777 public skills · 777 agents — procedures load on demand`), 'fixture'),
     /expected exactly one/,
     'a correct hero line followed by a contradicting one is ambiguity, not a pass'
   );
@@ -2301,7 +2298,7 @@ test('the hero and summary guards reject a second, contradicting claim', () => {
 test('the hero and summary guards count claims as rendered, not as written', () => {
   const hero = (body) => visibleMarkerBlockIn(
     `<!-- BEGIN:HERO-COUNT -->\n${body}\n<!-- END:HERO-COUNT -->`, 'HERO-COUNT', 'fixture');
-  const one = '99 bundled · 99 public skills · 15 agents — ~4%';
+  const one = '99 bundled · 99 public skills · 15 agents — procedures load on demand';
   assert.throws(
     () => heroCountsIn(hero(`${one}\n777 bundled · 777 public **skills** · 777 agents`), 'fixture'),
     /expected exactly one/,

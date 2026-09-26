@@ -8,12 +8,12 @@
 
 **Deja que el modelo elija el camino. Mantén el «hecho» verificable.**
 
-v4 da a Claude discreción dentro de un conjunto cerrado de anchors fijado por tests; los hooks son recordatorios ligados al digest (digest-bound) que sobreviven la compactación, y Codex revisa de forma independiente.
+Claude tiene discreción dentro de un conjunto cerrado de anchors fijado por tests. Desde v5 solo un núcleo pequeño de reglas se carga al inicio, y los procedimientos detallados se cargan cuando surge su situación. Los hooks son recordatorios ligados al digest (digest-bound) que sobreviven la compactación, y Codex revisa de forma independiente.
 
 Control plane completo en Claude Code. Distribución solo de skills para Codex CLI y otros agentes compatibles.
 
 <!-- BEGIN:HERO-COUNT -->
-101 bundled · 101 public skills · 16 agents — ~4% de la ventana de contexto de Claude
+101 bundled · 101 public skills · 16 agents — los procedimientos se cargan bajo demanda
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -105,6 +105,26 @@ El núcleo no negociable vive en un **Anchor Register cerrado** (`rules/discreti
 
 El modelo posee el camino. El harness posee la evidencia y los límites no negociables. El humano conserva la autoridad irreversible.
 
+## Por qué v5
+
+**Modelos recomendados: Claude Opus 5.5 o posterior.** La línea 3.x está obsoleta y solo es adecuada para modelos anteriores a Claude Opus 4.8.
+
+v4 cambió *quién elige el camino*: el modelo decide la ruta dentro de un conjunto cerrado de anchors. v5 cambia *cuándo entran las instrucciones de procedimiento en el contexto*. Todo lo que una sesión lleva desde el inicio compite con la tarea por la atención, así que 5.0 conserva al inicio solo lo que debe cumplirse antes de conocer la tarea — el Anchor Register, los gates, los tiers y un índice de contratos — y traslada los procedimientos paso a paso a contratos que se leen cuando surge su situación.
+
+| Vía de carga | Qué se carga | Cuándo |
+|--------------|--------------|--------|
+| **Núcleo de inicio** | `CLAUDE.md` y las 9 reglas del plugin sin frontmatter `paths:`, más tus overrides `*-project.md` sin alcance de ruta | En cada sesión, al iniciar |
+| **Reglas por ruta** | `testing.md`, `docs-writing.md`, `docs-numbering.md`, `override-contract.md` y `testing-project.md` | Cuando Claude lee o edita un archivo que coincide |
+| **Contratos** | Los procedimientos detallados en `skills/*/references/`: ciclo de review, alcance, autorización de push, testing y documentación | Cuando se reconoce la situación y se lee el contrato; la tabla § Contract Triggers de `CLAUDE.md` asigna ocho situaciones a sus contratos |
+
+- **Si la lectura falla, la acción que gobierna se detiene** en lugar de continuar de memoria. Los contratos se distribuyen con el plugin, así que las reglas copiadas a un proyecto sin él no tienen nada que leer.
+- **La coincidencia de ruta es automática; un contrato no.** Se llega a él mediante la tabla de triggers, la referencia en la regla residente, el skill que ejecuta el trabajo o un `procedure_hint` orientativo en los hechos de los recordatorios.
+- **El presupuesto está medido.** El núcleo de inicio gestionado por el plugin en una instalación nueva renderizada ocupa 49,614 caracteres / 582 líneas en 5.0.0, y `test/rules/residency-budget.test.js` lo mantiene en ≤ 50,000 / 600. Es una reducción del texto residente; el diseño no afirma un cambio medido en qué tan bien lo sigue el modelo.
+
+Lo que cada Anchor prohíbe o autoriza no cambió, y el review, `/precommit` y el review de documentación se ejecutan exactamente cuando antes.
+
+**Actualizar un proyecto ya instalado**: actualiza el plugin, ejecuta `/install-rules --all` y copia § Contract Triggers del `CLAUDE.template.md` del plugin a `.claude/CLAUDE.md`. No hace falta editar ningún `*-project.md`. La correspondencia 4.x → 5.0 bloque por bloque y la medición antes/después están en [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand).
+
 ## Novedades en 4.4
 
 > Si tras actualizar a **4.4.0** notas una caída en la calidad de review — defectos reales que se cuelan, o revisiones que convergen demasiado pronto — por favor [abre un issue](https://github.com/sd0xdev/sd0x-harness/issues). Esta versión cambia el **criterio** del review, y los reportes de campo son la única forma de validarlo.
@@ -137,10 +157,11 @@ sd0x-dev-flow es una reference implementation. Cada fila de la tabla mapea un su
 | 6 | **Defense-in-depth safety** | Los guards a nivel de git instalados siguen siendo duros — commit-msg-guard allí donde lo instaló `/codex-setup init` (el plugin de Claude con `/project-setup` no lo instala), y pre-push-gate sobre `/dev/tty` cuando se ha optado por él; pre-edit-guard sigue bloqueando las ediciones de rutas sensibles (un guard de seguridad, no enforcement de workflow — requiere `jq`; sin jq, el guard no se activa); el Stop hook recuerda — las capas que custodian acciones irreversibles conservaron sus dientes, la capa de review se volvió consultiva por diseño | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex revisa lo que escribió Claude e investiga el repositorio por su cuenta — nunca recibe una conclusión que confirmar | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | Disciplina de estancamiento basada en evidencia: tres rondas de revisión que no cierran ningún hallazgo — contadas por el modelo a partir de los reportes de review — disparan una clasificación estructurada más un ajuste acotado. El presupuesto de rondas por tier (por defecto 6 / 15 / 30, sobrescribible 3–50) queda como red de seguridad ante un bucle desbocado y ejecuta el mismo diagnóstico en su primer hit, con salidas humanas enumeradas | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; detalles en `skills/codex-code-review/references/loop-diagnostics.md`) |
-| 9 | **Human-in-the-loop safety gates** | Aprobación por `AskUserQuestion` antes de cada push de `/push-ci` — siempre obligatoria, y la autorización misma cuando el hook `pre-push` opt-in no está instalado; con el hook instalado, la confirmación por `/dev/tty` es la credencial terminal para pushes a ramas protegidas (más detección de non-fast-forward) | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`skills/push-ci/SKILL.md`](skills/push-ci/SKILL.md) |
+| 9 | **Human-in-the-loop safety gates** | Aprobación por `AskUserQuestion` antes de cada push de `/push-ci` — siempre obligatoria, y toda la credencial cuando el hook `pre-push` opt-in no está instalado o no pregunta. Instalado, el hook pregunta por `/dev/tty` en dos casos: una rama protegida, y un push que reescribe un ref que otras personas pueden tener (la atestación unshared); un push non-fast-forward sin lease se rechaza antes de ambos | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`authorization-contract.md`](skills/push-ci/references/authorization-contract.md) |
 | 10 | **Self-improvement loop** | Corrección → registrar lesson → promover a regla tras 3+ recurrencias | [`rules/self-improvement.md`](rules/self-improvement.md) |
+| 11 | **Instruction residency** | Un núcleo de inicio medido — el Anchor Register, los gates, los tiers y un índice de contratos — con los procedimientos detallados en contratos que se leen cuando surge su situación; si la lectura falla, la acción gobernada se detiene ([Por qué v5](#por-qué-v5)) | [`residency-manifest.json`](docs/features/rules-residency/residency-manifest.json) + [`residency-budget.test.js`](test/rules/residency-budget.test.js) + [`CLAUDE.template.md`](CLAUDE.template.md) (§ Contract Triggers) |
 
-La mayoría de proyectos de harness cubren 2–4 de estos subproblemas. sd0x-dev-flow cubre los 10 — lo que hace el código útil como objeto de estudio, no solo como herramienta.
+Cada fila enlaza al código que la implementa, lo que hace el repositorio útil como objeto de estudio, no solo como herramienta.
 
 ## Cómo funciona
 
@@ -321,16 +342,9 @@ Escenarios reales que muestran qué habilidades combinar y en qué orden.
 
 ### Mínimo consumo de context
 
-~4% de la ventana de 200k tokens de Claude — el 96% queda disponible para tu código.
+El núcleo de inicio gestionado por el plugin en una instalación nueva renderizada mide **49,614 caracteres / 582 líneas** en 5.0.0, y `test/rules/residency-budget.test.js` lo mantiene en ≤ 50,000 / 600 — [Por qué v5](#por-qué-v5) describe qué contiene. Las reglas por ruta, los contratos, el cuerpo de los skills y los agents se cargan solo cuando se usan.
 
-| Componente | Tokens | % de 200k |
-|------------|--------|-----------|
-| Rules (carga permanente) | 5.1k | 2.6% |
-| Skills (bajo demanda) | 1.9k | 1.0% |
-| Agents | 791 | 0.4% |
-| **Total** | **~8k** | **~4%** |
-
-Los skills se cargan bajo demanda. Los skills inactivos no consumen tokens.
+Para medir tu propio proyecto — tu `CLAUDE.md`, tus overrides y la parte del plugin juntos — ejecuta `/claude-health --scope budget`. Reproduce en caracteres el cómputo de inicio de Claude Code (medido en 2.1.281); los límites con los que compara son estimaciones que dependen del modelo, no un recuento de tokens en vivo.
 
 ## Referencia de Skills
 
@@ -489,7 +503,7 @@ Los skills se cargan bajo demanda. Los skills inactivos no consumen tokens.
 
 ## Reglas & Hooks
 
-16 reglas + 7 hooks. Las reglas son contratos por tiers: `discretion.md` resuelve cada instrucción de los 12 archivos de reglas gestionados por el plugin a exactamente uno de Anchor / Default / Guidance, y los 3 archivos de override propiedad del usuario se resuelven Anchor-first bajo sus reglas padre. El conjunto de hooks consta de cuatro hooks de recordatorio consultivos más un auto-formateador y dos guards bloqueantes. Los roles de recordatorio difieren por hook: los hooks de Stop y post-compact renderizan recordatorios de gates pendientes a partir del estado ligado al digest (`review-state.js`), el hook de prompt imprime la línea de hechos `[AUTO_LOOP_STATE]`, el hook post-skill imprime una línea estática con el orden de gates, y el hook post-compact además re-inyecta la línea base de git tras la compactación; la capa de review nunca bloquea — pre-edit-guard sigue bloqueando las ediciones de rutas sensibles (un guard de seguridad; requiere `jq` y sin jq no se activa), pre-bash-codex-launch-guard bloquea un Codex dispatch lanzado con su progreso desviado del panel de tareas, y los gates duros viven a nivel de git (commit-msg-guard, instalado por `/codex-setup init`; pre-push-gate, opt-in).
+16 reglas + 7 hooks. Las reglas son contratos por tiers: de los 13 archivos de reglas gestionados por el plugin, `discretion.md` resuelve cada instrucción de los otros 12 a exactamente uno de Anchor / Default / Guidance, y los 3 archivos de override propiedad del usuario se resuelven Anchor-first bajo sus reglas padre. Nueve reglas del plugin se cargan al inicio y cuatro cuando se lee un archivo que coincide; los procedimientos detallados viven en contratos que se leen bajo demanda ([Por qué v5](#por-qué-v5), [docs/rules.md](docs/rules.md)). El conjunto de hooks consta de cuatro hooks de recordatorio consultivos más un auto-formateador y dos guards bloqueantes. Los roles de recordatorio difieren por hook: los hooks de Stop y post-compact renderizan recordatorios de gates pendientes a partir del estado ligado al digest (`review-state.js`), el hook de prompt imprime la línea de hechos `[AUTO_LOOP_STATE]`, el hook post-skill imprime una línea estática con el orden de gates, y el hook post-compact además re-inyecta la línea base de git tras la compactación; la capa de review nunca bloquea — pre-edit-guard sigue bloqueando las ediciones de rutas sensibles (un guard de seguridad; requiere `jq` y sin jq no se activa), pre-bash-codex-launch-guard bloquea un Codex dispatch lanzado con su progreso desviado del panel de tareas, y los gates duros viven a nivel de git (commit-msg-guard, instalado por `/codex-setup init`; pre-push-gate, opt-in).
 
 > **Personalización**: Edita `auto-loop-project.md` para sobrescribir el comportamiento de auto-loop por proyecto. Las actualizaciones del plugin no conflictuarán — ver [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md).
 
@@ -534,12 +548,12 @@ Seis capas, cada una dueña de una responsabilidad:
 |------|-------|
 | **Skills** | Capacidades cargadas bajo demanda — los verbos (`/feature-dev`, `/codex-review-fast`, …) |
 | **Modelo** | La ruta: agrupación, timing, escalado de la profundidad de review, desviaciones de tier Default |
-| **Rules** | Contratos por tiers (Anchor / Default / Guidance) cargados en cada sesión |
+| **Rules** | Contratos por tiers (Anchor / Default / Guidance): un núcleo pequeño cargado en cada sesión, reglas por ruta en los archivos que coinciden y procedimientos detallados en contratos que se leen bajo demanda ([Por qué v5](#por-qué-v5)) |
 | **Hooks + estado** | Recordatorios + hechos `[AUTO_LOOP_STATE]`, notas de veredicto ligadas al digest, recuperación a través de la compactación |
 | **Codex** | Review independiente — investiga el repositorio por su cuenta, nunca recibe una conclusión |
 | **Scripts + agents** | Checks deterministas (precommit, guards) y subagentes aislados |
 
-Para detalles avanzados de arquitectura (agentic control stack, teoría de bucle de control, reglas de sandbox), consulta [docs/architecture.md](docs/architecture.md) — ten en cuenta que partes de ese documento son anteriores a v4 y aún describen la coreografía de v3; `rules/auto-loop.md` y `rules/discretion.md` son la fuente de verdad actual.
+Para detalles avanzados de arquitectura (agentic control stack, arquitectura de contexto, modos de fallo del bucle de control, reglas de sandbox), consulta [docs/architecture.md](docs/architecture.md); `rules/auto-loop.md` y `rules/discretion.md` siguen siendo la fuente de verdad.
 
 ## Contribuir
 

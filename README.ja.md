@@ -8,12 +8,12 @@
 
 **モデルに経路を選ばせる。「完了」は検証可能なままに。**
 
-v4 は、テストで固定された閉じた Anchor セットの内側で Claude に裁量を与えます。フックは compaction をまたいで生き残る digest 束縛のリマインダーであり、Codex が独立してレビューします。
+Claude は、テストで固定された閉じた Anchor セットの内側で裁量を持ちます。v5 からは、起動時に読み込むのは小さなルールの中核だけで、詳細な手順は該当する状況になったときに読み込まれます。フックは compaction をまたいで生き残る digest 束縛のリマインダーであり、Codex が独立してレビューします。
 
 Claude Code ではフルコントロールプレーン。Codex CLI やその他の互換エージェントにはスキルのみを配布します。
 
 <!-- BEGIN:HERO-COUNT -->
-101 bundled · 101 public skills · 16 agents — Claude の context window のわずか ~4%
+101 bundled · 101 public skills · 16 agents — 詳細な手順は必要なときに読み込み
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -105,6 +105,26 @@ sandbox と approval policy はディスパッチごとにアダプタ自身が�
 
 モデルは経路を所有します。harness は証拠と交渉不可能な境界を所有します。人間は不可逆の権限を保持します。
 
+## なぜ v5 なのか
+
+**推奨モデル：Claude Opus 5.5 以降。** 3.x 系は非推奨となり、Claude Opus 4.8 より前のモデル向けです。
+
+v4 が変えたのは*誰が経路を選ぶか*です。モデルは閉じた Anchor セットの内側で自ら経路を選びます。v5 が変えるのは*手順的な指示がいつ context に入るか*です。セッションが起動時から抱えている内容はすべてタスクと注意を奪い合うため、5.0 では起動時に、タスクが分かる前から成り立っていなければならないもの — Anchor Register、ゲート、tier、そして contract の索引 — だけを残し、段階的な手順は該当する状況になったときに読み込む contract に移しました。
+
+| 読み込み経路 | 読み込まれるもの | タイミング |
+|--------------|------------------|------------|
+| **起動時の中核** | `CLAUDE.md` と、`paths:` frontmatter を持たない 9 つのプラグインルール、さらにパス指定のない `*-project.md` オーバーライド | 毎セッションの起動時 |
+| **パス指定ルール** | `testing.md`、`docs-writing.md`、`docs-numbering.md`、`override-contract.md`、`testing-project.md` | Claude が一致するファイルを読む・編集するとき |
+| **Contract** | `skills/*/references/` 配下の詳細な手順：レビューループ、スコープ、push の承認、テスト、ドキュメント | 状況が認識され、その contract が読み込まれたとき。`CLAUDE.md` の § Contract Triggers 表が 8 つの状況をそれぞれの contract に対応づけます |
+
+- **読み込みに失敗すると、その contract が管轄する操作は停止します。** 記憶に頼って続行することはありません。contract はプラグインと一緒に配布されるため、プラグインのないプロジェクトにルールだけをコピーしても読むものがありません。
+- **パスの一致は自動ですが、contract はそうではありません。** トリガー表、常駐ルール内の参照、作業を実行する skill、あるいはリマインダーの事実に含まれる参考情報の `procedure_hint` を経由して読み込まれます。
+- **予算は実測されています。** 新規インストールをプロジェクト値で描画した場合、プラグイン管理の起動時の中核は 5.0.0 で 49,614 文字／582 行で、`test/rules/residency-budget.test.js` が 50,000／600 以下に保ちます。これは常駐テキストの削減であり、モデルの遵守度が測定上変わったとは主張していません。
+
+各 Anchor が禁止・承認する内容は変わっておらず、レビュー・`/precommit`・ドキュメントレビューもこれまでと同じタイミングで実行されます。
+
+**インストール済みプロジェクトのアップグレード**：プラグインを更新し、`/install-rules --all` を実行してから、プラグインの `CLAUDE.template.md` にある § Contract Triggers を `.claude/CLAUDE.md` にコピーしてください。`*-project.md` の編集は不要です。ブロックごとの 4.x → 5.0 の対応と前後の計測は [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand) にあります。
+
 ## 4.4 の新機能
 
 > **4.4.0** へのアップグレード後に review の品質低下——実際の欠陥の見逃し、あるいは収束が早すぎる——に気づいた場合は、[issue を開いて](https://github.com/sd0xdev/sd0x-harness/issues)ご報告ください。このリリースは review の**判断そのもの**を変えるため、実運用からの報告だけが検証手段です。
@@ -137,10 +157,11 @@ sd0x-dev-flow は reference implementation です。以下の各行は、harness
 | 6 | **Defense-in-depth safety** | インストール済みの git レベルのガードはハードなまま — commit-msg-guard は `/codex-setup init` でインストールした環境で有効になり（Claude プラグインと `/project-setup` ではインストールされません）、`/dev/tty` 経由の pre-push-gate はオプトインした場合に有効です。編集時の pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガードであり、ワークフロー強制ではない — `jq` が必要で、jq が無いとガードは作動しない）、Stop hook はリマインドする — 不可逆な操作をゲートする層は牙を残し、レビュー層は設計として advisory になった | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex が Claude の書いたコードをレビュー。リポジトリを自力で調査し、結論を渡されて追認することはない | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | 証拠にもとづくストール規律：finding を 1 つも閉じないレビューラウンドが 3 回続くと — モデルがレビューレポートから数えます — 構造化されたストール分類と 1 回の限定的な調整を起動します。Tier ごとのラウンド予算（デフォルト 6 / 15 / 30、3〜50 でオーバーライド可）は暴走用のバックストップに退き、初回の上限到達でも同じ診断を行い、列挙された human exit を備える | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; 詳細は `skills/codex-code-review/references/loop-diagnostics.md`) |
-| 9 | **Human-in-the-loop safety gates** | すべての `/push-ci` push の前に `AskUserQuestion` で承認 — この承認は常に必要で、オプトインの `pre-push` フックが無い場合はそれ自体が承認になります。フックがある場合は、保護ブランチへの push で `/dev/tty` 確認が最終的な資格情報です（加えて non-fast-forward 検出） | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`skills/push-ci/SKILL.md`](skills/push-ci/SKILL.md) |
+| 9 | **Human-in-the-loop safety gates** | すべての `/push-ci` push の前に `AskUserQuestion` で承認 — この承認は常に必要で、オプトインの `pre-push` フックが無い場合やフックが確認しない場合は、それが承認のすべてです。フックがある場合は 2 つのケースで `/dev/tty` から確認します：保護ブランチへの push と、他の人が持っている可能性のある ref を書き換える push（unshared の確認）。lease のない non-fast-forward push はそのどちらより前に拒否されます | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`authorization-contract.md`](skills/push-ci/references/authorization-contract.md) |
 | 10 | **Self-improvement loop** | 是正 → lesson として記録 → 3 回以上の再発で rule に昇格 | [`rules/self-improvement.md`](rules/self-improvement.md) |
+| 11 | **Instruction residency** | 実測された起動時の中核（Anchor Register、ゲート、tier、contract の索引）と、該当する状況で読み込む contract に置かれた詳細な手順。読み込みに失敗すると管轄する操作は停止します（[なぜ v5 なのか](#なぜ-v5-なのか)） | [`residency-manifest.json`](docs/features/rules-residency/residency-manifest.json) + [`residency-budget.test.js`](test/rules/residency-budget.test.js) + [`CLAUDE.template.md`](CLAUDE.template.md)（§ Contract Triggers） |
 
-多くの harness プロジェクトはこれらのうち 2〜4 個しかカバーしません。sd0x-dev-flow は 10 個すべてをカバーしており、単なるツールではなく学習対象として読めるコードになっています。
+各行はそれを実装するコードにリンクしており、このリポジトリは単なるツールではなく学習対象として読めるものになっています。
 
 ## 仕組み
 
@@ -321,16 +342,9 @@ flowchart TD
 
 ### 極小の Context 使用量
 
-Claude の 200k context window のわずか ~4% — 96% はコードに使えます。
+新規インストールをプロジェクト値で描画した場合、プラグイン管理の起動時の中核は 5.0.0 で **49,614 文字／582 行** と計測され、`test/rules/residency-budget.test.js` が 50,000／600 以下に保ちます。何が含まれるかは [なぜ v5 なのか](#なぜ-v5-なのか) を参照してください。パス指定ルール、contract、スキル本体、エージェントは使われたときにだけ読み込まれます。
 
-| コンポーネント | トークン数 | 200k に対する割合 |
-|---------------|-----------|-----------------|
-| ルール（常時読み込み） | 5.1k | 2.6% |
-| スキル（オンデマンド） | 1.9k | 1.0% |
-| エージェント | 791 | 0.4% |
-| **合計** | **~8k** | **~4%** |
-
-スキルはオンデマンドで読み込まれます。未使用のスキルはトークンを消費しません。
+自分のプロジェクト（あなたの `CLAUDE.md`、オーバーライド、プラグインの占める分の合計）を計測するには `/claude-health --scope budget` を実行してください。Claude Code の起動時の計上方法（2.1.281 で計測）を文字数で再現します。比較する上限はモデルに依存する推定値であり、実際のトークン数ではありません。
 
 ## スキルリファレンス
 
@@ -489,7 +503,7 @@ Claude の 200k context window のわずか ~4% — 96% はコードに使えま
 
 ## ルール & フック
 
-16 ルール + 7 フック。ルールは tier 付きの契約です：`discretion.md` が、プラグイン管理の 12 のルールファイル内のすべての指示を Anchor / Default / Guidance のいずれかちょうど 1 つに解決し、ユーザー所有の 3 つのオーバーライドファイルは親ルールの下で Anchor-first に解決されます。フック構成は 4 本の advisory リマインダーフックに、自動フォーマッタ 1 本とブロックするガード 2 本を加えたものです。リマインダーの役割はフックごとに異なります：Stop と post-compact フックは digest 束縛の状態（`review-state.js`）から未完了ゲートのリマインダーを描画し、prompt フックは `[AUTO_LOOP_STATE]` の事実行を、post-skill フックは固定のゲート順序行を出力し、post-compact フックはさらに git ベースラインを再注入します。レビュー層は何もブロックしません — pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガード、`jq` 必須 — 無いと作動しない）、pre-bash-codex-launch-guard は進捗をタスクパネルから逸らす Codex dispatch の起動をブロックし、ハードなゲートは git レベルにあります（commit-msg-guard は `/codex-setup init` でインストール、pre-push-gate はオプトイン）。
+16 ルール + 7 フック。ルールは tier 付きの契約です：プラグイン管理の 13 のルールファイルのうち、`discretion.md` が残り 12 のすべての指示を Anchor / Default / Guidance のいずれかちょうど 1 つに解決し、ユーザー所有の 3 つのオーバーライドファイルは親ルールの下で Anchor-first に解決されます。プラグインルールのうち 9 つは起動時に、4 つは一致するファイルを読んだときに読み込まれます。詳細な手順は必要なときに読む contract にあります（[なぜ v5 なのか](#なぜ-v5-なのか)、[docs/rules.md](docs/rules.md)）。フック構成は 4 本の advisory リマインダーフックに、自動フォーマッタ 1 本とブロックするガード 2 本を加えたものです。リマインダーの役割はフックごとに異なります：Stop と post-compact フックは digest 束縛の状態（`review-state.js`）から未完了ゲートのリマインダーを描画し、prompt フックは `[AUTO_LOOP_STATE]` の事実行を、post-skill フックは固定のゲート順序行を出力し、post-compact フックはさらに git ベースラインを再注入します。レビュー層は何もブロックしません — pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガード、`jq` 必須 — 無いと作動しない）、pre-bash-codex-launch-guard は進捗をタスクパネルから逸らす Codex dispatch の起動をブロックし、ハードなゲートは git レベルにあります（commit-msg-guard は `/codex-setup init` でインストール、pre-push-gate はオプトイン）。
 
 > **カスタマイズ**：`auto-loop-project.md` を編集してプロジェクトの auto-loop 動作をオーバーライドできます。プラグイン更新と競合しません — [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md) 参照。
 
@@ -534,12 +548,12 @@ Claude の 200k context window のわずか ~4% — 96% はコードに使えま
 |-------|------|
 | **スキル** | オンデマンドで読み込まれる能力 — 動詞（`/feature-dev`、`/codex-review-fast`、…） |
 | **モデル** | 経路：バッチ処理、タイミング、レビュー深度のエスカレーション、Default tier の逸脱 |
-| **ルール** | 毎セッション読み込まれる tier 付きの契約（Anchor / Default / Guidance） |
+| **ルール** | tier 付きの契約（Anchor / Default / Guidance）：小さな中核は毎セッション読み込まれ、パス指定ルールは一致するファイルで読み込まれ、詳細な手順は必要なときに読む contract にあります（[なぜ v5 なのか](#なぜ-v5-なのか)） |
 | **フック + 状態** | リマインダー + `[AUTO_LOOP_STATE]` のファクト、digest に束縛された verdict の note、compaction をまたぐ復帰 |
 | **Codex** | 独立レビュー — リポジトリを自力で調査し、結論を渡されることはない |
 | **スクリプト + エージェント** | 決定論的チェック（precommit、ガード）と隔離されたサブエージェント |
 
-高度なアーキテクチャの詳細（agentic control stack、制御ループ理論、サンドボックスルール）は [docs/architecture.md](docs/architecture.md) を参照してください — ただし、その一部は v4 以前に書かれ、いまだ v3 の choreography を記述しています。現在の source of truth は `rules/auto-loop.md` と `rules/discretion.md` です。
+高度なアーキテクチャの詳細（agentic control stack、context アーキテクチャ、制御ループの失敗モード、サンドボックスルール）は [docs/architecture.md](docs/architecture.md) を参照してください。source of truth は引き続き `rules/auto-loop.md` と `rules/discretion.md` です。
 
 ## コントリビュート
 

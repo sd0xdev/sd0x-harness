@@ -8,12 +8,12 @@
 
 **Let the model choose the path. Keep "done" verifiable.**
 
-v4 gives Claude discretion inside a closed, test-pinned anchor set; hooks are digest-bound reminders that survive compaction, and Codex reviews independently.
+Claude has discretion inside a closed, test-pinned anchor set. Since v5 only a small rule core loads at launch, and the detailed procedures load when their situation arises. Hooks are digest-bound reminders that survive compaction, and Codex reviews independently.
 
 Full control plane on Claude Code. Skills-only distribution for Codex CLI and other compatible agents.
 
 <!-- BEGIN:HERO-COUNT -->
-101 bundled · 101 public skills · 16 agents — ~4% of Claude's context window
+101 bundled · 101 public skills · 16 agents — procedures load on demand
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -115,6 +115,26 @@ The non-negotiable core lives in a **closed Anchor Register** (`rules/discretion
 
 The model owns the path. The harness owns the evidence and non-negotiable boundaries. The human retains irreversible authority.
 
+## Why v5
+
+**Recommended models: Claude Opus 5.5 or later.** The 3.x line is deprecated and suitable only for models before Claude Opus 4.8.
+
+v4 changed *who chooses the path*: the model owns the route inside a closed set of anchors. v5 changes *when procedural instructions enter the context*. Everything a session carries from launch competes with the task for attention, so 5.0 keeps at launch only what must hold before the task is known — the Anchor Register, the gates, the tiers and an index of contracts — and moves the step-by-step procedures into contracts read when their situation arises.
+
+| Loading path | What loads | When |
+|--------------|------------|------|
+| **Launch core** | `CLAUDE.md` and the 9 plugin rules without `paths:` frontmatter, plus your unscoped `*-project.md` overrides | Every session, at launch |
+| **Path-scoped rules** | `testing.md`, `docs-writing.md`, `docs-numbering.md`, `override-contract.md` and `testing-project.md` | When Claude reads or edits a matching file |
+| **Contracts** | The detailed procedures under `skills/*/references/` — review loop, scope, push authorization, testing and documentation | When the situation is recognized and the contract is Read; the § Contract Triggers table in `CLAUDE.md` maps eight situations to their contracts |
+
+- **A failed Read stops the action it governs** instead of proceeding from memory. The contracts ship with the plugin, so rules copied into a project without it have nothing to read.
+- **A path match is automatic; a contract is not.** It is reached through the trigger table, the resident rule's pointer, the skill that runs the work, or an advisory `procedure_hint` in the reminder facts.
+- **The budget is measured.** The plugin-managed launch core of a rendered fresh install is 49,614 characters / 582 lines at 5.0.0, and `test/rules/residency-budget.test.js` holds it at ≤ 50,000 / 600. That is a reduction in resident text; the design does not claim a measured change in how well the model follows it.
+
+What every Anchor prohibits or authorizes is unchanged, and review, `/precommit` and doc review run exactly when they did.
+
+**Upgrading an installed project**: update the plugin, run `/install-rules --all`, and copy § Contract Triggers from the plugin's `CLAUDE.template.md` into `.claude/CLAUDE.md`. No `*-project.md` edit is required. The block-by-block 4.x → 5.0 mapping and the before/after measurement are in [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand).
+
 ## What's New in 4.4
 
 > If you notice review quality drop after upgrading to **4.4.0** — real defects slipping through, or reviews converging too eagerly — please
@@ -163,10 +183,11 @@ sd0x-dev-flow is a reference implementation. Each row below maps a canonical har
 | 6 | **Defense-in-depth safety** | Git-level guards stay hard where they are installed — commit-msg-guard wherever `/codex-setup init` installed it (the Claude plugin plus `/project-setup` does not), pre-push-gate over `/dev/tty` when opted in; edit-time pre-edit-guard still blocks sensitive-path edits (a security guard, not workflow enforcement — it needs `jq`, and without it the guard does not fire); the Stop hook reminds — the layers that gate irreversible actions and secrets kept their teeth, the review layer became advisory by design | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex reviews what Claude wrote, researching the repo independently — never handed a conclusion to confirm | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | Evidence-based stall discipline: three review rounds that close no findings — counted by the model from the review reports — trigger a structured classification plus one bounded adjustment. The per-tier round budget (default 6 / 15 / 30, overridable 3–50) is the runaway backstop and runs the same diagnosis on its first hit, with enumerated human exits | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; details in `skills/codex-code-review/references/loop-diagnostics.md`) |
-| 9 | **Human-in-the-loop safety gates** | `AskUserQuestion` approval before every `/push-ci` push — always required, and the authorization itself where the opt-in `pre-push` hook is absent; with the hook installed, `/dev/tty` confirmation is the terminal credential for protected-branch pushes (plus non-fast-forward detection) | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`skills/push-ci/SKILL.md`](skills/push-ci/SKILL.md) |
+| 9 | **Human-in-the-loop safety gates** | `AskUserQuestion` approval before every `/push-ci` push — always required, and the whole credential where the opt-in `pre-push` hook is absent or does not prompt. Installed, the hook asks over `/dev/tty` in two cases: a protected branch, and a push that rewrites a ref other people may hold (the unshared attestation); a non-fast-forward push without a lease is refused before either | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`authorization-contract.md`](skills/push-ci/references/authorization-contract.md) |
 | 10 | **Self-improvement loop** | Correction → record lesson → promote to rule after 3+ recurrences | [`rules/self-improvement.md`](rules/self-improvement.md) |
+| 11 | **Instruction residency** | A measured launch core — the Anchor Register, gates, tiers and a contract index — with the detailed procedures in contracts read when their situation arises; a failed Read stops the governed action ([Why v5](#why-v5)) | [`residency-manifest.json`](docs/features/rules-residency/residency-manifest.json) + [`residency-budget.test.js`](test/rules/residency-budget.test.js) + [`CLAUDE.template.md`](CLAUDE.template.md) (§ Contract Triggers) |
 
-Most harness projects cover 2–4 of these. sd0x-dev-flow covers all 10 — which makes the code useful as a study target, not just a tool.
+Each row links to the code that implements it, which makes the repository useful as a study target, not just a tool.
 
 ## How It Works
 
@@ -347,16 +368,9 @@ Real-world scenarios showing which skills to combine and in what order.
 
 ### Minimal Context Footprint
 
-~4% of Claude's 200k context window — 96% remains for your code.
+The plugin-managed launch core of a rendered fresh install measures **49,614 characters / 582 lines** at 5.0.0, and `test/rules/residency-budget.test.js` holds it at ≤ 50,000 / 600 — [Why v5](#why-v5) describes what is in it. Path-scoped rules, contracts, skill bodies and agents load only when they are used.
 
-| Component | Tokens | % of 200k |
-|-----------|--------|-----------|
-| Rules (always loaded) | 5.1k | 2.6% |
-| Skills (on-demand) | 1.9k | 1.0% |
-| Agents | 791 | 0.4% |
-| **Total** | **~8k** | **~4%** |
-
-Skills load on-demand. Idle skills cost zero tokens.
+To measure your own project — your `CLAUDE.md`, your overrides and the plugin's share together — run `/claude-health --scope budget`. It reproduces Claude Code's launch accounting (measured on 2.1.281) in characters; the limits it compares against are model-dependent estimates, not a live token count.
 
 ## Skill Reference
 
@@ -515,7 +529,7 @@ Skills load on-demand. Idle skills cost zero tokens.
 
 ## Rules & Hooks
 
-16 rules + 7 hooks. The rules are tiered contracts: `discretion.md` resolves every instruction in the 12 plugin-managed rule files to exactly one of Anchor / Default / Guidance, and the 3 user-owned override files resolve Anchor-first under their parent rules. The hook set is 4 advisory reminder hooks plus an auto-formatter and two blocking guards. The reminder roles differ per hook: the Stop and post-compact hooks render owed-gate reminders from the digest-bound state (`review-state.js`), the prompt hook prints the `[AUTO_LOOP_STATE]` fact line, the post-skill hook prints a static gate-order line, and the post-compact hook also re-injects the git baseline; the review layer never blocks — pre-edit-guard still blocks sensitive-path edits (a security guard; it needs `jq` and does not fire without it), pre-bash-codex-launch-guard blocks a Codex dispatch launched with its progress redirected away from the task panel, and the hard gates live at the git level (commit-msg-guard, installed by `/codex-setup init`; pre-push-gate, opt-in).
+16 rules + 7 hooks. The rules are tiered contracts: of the 13 plugin-managed rule files, `discretion.md` resolves every instruction in the other 12 to exactly one of Anchor / Default / Guidance, and the 3 user-owned override files resolve Anchor-first under their parent rules. Nine plugin rules load at launch and four when a matching file is read; the detailed procedures live in contracts read on demand ([Why v5](#why-v5), [docs/rules.md](docs/rules.md)). The hook set is 4 advisory reminder hooks plus an auto-formatter and two blocking guards. The reminder roles differ per hook: the Stop and post-compact hooks render owed-gate reminders from the digest-bound state (`review-state.js`), the prompt hook prints the `[AUTO_LOOP_STATE]` fact line, the post-skill hook prints a static gate-order line, and the post-compact hook also re-injects the git baseline; the review layer never blocks — pre-edit-guard still blocks sensitive-path edits (a security guard; it needs `jq` and does not fire without it), pre-bash-codex-launch-guard blocks a Codex dispatch launched with its progress redirected away from the task panel, and the hard gates live at the git level (commit-msg-guard, installed by `/codex-setup init`; pre-push-gate, opt-in).
 
 > **Customization**: Edit `auto-loop-project.md` to override auto-loop behavior per project. Plugin updates won't conflict — see [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md).
 
@@ -560,12 +574,12 @@ Six layers, each owning one concern:
 |-------|------|
 | **Skills** | Capabilities loaded on demand — the verbs (`/feature-dev`, `/codex-review-fast`, …) |
 | **Model** | The route: batching, timing, review depth escalation, Default-tier deviations |
-| **Rules** | Tiered contracts (Anchor / Default / Guidance) loaded every session |
+| **Rules** | Tiered contracts (Anchor / Default / Guidance): a small core loaded every session, path-scoped rules on matching files, detailed procedures in contracts read on demand ([Why v5](#why-v5)) |
 | **Hooks + state** | Reminders + `[AUTO_LOOP_STATE]` facts, digest-bound verdict notes, recovery across compaction |
 | **Codex** | Independent review — researches the repo itself, never handed a conclusion |
 | **Scripts + agents** | Deterministic checks (precommit, guards) and isolated subagents |
 
-For advanced architecture details (agentic control stack, control loop theory, sandbox rules), see [docs/architecture.md](docs/architecture.md) — note that parts of it predate v4 and still describe the v3 choreography; `rules/auto-loop.md` and `rules/discretion.md` are the current source of truth.
+For advanced architecture details (agentic control stack, context architecture, control-loop failure modes, sandbox rules), see [docs/architecture.md](docs/architecture.md); `rules/auto-loop.md` and `rules/discretion.md` remain the source of truth.
 
 ## Contributing
 
