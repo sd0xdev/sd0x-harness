@@ -24,6 +24,7 @@
     "hooks/",
     "rules/",
     "docs/skill-catalog.yml",
+    "CHANGELOG.md",
     "CLAUDE.md",
     "CLAUDE.template.md"
   ]

@@ -89,6 +89,15 @@ jobs:
           process.stdout.write(body);
           " "$COMMITS" > release-notes.md
 
+      - name: Append the migration guide
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          # A version with a CHANGELOG.md section gets it after the commit list; most have none.
+          SECTION=$(node .github/scripts/changelog-section.js "${{ steps.version.outputs.version }}")
+          if [ -n "$SECTION" ]; then
+            printf '\n%s\n' "$SECTION" >> release-notes.md
+          fi
+
       - name: Create tag and release
         if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
