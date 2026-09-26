@@ -12,14 +12,14 @@ first).
 
 | Hook | Trigger | Purpose |
 |------|---------|---------|
-| `namespace-hint` | SessionStart (`startup\|clear\|compact`) | Inject plugin command namespace guidance, and the plugin root (`Plugin root:`) that resident contract paths resolve against, into Claude context |
+| `namespace-hint` | SessionStart (`startup\|clear\|compact`) | Inject plugin command namespace guidance, and the plugin root (`Plugin root:`) that the on-demand contract paths (`skills/…`) resolve against, into Claude context |
 | `pre-edit-guard` | Before Edit/Write | Block sensitive-path edits (.env/.git) — security guard, still exits 2. **Requires `jq`**: without it the path cannot be extracted and the guard silently does not fire (fail-open, pinned by `test/hooks/pre-edit-guard.test.js`) |
 | `pre-bash-codex-launch-guard` | Before Bash | Block a `codex-exec.js start`/`resume` launch that is not `run_in_background: true`, or that redirects or pipes stdout/stderr (anywhere on that simple command), wraps in `nohup`/`setsid`, or backgrounds with a trailing `&` — those cut a long review off or hide the adapter's live progress from the task panel. Judged per top-level simple command by a quote-aware lexer (the command word must be `node` running a `…codex-exec.js` path — written literally, or through a variable this same tool input assigns; every such launch is checked), so a quoted mention in a `grep` pattern or a comment passes (`codex-transport.md` § Progress step 1); exits 2 with the correct launch shape on stderr. `alloc`/`cleanup` and every non-Codex command pass. **Boundary, by design**: a launch hidden inside `bash -c '…'`, `eval`, `$(…)` or backticks is a quoted word to the lexer and passes, and so does a locator held in a variable that an earlier tool call assigned — the guard targets the launch shapes that were measured, not arbitrary shell. **Requires `jq` and `node`**: without either the command cannot be judged and the guard does not fire (fail-open, pinned by `test/hooks/pre-bash-codex-launch-guard.test.js`) |
 | `post-edit-format` | After Edit/Write | Auto prettier; the digest change is what re-opens the plane's reminder |
 | `post-skill-auto-loop` | After Skill tool | Print the static gate-order reminder (review → precommit → doc-sync) — deliberately state-blind, it reads nothing |
 | `stop-guard` | Before stop | Print owed-gate reminders from the state (git fallback when the checker is absent) — never blocks |
 | `post-compact-auto-loop` | SessionStart (compact) | Re-inject git baseline (branch + uncommitted files) and the same owed-gate reminders |
-| `user-prompt-review-guard` | Before each prompt | Print the `[AUTO_LOOP_STATE]` fact line plus a rule pointer (owed-gate lines are rendered by `stop-guard` and `post-compact-auto-loop`) |
+| `user-prompt-review-guard` | Before each prompt | Print the `[AUTO_LOOP_STATE]` fact line plus a rule pointer (owed-gate lines are rendered by `stop-guard` and `post-compact-auto-loop`). The line can carry `procedure_hint=` naming the on-demand contract a signal points to — three failed rounds on a plane, an edited `*-project.md`, a feature doc over 500 lines; it is a reminder, never a gate |
 
 Customization:
 

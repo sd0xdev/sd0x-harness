@@ -218,7 +218,7 @@ function diskCounts() {
 }
 
 function buildHeroCount({ publicCount, bundledCount, disk }) {
-  return `${bundledCount} bundled · ${publicCount} public skills · ${disk.agents} agents — ~4% of Claude's context window`;
+  return `${bundledCount} bundled · ${publicCount} public skills · ${disk.agents} agents — procedures load on demand`;
 }
 
 function buildWhatsIncludedCount({ publicCount, bundledCount, disk }) {

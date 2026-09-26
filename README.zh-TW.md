@@ -8,12 +8,12 @@
 
 **讓模型自己選路，讓「完成」可被驗證。**
 
-v4 讓 Claude 在一組封閉、由測試釘死的 anchor 集合內擁有裁量權；hooks 是綁定 digest、跨 compaction 仍然有效的提醒，Codex 則獨立進行 review。
+Claude 在一組封閉、由測試釘死的 anchor 集合內擁有裁量權。從 v5 起，啟動時只載入精簡的規則核心，詳細程序遇到對應情境時才讀取。hooks 是綁定 digest、跨 compaction 仍然有效的提醒，Codex 則獨立進行 review。
 
 在 Claude Code 上提供完整 control plane；對 Codex CLI 與其他相容 agent 則以 skills-only 形式發佈。
 
 <!-- BEGIN:HERO-COUNT -->
-101 bundled · 101 public skills · 16 agents — 僅佔 Claude context window 的 ~4%
+101 bundled · 101 public skills · 16 agents — 詳細程序需要時才載入
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -105,21 +105,25 @@ sandbox 與 approval policy 由 adapter 為每次派送自行釘定，因此都�
 
 模型擁有路徑。Harness 擁有證據與不可協商的邊界。人類保留不可逆的權力。
 
-## 5.0 的新變化
+## 為什麼是 v5
 
 **建議模型：Claude Opus 5.5 或更新版本。** 3.x 系列已棄用，只適用於 Claude Opus 4.8 之前的模型。
 
-5.0 縮減了每個 session 一開始就載入的內容。每條常駐規則只保留精簡的核心，詳細程序移到 contract，遇到對應情境時才讀取。
+v4 改變的是*由誰決定路徑*：模型在一組封閉的 anchor 之內自己決定怎麼走。v5 改變的是*程序性指示何時進入 context*。session 從啟動起帶著的每一段內容都在跟任務搶注意力，所以 5.0 在啟動時只保留任務還不明確前就必須成立的東西：Anchor Register、閘門、tier，以及一份 contract 索引；逐步的程序則移到 contract，遇到對應情境時才讀取。
 
-| | 4.x | 5.0 |
-|---|-----|-----|
-| 外掛管理的常駐規則（全新 `/project-setup` 安裝） | 78,378 字元／721 行 | 49,614 字元／582 行，由測試維持在 50,000 字元、600 行以內 |
-| 詳細程序：推送授權、審查循環、範圍、測試、文件、覆寫 | 一律載入 | 需要時才讀取，由 `CLAUDE.md` 的 § Contract Triggers 表指引 |
-| Anchor 與閘門 | — | 不變：禁止事項相同，審查、`/precommit` 與文件審查的執行時機也和以前一樣 |
+| 載入路徑 | 載入什麼 | 何時載入 |
+|----------|----------|----------|
+| **啟動核心** | `CLAUDE.md` 與 9 條沒有 `paths:` frontmatter 的外掛規則，加上你沒有限定路徑的 `*-project.md` 覆寫檔 | 每個 session 啟動時 |
+| **依路徑載入的規則** | `testing.md`、`docs-writing.md`、`docs-numbering.md`、`override-contract.md` 與 `testing-project.md` | Claude 讀取或編輯符合路徑的檔案時 |
+| **Contract** | `skills/*/references/` 下的詳細程序：審查循環、範圍、推送授權、測試與文件 | 辨識出情境並讀取該 contract 時；`CLAUDE.md` 的 § Contract Triggers 表把八種情境對應到各自的 contract |
 
-contract 讀取失敗時，它所管轄的動作會停止，不會憑記憶繼續。
+- **讀取失敗時，它所管轄的動作會停止**，不會憑記憶繼續。contract 隨外掛一起發布，所以在沒有外掛的專案裡單獨複製規則，就沒有東西可讀。
+- **路徑符合會自動載入，contract 不會。** 要透過觸發表、常駐規則裡的指引、執行該工作的 skill，或提醒事實中僅供參考的 `procedure_hint` 才會讀到。
+- **預算有實測。** 全新安裝並代入專案值後，外掛管理的啟動核心在 5.0.0 為 49,614 字元／582 行，由 `test/rules/residency-budget.test.js` 維持在 50,000／600 以內。這是常駐文字變少了；這個設計並不宣稱模型遵循程度有經過量測的改變。
 
-**已安裝專案的升級方式**：更新外掛、執行 `/install-rules --all`，再把外掛 `CLAUDE.template.md` 裡的 § Contract Triggers 複製到 `.claude/CLAUDE.md`。不需要修改任何 `*-project.md`。完整的 4.x → 5.0 對照表請見 [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand)。
+每條 Anchor 禁止或授權的事項都沒有改變，審查、`/precommit` 與文件審查的執行時機也和以前一樣。
+
+**已安裝專案的升級方式**：更新外掛、執行 `/install-rules --all`，再把外掛 `CLAUDE.template.md` 裡的 § Contract Triggers 複製到 `.claude/CLAUDE.md`。不需要修改任何 `*-project.md`。每個區塊的 4.x → 5.0 對照與前後量測請見 [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand)。
 
 ## 4.4 的新變化
 
@@ -153,10 +157,11 @@ sd0x-dev-flow 是一個 reference implementation。下表每一列都將一個�
 | 6 | **Defense-in-depth safety** | 已安裝的 git 層級護欄維持硬性——commit-msg-guard 在 `/codex-setup init` 安裝過的地方生效（Claude plugin 加 `/project-setup` 不會安裝它），走 `/dev/tty` 的 pre-push-gate 則在 opt-in 後生效；編輯期的 pre-edit-guard 仍會阻擋敏感路徑編輯（安全護欄，非工作流強制——需要 `jq`，缺 jq 時護欄不會啟動）；Stop hook 只做提醒——把關不可逆動作的層保留了強制力，review 層則刻意改為建議性 | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex 審查 Claude 寫的東西,自行研究 repo——絕不餵結論要它確認 | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md)(Review Dispatch) |
 | 8 | **Incremental progress tracking** | 證據驅動的卡關紀律：連續三輪 review 都沒關掉任何 finding——由模型從 review 報告中自行計數——就觸發結構化的停滯分類與一次有界調整。每個 tier 的輪次預算（預設 6 / 15 / 30，可覆寫為 3–50）退居 runaway backstop，第一次觸頂跑同一套診斷，並保留列舉的人類出口 | [`rules/auto-loop.md`](rules/auto-loop.md)（§ Stall Detection and Diagnosis；細節見 `skills/codex-code-review/references/loop-diagnostics.md`） |
-| 9 | **Human-in-the-loop safety gates** | 每次 `/push-ci` push 前都需 `AskUserQuestion` 核准——此核准一律必要，且在未安裝 opt-in 的 `pre-push` hook 時即為授權本身；已安裝時，`/dev/tty` 確認才是保護分支 push 的最終憑證（外加 non-fast-forward 偵測） | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`skills/push-ci/SKILL.md`](skills/push-ci/SKILL.md) |
+| 9 | **Human-in-the-loop safety gates** | 每次 `/push-ci` push 前都需 `AskUserQuestion` 核准——此核准一律必要，而且在未安裝 opt-in 的 `pre-push` hook、或 hook 沒有詢問時，就是全部的授權。已安裝時，hook 會在兩種情況透過 `/dev/tty` 詢問：推送到保護分支，以及改寫他人可能持有的 ref（unshared 確認）；沒有 lease 的 non-fast-forward push 在這兩者之前就會被拒絕 | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`authorization-contract.md`](skills/push-ci/references/authorization-contract.md) |
 | 10 | **Self-improvement loop** | 被糾正 → 記錄 lesson → 重複 3 次以上後提升為 rule | [`rules/self-improvement.md`](rules/self-improvement.md) |
+| 11 | **Instruction residency** | 有實測的啟動核心（Anchor Register、閘門、tier 與 contract 索引），詳細程序放在 contract，遇到對應情境時才讀取；讀取失敗時會停止它所管轄的動作（[為什麼是 v5](#為什麼是-v5)） | [`residency-manifest.json`](docs/features/rules-residency/residency-manifest.json) + [`residency-budget.test.js`](test/rules/residency-budget.test.js) + [`CLAUDE.template.md`](CLAUDE.template.md)（§ Contract Triggers） |
 
-大多數 harness 專案只涵蓋其中的 2–4 項,sd0x-dev-flow 把 10 項全部做齊 — 這也是為什麼它的程式碼不只是工具,更值得當成學習對象。
+每一列都連到實作它的程式碼，這也是為什麼這個 repo 不只是工具，更值得當成學習對象。
 
 ## 運作方式
 
@@ -337,16 +342,9 @@ flowchart TD
 
 ### 極小的 Context 佔用
 
-~4% 的 Claude 200k context window——96% 留給你的程式碼。
+全新安裝並代入專案值後，外掛管理的啟動核心在 5.0.0 實測為 **49,614 字元／582 行**，由 `test/rules/residency-budget.test.js` 維持在 50,000／600 以內；其中包含什麼請見 [為什麼是 v5](#為什麼是-v5)。依路徑載入的規則、contract、skill 內容與 agents 都只在用到時才載入。
 
-| 組件 | Tokens | 佔 200k 比例 |
-|------|--------|-------------|
-| Rules（常駐載入） | 5.1k | 2.6% |
-| Skills（按需載入） | 1.9k | 1.0% |
-| Agents | 791 | 0.4% |
-| **合計** | **~8k** | **~4%** |
-
-Skills 按需載入。閒置 Skill 不佔用任何 Token。
+想量測自己的專案（你的 `CLAUDE.md`、覆寫檔與外掛的佔比），請執行 `/claude-health --scope budget`。它以字元數重現 Claude Code 的啟動計算方式（在 2.1.281 上量測）；用來比較的上限是依模型而定的估計值，不是即時的 token 數。
 
 ## 技能參考
 
@@ -505,7 +503,7 @@ Skills 按需載入。閒置 Skill 不佔用任何 Token。
 
 ## Rules & Hooks
 
-16 條 rules + 7 個 hooks。Rules 是分層的契約：`discretion.md` 把 12 個 plugin 管理的 rule 檔中的每一條指示解析為 Anchor / Default / Guidance 三者之一，3 個使用者擁有的 override 檔則在其父規則之下以 Anchor-first 解析。Hook 組成是 4 支建議性提醒 hook，加上 1 支自動格式化與 2 支會阻擋的護欄。提醒角色各不相同：Stop 與 post-compact hook 依據綁定 digest 的狀態（`review-state.js`）印出欠著的 gate 提醒，prompt hook 印出 `[AUTO_LOOP_STATE]` 事實行，post-skill hook 印出固定的閘門順序行，post-compact hook 另外重新注入 git baseline；review 層永不阻擋——pre-edit-guard 仍會阻擋敏感路徑編輯（安全護欄，需要 `jq`，缺 jq 時不會啟動），pre-bash-codex-launch-guard 會阻擋把進度導離任務面板的 Codex dispatch 啟動指令，硬性關卡則位於 git 層級（commit-msg-guard 由 `/codex-setup init` 安裝；pre-push-gate 為 opt-in）。
+16 條 rules + 7 個 hooks。Rules 是分層的契約：13 個 plugin 管理的 rule 檔中，`discretion.md` 把其餘 12 個的每一條指示解析為 Anchor / Default / Guidance 三者之一，3 個使用者擁有的 override 檔則在其父規則之下以 Anchor-first 解析。其中九條外掛規則在啟動時載入，四條在讀到符合路徑的檔案時載入；詳細程序放在需要時才讀取的 contract（[為什麼是 v5](#為什麼是-v5)、[docs/rules.md](docs/rules.md)）。Hook 組成是 4 支建議性提醒 hook，加上 1 支自動格式化與 2 支會阻擋的護欄。提醒角色各不相同：Stop 與 post-compact hook 依據綁定 digest 的狀態（`review-state.js`）印出欠著的 gate 提醒，prompt hook 印出 `[AUTO_LOOP_STATE]` 事實行，post-skill hook 印出固定的閘門順序行，post-compact hook 另外重新注入 git baseline；review 層永不阻擋——pre-edit-guard 仍會阻擋敏感路徑編輯（安全護欄，需要 `jq`，缺 jq 時不會啟動），pre-bash-codex-launch-guard 會阻擋把進度導離任務面板的 Codex dispatch 啟動指令，硬性關卡則位於 git 層級（commit-msg-guard 由 `/codex-setup init` 安裝；pre-push-gate 為 opt-in）。
 
 > **客製化**：編輯 `auto-loop-project.md` 可覆寫專案的 auto-loop 行為。Plugin 更新不會衝突 — 詳見 [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md)。
 
@@ -550,12 +548,12 @@ Skills 按需載入。閒置 Skill 不佔用任何 Token。
 |----|-----------|
 | **Skills** | 按需載入的能力——動詞（`/feature-dev`、`/codex-review-fast`、…） |
 | **Model** | 路徑：批次、時機、review 深度升級、Default 層級的偏離 |
-| **Rules** | 每個 session 都載入的分層契約（Anchor / Default / Guidance） |
+| **Rules** | 分層契約（Anchor / Default / Guidance）：精簡核心每個 session 都載入，依路徑載入的規則在碰到符合的檔案時載入，詳細程序放在需要時才讀取的 contract（[為什麼是 v5](#為什麼是-v5)） |
 | **Hooks + state** | 提醒 + `[AUTO_LOOP_STATE]` 事實、綁定 digest 的 verdict 記錄、跨 compaction 的復原 |
 | **Codex** | 獨立 review——自行研究 repo，絕不被餵結論 |
 | **Scripts + agents** | 確定性的檢查（precommit、guards）與隔離的 subagent |
 
-進階架構細節（agentic control stack、控制迴圈理論、sandbox 規則）請參閱 [docs/architecture.md](docs/architecture.md)——注意其中部分內容早於 v4，仍在描述 v3 的 choreography；`rules/auto-loop.md` 與 `rules/discretion.md` 才是目前的 source of truth。
+進階架構細節（agentic control stack、context 架構、控制迴圈的失效模式、sandbox 規則）請參閱 [docs/architecture.md](docs/architecture.md)；`rules/auto-loop.md` 與 `rules/discretion.md` 仍是 source of truth。
 
 ## 貢獻
 

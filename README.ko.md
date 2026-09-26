@@ -8,12 +8,12 @@
 
 **모델이 경로를 선택하게 하고, "완료"는 검증 가능하게 유지합니다.**
 
-v4는 테스트로 고정된 닫힌 anchor 집합 안에서 Claude에게 재량을 부여합니다. hook은 compaction 이후에도 유지되는 digest 기반 reminder이고, Codex는 독립적으로 리뷰합니다.
+Claude는 테스트로 고정된 닫힌 anchor 집합 안에서 재량을 가집니다. v5부터는 시작 시 작은 규칙 핵심만 로드하고, 세부 절차는 해당 상황이 되었을 때 읽습니다. hook은 compaction 이후에도 유지되는 digest 기반 reminder이고, Codex는 독립적으로 리뷰합니다.
 
 Claude Code에서는 전체 control plane을 제공합니다. Codex CLI와 기타 호환 에이전트에는 skills-only 배포를 제공합니다.
 
 <!-- BEGIN:HERO-COUNT -->
-101 bundled · 101 public skills · 16 agents — Claude context window의 ~4%만 사용
+101 bundled · 101 public skills · 16 agents — 세부 절차는 필요할 때 로드
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -105,21 +105,25 @@ sandbox 와 approval policy 는 디스패치마다 어댑터가 직접 고정하
 
 모델은 경로를 소유합니다. Harness는 증거와 양보할 수 없는 경계를 소유합니다. 사람은 되돌릴 수 없는 권한을 보유합니다.
 
-## 5.0의 새로운 변화
+## 왜 v5인가
 
 **권장 모델: Claude Opus 5.5 이상.** 3.x 계열은 지원 중단(deprecated)되었으며 Claude Opus 4.8 이전 모델에만 적합합니다.
 
-5.0은 각 세션이 시작할 때 불러오는 내용을 줄였습니다. 상주 규칙마다 간결한 핵심만 남기고, 세부 절차는 해당 상황이 되었을 때 읽는 contract로 옮겼습니다.
+v4가 바꾼 것은 *누가 경로를 고르는가*입니다. 모델은 닫힌 anchor 집합 안에서 스스로 경로를 정합니다. v5가 바꾸는 것은 *절차적 지시가 언제 context에 들어오는가*입니다. 세션이 시작부터 지니는 모든 내용은 작업과 주의를 다투므로, 5.0은 작업이 무엇인지 알기 전부터 성립해야 하는 것 — Anchor Register, 게이트, tier, contract 색인 — 만 시작 시 남기고, 단계별 절차는 해당 상황이 되었을 때 읽는 contract로 옮겼습니다.
 
-| | 4.x | 5.0 |
-|---|-----|-----|
-| 플러그인이 관리하는 상주 규칙 (새 `/project-setup` 설치 기준) | 78,378자 / 721줄 | 49,614자 / 582줄 — 테스트가 50,000자, 600줄 이하로 유지합니다 |
-| 세부 절차: push 승인, 리뷰 루프, 범위, 테스트, 문서, 오버라이드 | 항상 로드 | 필요할 때 읽음 — `CLAUDE.md`의 § Contract Triggers 표가 위치를 안내합니다 |
-| Anchor와 게이트 | — | 변경 없음: 금지 사항이 같고, 리뷰·`/precommit`·문서 리뷰도 이전과 같은 시점에 실행됩니다 |
+| 로드 경로 | 로드되는 것 | 시점 |
+|-----------|-------------|------|
+| **시작 시 핵심** | `CLAUDE.md`와 `paths:` frontmatter가 없는 플러그인 규칙 9개, 그리고 경로가 지정되지 않은 `*-project.md` 오버라이드 | 매 세션 시작 시 |
+| **경로 지정 규칙** | `testing.md`, `docs-writing.md`, `docs-numbering.md`, `override-contract.md`, `testing-project.md` | Claude가 일치하는 파일을 읽거나 편집할 때 |
+| **Contract** | `skills/*/references/` 아래의 세부 절차: 리뷰 루프, 범위, push 승인, 테스트, 문서 | 상황을 인식하고 해당 contract를 읽을 때. `CLAUDE.md`의 § Contract Triggers 표가 8가지 상황을 각 contract에 대응시킵니다 |
 
-contract를 읽지 못하면, 그 contract가 관할하는 작업은 기억에 의존해 진행하지 않고 멈춥니다.
+- **읽기에 실패하면 그 contract가 관할하는 작업은 멈춥니다.** 기억에 의존해 진행하지 않습니다. contract는 플러그인과 함께 배포되므로, 플러그인 없이 프로젝트에 규칙만 복사하면 읽을 것이 없습니다.
+- **경로 일치는 자동이지만 contract는 그렇지 않습니다.** 트리거 표, 상주 규칙의 안내, 작업을 실행하는 skill, 또는 reminder 사실에 담긴 참고용 `procedure_hint`를 통해 읽힙니다.
+- **예산은 측정된 값입니다.** 새 설치를 프로젝트 값으로 렌더링했을 때 플러그인이 관리하는 시작 시 핵심은 5.0.0에서 49,614자 / 582줄이며, `test/rules/residency-budget.test.js`가 50,000 / 600 이하로 유지합니다. 이는 상주 텍스트가 줄었다는 뜻이며, 모델의 준수 정도가 측정상 달라졌다고 주장하지는 않습니다.
 
-**설치된 프로젝트 업그레이드**: 플러그인을 업데이트하고 `/install-rules --all`을 실행한 뒤, 플러그인의 `CLAUDE.template.md`에 있는 § Contract Triggers를 `.claude/CLAUDE.md`에 복사하세요. `*-project.md`는 수정할 필요가 없습니다. 4.x → 5.0 전체 대응표는 [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand)에 있습니다.
+각 Anchor가 금지하거나 허용하는 내용은 바뀌지 않았고, 리뷰·`/precommit`·문서 리뷰도 이전과 같은 시점에 실행됩니다.
+
+**설치된 프로젝트 업그레이드**: 플러그인을 업데이트하고 `/install-rules --all`을 실행한 뒤, 플러그인의 `CLAUDE.template.md`에 있는 § Contract Triggers를 `.claude/CLAUDE.md`에 복사하세요. `*-project.md`는 수정할 필요가 없습니다. 블록별 4.x → 5.0 대응과 전후 측정값은 [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand)에 있습니다.
 
 ## 4.4의 새로운 변화
 
@@ -153,10 +157,11 @@ sd0x-dev-flow는 그 reference implementation입니다. 아래 각 행은 harnes
 | 6 | **Defense-in-depth 안전장치** | 설치된 git 레벨 가드는 그대로 강제됩니다 — commit-msg-guard는 `/codex-setup init`으로 설치한 곳에서 작동하고(Claude 플러그인과 `/project-setup`으로는 설치되지 않음), `/dev/tty`를 통한 pre-push-gate는 opt-in한 경우에 작동합니다; 편집 시점의 pre-edit-guard는 민감 경로 편집을 여전히 차단하고(보안 가드이며 워크플로 강제가 아님 — `jq`가 필요하며, jq가 없으면 가드가 작동하지 않음), Stop hook은 reminder를 출력합니다 — 되돌릴 수 없는 동작을 막는 레이어는 강제력을 유지하고, 리뷰 레이어는 의도적으로 권고형이 되었습니다 | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator 분리** | Codex가 Claude의 결과물을 리뷰하며 저장소를 직접 조사 — 결론을 건네받아 승인만 하는 일은 없음 | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **점진적 진행 추적** | 증거 기반 정체 규율: finding을 하나도 닫지 못한 리뷰 라운드가 3회 연속되면 — 모델이 리뷰 리포트로부터 직접 셉니다 — 구조화된 정체(stall) 분류와 한 번의 제한된 조정을 트리거합니다. Tier별 라운드 예산 (기본 6 / 15 / 30, 3–50으로 오버라이드 가능) 은 폭주 방지용 백스톱으로 물러나며, 첫 상한 도달 시에도 같은 진단을 수행하고, human exit는 열거되어 있음 | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; 자세한 내용은 `skills/codex-code-review/references/loop-diagnostics.md`) |
-| 9 | **Human-in-the-loop 안전 게이트** | 모든 `/push-ci` push 전 `AskUserQuestion` 승인 — 이 승인은 항상 필요하며, opt-in인 `pre-push` hook이 없으면 그 자체가 인가입니다. hook이 설치된 경우에는 보호 브랜치 push에서 `/dev/tty` 확인이 최종 credential입니다 (non-fast-forward 감지 포함) | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`skills/push-ci/SKILL.md`](skills/push-ci/SKILL.md) |
+| 9 | **Human-in-the-loop 안전 게이트** | 모든 `/push-ci` push 전 `AskUserQuestion` 승인 — 이 승인은 항상 필요하며, opt-in인 `pre-push` hook이 없거나 hook이 묻지 않는 경우에는 그것이 인가의 전부입니다. hook이 설치되어 있으면 두 경우에 `/dev/tty`로 묻습니다: 보호 브랜치로의 push, 그리고 다른 사람이 가지고 있을 수 있는 ref를 다시 쓰는 push(unshared 확인). lease 없는 non-fast-forward push는 그 둘보다 먼저 거부됩니다 | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`authorization-contract.md`](skills/push-ci/references/authorization-contract.md) |
 | 10 | **자기 개선 루프** | 지적 → lesson 기록 → 3회 이상 재발 시 rule로 승격 | [`rules/self-improvement.md`](rules/self-improvement.md) |
+| 11 | **Instruction residency** | 측정된 시작 시 핵심(Anchor Register, 게이트, tier, contract 색인)과, 해당 상황에서 읽는 contract에 둔 세부 절차. 읽기에 실패하면 관할하는 작업이 멈춥니다([왜 v5인가](#왜-v5인가)) | [`residency-manifest.json`](docs/features/rules-residency/residency-manifest.json) + [`residency-budget.test.js`](test/rules/residency-budget.test.js) + [`CLAUDE.template.md`](CLAUDE.template.md) (§ Contract Triggers) |
 
-대부분의 harness 프로젝트는 이 중 2~4개만 다룹니다. sd0x-dev-flow는 10개 모두를 다루므로, 단순한 도구가 아니라 연구 대상으로서의 코드로 활용할 수 있습니다.
+각 행은 그것을 구현한 코드로 연결되므로, 이 저장소는 단순한 도구가 아니라 연구 대상으로도 활용할 수 있습니다.
 
 ## 작동 원리
 
@@ -337,16 +342,9 @@ flowchart TD
 
 ### 최소한의 Context 사용량
 
-Claude의 200k context window 중 ~4%만 사용합니다. 나머지 96%는 코드에 활용할 수 있습니다.
+새 설치를 프로젝트 값으로 렌더링했을 때 플러그인이 관리하는 시작 시 핵심은 5.0.0에서 **49,614자 / 582줄**로 측정되며, `test/rules/residency-budget.test.js`가 50,000 / 600 이하로 유지합니다. 무엇이 들어 있는지는 [왜 v5인가](#왜-v5인가)를 참고하세요. 경로 지정 규칙, contract, skill 본문, agent는 사용될 때만 로드됩니다.
 
-| 구성 요소 | 토큰 수 | 200k 대비 비율 |
-|-----------|---------|---------------|
-| Rules (상시 로드) | 5.1k | 2.6% |
-| Skills (온디맨드) | 1.9k | 1.0% |
-| Agents | 791 | 0.4% |
-| **합계** | **~8k** | **~4%** |
-
-Skills는 온디맨드로 로드됩니다. 미사용 Skills는 토큰을 소비하지 않습니다.
+자신의 프로젝트(여러분의 `CLAUDE.md`, 오버라이드, 플러그인 몫의 합계)를 측정하려면 `/claude-health --scope budget`을 실행하세요. Claude Code의 시작 시 계산 방식(2.1.281에서 측정)을 문자 수로 재현하며, 비교하는 한도는 모델에 따라 달라지는 추정값이지 실시간 토큰 수가 아닙니다.
 
 ## 스킬 레퍼런스
 
@@ -505,7 +503,7 @@ Skills는 온디맨드로 로드됩니다. 미사용 Skills는 토큰을 소비�
 
 ## 규칙 & Hook
 
-16개 규칙 + 7개 Hook. 규칙은 tier화된 계약입니다: `discretion.md`가 플러그인이 관리하는 12개 규칙 파일의 모든 지시를 Anchor / Default / Guidance 중 정확히 하나로 해석하고, 사용자 소유의 오버라이드 파일 3개는 상위 규칙 아래에서 Anchor 우선으로 해석됩니다. Hook 구성은 4개의 권고형 reminder hook에 자동 포매터 1개와 차단형 가드 2개를 더한 것입니다. reminder 역할은 hook마다 다릅니다: Stop과 post-compact hook은 digest 기반 상태(`review-state.js`)로부터 미완료 gate reminder를 렌더링하고, prompt hook은 `[AUTO_LOOP_STATE]` 사실 라인을, post-skill hook은 고정된 gate 순서 라인을 출력하며, post-compact hook은 추가로 git baseline을 재주입합니다. 리뷰 레이어는 아무것도 차단하지 않습니다 — pre-edit-guard는 민감 경로 편집을 여전히 차단하고(보안 가드, `jq` 필요 — 없으면 작동하지 않음), pre-bash-codex-launch-guard는 진행 상황을 작업 패널 밖으로 돌리는 Codex dispatch 실행을 차단하며, 강제 gate는 git 레벨에 있습니다 (commit-msg-guard는 `/codex-setup init`으로 설치, pre-push-gate는 opt-in).
+16개 규칙 + 7개 Hook. 규칙은 tier화된 계약입니다: 플러그인이 관리하는 규칙 파일 13개 중 `discretion.md`가 나머지 12개의 모든 지시를 Anchor / Default / Guidance 중 정확히 하나로 해석하고, 사용자 소유의 오버라이드 파일 3개는 상위 규칙 아래에서 Anchor 우선으로 해석됩니다. 플러그인 규칙 중 9개는 시작 시, 4개는 일치하는 파일을 읽을 때 로드되며, 세부 절차는 필요할 때 읽는 contract에 있습니다([왜 v5인가](#왜-v5인가), [docs/rules.md](docs/rules.md)). Hook 구성은 4개의 권고형 reminder hook에 자동 포매터 1개와 차단형 가드 2개를 더한 것입니다. reminder 역할은 hook마다 다릅니다: Stop과 post-compact hook은 digest 기반 상태(`review-state.js`)로부터 미완료 gate reminder를 렌더링하고, prompt hook은 `[AUTO_LOOP_STATE]` 사실 라인을, post-skill hook은 고정된 gate 순서 라인을 출력하며, post-compact hook은 추가로 git baseline을 재주입합니다. 리뷰 레이어는 아무것도 차단하지 않습니다 — pre-edit-guard는 민감 경로 편집을 여전히 차단하고(보안 가드, `jq` 필요 — 없으면 작동하지 않음), pre-bash-codex-launch-guard는 진행 상황을 작업 패널 밖으로 돌리는 Codex dispatch 실행을 차단하며, 강제 gate는 git 레벨에 있습니다 (commit-msg-guard는 `/codex-setup init`으로 설치, pre-push-gate는 opt-in).
 
 > **커스터마이징**: `auto-loop-project.md`를 편집하여 프로젝트별 auto-loop 동작을 오버라이드할 수 있습니다. 플러그인 업데이트와 충돌하지 않습니다 — [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md) 참조.
 
@@ -550,12 +548,12 @@ Skills는 온디맨드로 로드됩니다. 미사용 Skills는 토큰을 소비�
 |--------|-----------|
 | **Skills** | 온디맨드로 로드되는 capability — 동사 역할 (`/feature-dev`, `/codex-review-fast`, …) |
 | **Model** | 경로: 배치, 타이밍, 리뷰 깊이 상향, Default tier 이탈 |
-| **Rules** | 매 세션 로드되는 tier화된 계약 (Anchor / Default / Guidance) |
+| **Rules** | tier화된 계약 (Anchor / Default / Guidance): 작은 핵심은 매 세션 로드되고, 경로 지정 규칙은 일치하는 파일에서 로드되며, 세부 절차는 필요할 때 읽는 contract에 있습니다([왜 v5인가](#왜-v5인가)) |
 | **Hooks + state** | Reminder + `[AUTO_LOOP_STATE]` 사실, digest 기반 verdict 기록, compaction을 넘어서는 복구 |
 | **Codex** | 독립 리뷰 — 저장소를 직접 조사하며, 결론을 건네받지 않음 |
 | **Scripts + agents** | 결정론적 검사 (precommit, guard)와 격리된 서브에이전트 |
 
-고급 아키텍처에 대한 자세한 내용(agentic control stack, 제어 루프 이론, 샌드박스 규칙)은 [docs/architecture.md](docs/architecture.md)를 참고하세요 — 다만 그 일부는 v4 이전에 작성되어 여전히 v3 choreography를 설명하고 있으며, 현재의 source of truth는 `rules/auto-loop.md`와 `rules/discretion.md`입니다.
+고급 아키텍처에 대한 자세한 내용(agentic control stack, context 아키텍처, 제어 루프의 실패 모드, 샌드박스 규칙)은 [docs/architecture.md](docs/architecture.md)를 참고하세요. source of truth는 여전히 `rules/auto-loop.md`와 `rules/discretion.md`입니다.
 
 ## 기여
 
