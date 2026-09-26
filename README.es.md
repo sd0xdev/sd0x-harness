@@ -105,6 +105,22 @@ El núcleo no negociable vive en un **Anchor Register cerrado** (`rules/discreti
 
 El modelo posee el camino. El harness posee la evidencia y los límites no negociables. El humano conserva la autoridad irreversible.
 
+## Novedades en 5.0
+
+**Modelos recomendados: Claude Opus 5.5 o posterior.** La línea 3.x está obsoleta y solo es adecuada para modelos anteriores a Claude Opus 4.8.
+
+5.0 reduce lo que cada sesión carga al inicio. Cada regla residente conserva un núcleo compacto; los procedimientos detallados se trasladaron a contratos que se leen cuando surge su situación.
+
+| | 4.x | 5.0 |
+|---|-----|-----|
+| Reglas residentes gestionadas por el plugin (instalación nueva con `/project-setup`) | 78,378 caracteres / 721 líneas | 49,614 caracteres / 582 líneas — un test lo mantiene en ≤ 50,000 caracteres y 600 líneas |
+| Procedimientos detallados: autorización de push, ciclo de review, alcance, testing, documentación, overrides | Siempre cargados | Se leen bajo demanda, señalados por la tabla § Contract Triggers de `CLAUDE.md` |
+| Anchors y gates | — | Sin cambios: las mismas prohibiciones, y el review, `/precommit` y el review de documentación se ejecutan exactamente cuando antes |
+
+Si un contrato no se puede leer, la acción que gobierna se detiene en lugar de continuar de memoria.
+
+**Actualizar un proyecto ya instalado**: actualiza el plugin, ejecuta `/install-rules --all` y copia § Contract Triggers del `CLAUDE.template.md` del plugin a `.claude/CLAUDE.md`. No hace falta editar ningún `*-project.md`. La correspondencia completa 4.x → 5.0 está en [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand).
+
 ## Novedades en 4.4
 
 > Si tras actualizar a **4.4.0** notas una caída en la calidad de review — defectos reales que se cuelan, o revisiones que convergen demasiado pronto — por favor [abre un issue](https://github.com/sd0xdev/sd0x-harness/issues). Esta versión cambia el **criterio** del review, y los reportes de campo son la única forma de validarlo.

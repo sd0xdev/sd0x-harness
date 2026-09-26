@@ -105,6 +105,22 @@ sandbox 와 approval policy 는 디스패치마다 어댑터가 직접 고정하
 
 모델은 경로를 소유합니다. Harness는 증거와 양보할 수 없는 경계를 소유합니다. 사람은 되돌릴 수 없는 권한을 보유합니다.
 
+## 5.0의 새로운 변화
+
+**권장 모델: Claude Opus 5.5 이상.** 3.x 계열은 지원 중단(deprecated)되었으며 Claude Opus 4.8 이전 모델에만 적합합니다.
+
+5.0은 각 세션이 시작할 때 불러오는 내용을 줄였습니다. 상주 규칙마다 간결한 핵심만 남기고, 세부 절차는 해당 상황이 되었을 때 읽는 contract로 옮겼습니다.
+
+| | 4.x | 5.0 |
+|---|-----|-----|
+| 플러그인이 관리하는 상주 규칙 (새 `/project-setup` 설치 기준) | 78,378자 / 721줄 | 49,614자 / 582줄 — 테스트가 50,000자, 600줄 이하로 유지합니다 |
+| 세부 절차: push 승인, 리뷰 루프, 범위, 테스트, 문서, 오버라이드 | 항상 로드 | 필요할 때 읽음 — `CLAUDE.md`의 § Contract Triggers 표가 위치를 안내합니다 |
+| Anchor와 게이트 | — | 변경 없음: 금지 사항이 같고, 리뷰·`/precommit`·문서 리뷰도 이전과 같은 시점에 실행됩니다 |
+
+contract를 읽지 못하면, 그 contract가 관할하는 작업은 기억에 의존해 진행하지 않고 멈춥니다.
+
+**설치된 프로젝트 업그레이드**: 플러그인을 업데이트하고 `/install-rules --all`을 실행한 뒤, 플러그인의 `CLAUDE.template.md`에 있는 § Contract Triggers를 `.claude/CLAUDE.md`에 복사하세요. `*-project.md`는 수정할 필요가 없습니다. 4.x → 5.0 전체 대응표는 [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand)에 있습니다.
+
 ## 4.4의 새로운 변화
 
 > **4.4.0**으로 업그레이드한 후 review 품질 저하——실제 결함이 통과하거나, 수렴이 지나치게 빨라지는 현상——를 발견하면 [issue를 열어](https://github.com/sd0xdev/sd0x-harness/issues) 알려주세요. 이 릴리스는 review의 **판단 방식** 자체를 바꾸므로, 실사용 보고만이 검증 수단입니다.

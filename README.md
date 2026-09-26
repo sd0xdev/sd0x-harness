@@ -115,6 +115,22 @@ The non-negotiable core lives in a **closed Anchor Register** (`rules/discretion
 
 The model owns the path. The harness owns the evidence and non-negotiable boundaries. The human retains irreversible authority.
 
+## What's New in 5.0
+
+**Recommended models: Claude Opus 5.5 or later.** The 3.x line is deprecated and suitable only for models before Claude Opus 4.8.
+
+5.0 shrinks what every session loads up front. Each resident rule keeps a compact core; the detailed procedures moved into contracts that are read when their situation arises.
+
+| | 4.x | 5.0 |
+|---|-----|-----|
+| Plugin-managed resident rules (fresh `/project-setup` install) | 78,378 chars / 721 lines | 49,614 chars / 582 lines — a test holds it at ≤ 50,000 chars and 600 lines |
+| Detailed procedures — push authorization, review loop, scope, testing, docs, overrides | Always loaded | Read on demand, pointed to by the § Contract Triggers table in `CLAUDE.md` |
+| Anchors and gates | — | Unchanged: the same prohibitions, and review, `/precommit` and doc review run exactly when they did |
+
+If a contract cannot be read, the action it governs stops rather than proceeding from memory.
+
+**Upgrading an installed project**: update the plugin, run `/install-rules --all`, and copy § Contract Triggers from the plugin's `CLAUDE.template.md` into `.claude/CLAUDE.md`. No `*-project.md` edit is required. The full 4.x → 5.0 mapping is in [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand).
+
 ## What's New in 4.4
 
 > If you notice review quality drop after upgrading to **4.4.0** — real defects slipping through, or reviews converging too eagerly — please

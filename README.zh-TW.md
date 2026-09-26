@@ -105,6 +105,22 @@ sandbox 與 approval policy 由 adapter 為每次派送自行釘定，因此都�
 
 模型擁有路徑。Harness 擁有證據與不可協商的邊界。人類保留不可逆的權力。
 
+## 5.0 的新變化
+
+**建議模型：Claude Opus 5.5 或更新版本。** 3.x 系列已棄用，只適用於 Claude Opus 4.8 之前的模型。
+
+5.0 縮減了每個 session 一開始就載入的內容。每條常駐規則只保留精簡的核心，詳細程序移到 contract，遇到對應情境時才讀取。
+
+| | 4.x | 5.0 |
+|---|-----|-----|
+| 外掛管理的常駐規則（全新 `/project-setup` 安裝） | 78,378 字元／721 行 | 49,614 字元／582 行，由測試維持在 50,000 字元、600 行以內 |
+| 詳細程序：推送授權、審查循環、範圍、測試、文件、覆寫 | 一律載入 | 需要時才讀取，由 `CLAUDE.md` 的 § Contract Triggers 表指引 |
+| Anchor 與閘門 | — | 不變：禁止事項相同，審查、`/precommit` 與文件審查的執行時機也和以前一樣 |
+
+contract 讀取失敗時，它所管轄的動作會停止，不會憑記憶繼續。
+
+**已安裝專案的升級方式**：更新外掛、執行 `/install-rules --all`，再把外掛 `CLAUDE.template.md` 裡的 § Contract Triggers 複製到 `.claude/CLAUDE.md`。不需要修改任何 `*-project.md`。完整的 4.x → 5.0 對照表請見 [CHANGELOG.md](CHANGELOG.md#500--rules-load-on-demand)。
+
 ## 4.4 的新變化
 
 > 升級到 **4.4.0** 後若察覺 review 品質下降——真缺陷漏網、或收斂得太急——請[開 issue](https://github.com/sd0xdev/sd0x-harness/issues)回報。這個版本改的是 review 的**判斷方式**，只有實際使用回報能驗證它。
