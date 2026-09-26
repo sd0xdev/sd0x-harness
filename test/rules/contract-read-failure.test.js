@@ -23,6 +23,9 @@ const POINTERS = [
   ['rules/auto-loop.md', 'Stall Detection and Diagnosis', 'skills/codex-code-review/references/loop-diagnostics.md',
     'Read it before diagnosing.',
     'If that Read fails, make no diagnosis and no adjustment — report the trigger and the failed Read, and take ⚠️ Need Human.'],
+  ['rules/auto-loop.md', 'Review Dispatch', 'skills/codex-code-review/references/review-common.md',
+    'Read it before a fallback dispatch or a rotation;',
+    'if that Read fails, dispatch no fallback and rotate nothing — keep the gate open and report the failed Read.'],
   ['rules/auto-loop.md', 'Override Contract', 'rules/override-contract.md',
     'Before interpreting, auditing or editing an override, Read', 'If that Read fails, do not edit or audit the override.'],
   ['rules/testing.md', 'Evidence Model', 'skills/test-review/references/testing-contract.md',
@@ -32,6 +35,15 @@ const POINTERS = [
   ['rules/docs-writing.md', 'Code Comments', 'skills/doc-review/references/documentation-contract.md',
     'Before relying on an exemption, or changing the checker, Read',
     'If that Read fails, do not change the checker or rely on an exemption — stop that work and say so.'],
+  ['rules/auto-loop.md', 'Fix Obligation', 'skills/codex-code-review/references/scope-contract.md',
+    'Read it before deferring or excepting a blocking finding',
+    'if that Read fails, defer and except nothing and decide no fix obligation — report that the contract could not be read, and leave the gate open until it can be.'],
+  ['rules/git-workflow.md', 'Push safety', 'skills/push-ci/references/authorization-contract.md',
+    'Before any push, Read', 'If that Read fails, do not push.'],
+  ['rules/git-workflow.md', 'Proactive Offer', 'skills/push-ci/references/authorization-contract.md',
+    'Before offering, or committing under Goal mode, Read', 'If that Read fails, offer nothing and make no Goal-mode commit.'],
+  ['rules/discretion.md', 'Efficacy Boundary', 'skills/push-ci/references/authorization-contract.md',
+    'Read it before relying on an approval as a push credential', 'if that Read fails, do not push.'],
 ];
 
 /** Listed pointers whose section lacks the contract, the Read instruction, or a stop that follows it. */
@@ -50,9 +62,11 @@ test('each listed contract pointer when read in its own section → names the co
 });
 
 test('a pointer whose stop clause or Read instruction is deleted → is named by the same reader (negative control)', () => {
-  const [rule, heading, , read, stop] = POINTERS[0];
-  for (const cut of [stop, read]) {
-    const stripped = (r, h) => (r === rule && h === heading ? section(r, h).replace(cut, '') : section(r, h));
-    assert.deepEqual(missingStops(POINTERS, stripped), [`${rule} § ${heading}`]);
+  // Every listed pointer, not one: each row must fail on its own when its Read or its stop is cut.
+  for (const [rule, heading, , read, stop] of POINTERS) {
+    for (const cut of [stop, read]) {
+      const stripped = (r, h) => (r === rule && h === heading ? section(r, h).replace(cut, '') : section(r, h));
+      assert.deepEqual(missingStops(POINTERS, stripped), [`${rule} § ${heading}`], `${rule} § ${heading} without: ${cut}`);
+    }
   }
 });

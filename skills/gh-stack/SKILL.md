@@ -6,6 +6,9 @@ allowed-tools: Bash(gh:*), Bash(git:*), Bash(bash:*), Bash(/bin/bash:*), Bash(mk
 
 # GH Stack — Native Stacked PRs
 
+**Read first**: `@skills/push-ci/references/authorization-contract.md` before any `gh stack` operation that pushes — § Push safety for the credential and the unshared attestation, § Efficacy Boundary for what the per-use approval authorizes. If that Read fails, stop and report it; run no pushing operation.
+
+
 Wraps the `github/gh-stack` extension so a branch chain becomes a real **Stack** on GitHub — one PR per layer, chained bases, per-layer diff view, linked merges — instead of the hand-built chained-base PR set `/create-pr --stack` produces on its own.
 
 ## Authorization

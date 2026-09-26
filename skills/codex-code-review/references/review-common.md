@@ -284,6 +284,16 @@ consumes the Codex-❌ rows below directly (it simply has no Secondary column to
 (`codex-transport.md` § Completion state machine). A pending or unknown completion keeps the gate
 open and dispatches nothing; exit 2 is a configuration error to fix; an `alloc`/`cleanup` failure is
 a lifecycle error surfaced to the operator. None of those three reaches this matrix.
+The `reason=` label is a separate axis from the trigger, but it never substitutes for it: `timeout`
+may be selected **only after an adapter exit 1 has independently occurred** and the diagnostic
+attributes that failure to a timeout. A host-level event alone does not qualify — a foreground
+ceiling leaves a still-running process (unknown completion) and a killed adapter terminates by
+signal, not exit 1; both keep the gate open and dispatch nothing (policy change,
+review-loop-resilience 2026-08-23 — it was `⚠️ Need Human`). The change's first dispatch probes
+Codex; on failure record `[REVIEWER_FALLBACK] plane=<plane> from=codex to=<agent>
+reason=<quota|timeout|error> | <ISO8601>` and dispatch the fallback — re-reviews never re-probe,
+the next change probes afresh. `seek-verdict` stays non-gate: without Codex its automated dismiss
+closes.
 Carrier order per family is decided by `scripts/lib/review-dispatch.js` (`FALLBACK_CARRIERS`):
 
 | Contract | Priority 1 | Priority 2 | Priority 3 | Priority 4 |

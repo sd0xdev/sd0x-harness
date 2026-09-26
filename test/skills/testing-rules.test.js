@@ -81,17 +81,17 @@ test('testing-project.md has commented override sections', () => {
 
 // --- CLAUDE.md references ---
 
-test('CLAUDE.md references testing-project.md', () => {
-  const content = readFileSync(resolve(root, 'CLAUDE.md'), 'utf8');
-  assert.match(content, /@rules\/testing-project\.md/, 'should reference testing-project.md');
-});
-
-test('.claude/CLAUDE.md references testing-project.md', {
-  skip: !existsSync(resolve(root, '.claude/CLAUDE.md')),
-}, () => {
-  const content = readFileSync(resolve(root, '.claude/CLAUDE.md'), 'utf8');
-  assert.match(content, /@rules\/testing-project\.md/, 'should reference testing-project.md');
-});
+// testing-project.md is path-scoped (instruction-budget R1): both CLAUDE files name it in plain text,
+// since an `@` import would load it at launch (rules-residency task 3 removed the repo's import).
+for (const file of ['CLAUDE.md', '.claude/CLAUDE.md']) {
+  test(`${file} references testing-project.md without @-importing it`, {
+    skip: !existsSync(resolve(root, file)),
+  }, () => {
+    const content = readFileSync(resolve(root, file), 'utf8');
+    assert.match(content, /`rules\/testing-project\.md`/, 'should name testing-project.md');
+    assert.doesNotMatch(content, /@rules\/testing-project\.md/, 'an @ import would make it resident');
+  });
+}
 
 // --- Phase B: --ac-trace mode ---
 

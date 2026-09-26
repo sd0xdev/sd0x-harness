@@ -13,6 +13,13 @@ const { resolve } = require('node:path');
 const root = resolve(__dirname, '../..');
 const discretion = readFileSync(resolve(root, 'rules/discretion.md'), 'utf8');
 const gitWorkflow = readFileSync(resolve(root, 'rules/git-workflow.md'), 'utf8');
+// rules-residency r3: § Push safety, § Efficacy Boundary and § Proactive Offer moved verbatim into the
+// push authorization contract; the resident rules keep a compact core each. The byte pins below now
+// validate the moved text where it lives, which is what proves the move was verbatim. The
+// destructive-git validator reads the two carriers together: the authorization block stays in
+// git-workflow.md, the credential-selection paragraph now sits in the contract.
+const pushContract = readFileSync(resolve(root, 'skills/push-ci/references/authorization-contract.md'), 'utf8');
+const destructiveText = `${gitWorkflow}\n\n${pushContract}`;
 const autoLoop = readFileSync(resolve(root, 'rules/auto-loop.md'), 'utf8');
 
 const MANAGED_FILES = [
@@ -21,12 +28,10 @@ const MANAGED_FILES = [
   'git-workflow.md',
   'auto-loop.md',
   'codex-invocation.md',
-  'fix-all-issues.md',
   'testing.md',
   'docs-writing.md',
   'docs-numbering.md',
   'context-management.md',
-  'framework.md',
   'self-improvement.md',
   'scope-discipline.md',
   'override-contract.md',
@@ -81,12 +86,12 @@ test('resolution order when parsed → an Anchor Register hit always resolves to
   assert.match(preamble, /exactly one\*\* tier/, 'every instruction resolves to exactly one tier');
 });
 
-test('baseline table when parsed → the full 14-row file/baseline/exception mapping is pinned verbatim', () => {
+test('baseline table when parsed → the full 12-row file/baseline/exception mapping is pinned verbatim', () => {
   // deepEqual over ALL THREE columns: flipping a baseline (framework.md → Anchor) or slipping a
   // "→ Anchor" exception into any row would mint a new anchor OUTSIDE the closed register while
   // a files-only check stays green. Every Anchor-producing cell below maps back to a register item.
   const rows = parseTable(
-    section(discretion, 'File Baselines (14 plugin-managed files)'),
+    section(discretion, 'File Baselines (12 plugin-managed files)'),
     ['File', 'Baseline', 'Exceptions above baseline']
   );
   assert.deepEqual(rows, [
@@ -95,12 +100,10 @@ test('baseline table when parsed → the full 14-row file/baseline/exception map
     ['`git-workflow.md`', 'Default', 'Forbidden/destructive git ops, protected branches, attribution → Anchor (Register #4); commit containing secrets → Anchor (Register #2)'],
     ['`auto-loop.md`', 'Default', 'Register #5–#7 items → Anchor; § Tiers security/data-integrity escalation → Anchor (Register #3)'],
     ['`codex-invocation.md`', 'Default', '— (the loop-review exception in the file is part of its own contract)'],
-    ['`fix-all-issues.md`', 'Default', "Its exception table's logging duty stands as written"],
     ['`testing.md`', 'Default', 'Security / data-integrity / regression AC "❌ Never" rows → Anchor'],
     ['`docs-writing.md`', 'Guidance', 'Comment-block thresholds and move-or-dedupe (no net information loss) → Default'],
     ['`docs-numbering.md`', 'Default', '— (the 500-line limit is the canonical Default example)'],
     ['`context-management.md`', 'Default', '"Context state never overrides auto-loop" and gate-skip prohibition → Anchor (Register #7); no secrets in compact summaries → Anchor (Register #2)'],
-    ['`framework.md`', 'Guidance', '—'],
     ['`self-improvement.md`', 'Default', 'Redaction rules (never record secrets) → Anchor (Register #2)'],
     ['`scope-discipline.md`', 'Default', 'Edit re-review sentence → Anchor (Register #6); deferred/skip records never carry secrets → Anchor (Register #2); security/data-integrity `thorough` escalation → Anchor (Register #3)'],
     ['`override-contract.md`', 'Default', '— (it restates Anchor supremacy over the overrides and grants no exception; Register hits in it resolve at step 0)'],
@@ -109,7 +112,7 @@ test('baseline table when parsed → the full 14-row file/baseline/exception map
 });
 
 test('override files when classified → excluded from the table and delegated to R8', () => {
-  const table = section(discretion, 'File Baselines (14 plugin-managed files)');
+  const table = section(discretion, 'File Baselines (12 plugin-managed files)');
   assert.ok(!table.includes('auto-loop-project.md'), 'override files are not classified here');
   assert.ok(!table.includes('testing-project.md'), 'override files are not classified here');
   assert.match(discretion, /auto-loop-project\.md.*testing-project\.md.*out of scope/s);
@@ -154,40 +157,40 @@ test('approval workflows when pinned → each keeps its exact operations, approv
   // Name-presence alone is bypassable ("/push-ci may commit without approval" still contains the
   // name). Pin each workflow's full contract in the source rule: which git operations, that
   // explicit user approval via AskUserQuestion is required, and (for push) the terminal gate.
-  assert.match(gitWorkflow,
+  assert.match(destructiveText,
     /`\/push-ci` skill may execute `git push` — and `git push --force-with-lease` when the caller explicitly passes that flag — after explicit user approval via AskUserQuestion/);
   // The grant is bounded on two axes, and dropping either turns a reviewed widening into
   // an unreviewed one: the flag must be passed explicitly (never inferred), and bare
   // --force stays forbidden to every skill including this one.
-  assert.match(gitWorkflow, /Bare `--force` stays forbidden to every skill/,
+  assert.match(destructiveText, /Bare `--force` stays forbidden to every skill/,
     'widening to lease-force must not widen to bare force');
-  assert.match(gitWorkflow, /The approval must name the force form/,
+  assert.match(destructiveText, /The approval must name the force form/,
     'an approval shown as a plain push does not authorize a history rewrite');
-  assert.match(gitWorkflow,
+  assert.match(destructiveText,
     /`\/smart-commit --execute` may execute `git add` \+ `git commit` after explicit user approval via AskUserQuestion/);
-  assert.match(gitWorkflow,
+  assert.match(destructiveText,
     /`\/epic-merge` skill may execute `git rebase --onto`, `git push --force-with-lease`, and `gh pr merge --squash` after explicit per-iteration user approval via AskUserQuestion/);
-  assert.match(gitWorkflow,
+  assert.match(destructiveText,
     /`\/gh-stack` skill may execute `gh stack link`, `gh stack push` and `gh stack submit --auto` — native stacked-PR operations whose branch pushes run a plain `git push --atomic` for `link` and a per-branch, value-bearing `git push --force-with-lease` for the other two — after explicit per-use user approval via AskUserQuestion naming that push form and the branches it moves/);
   // Two bounds, and dropping either turns a reviewed grant into an unreviewed one: the approval
   // must name the force form (the same axis /push-ci is bound on, because the same push runs), and
   // the subcommands that rewrite local history are outside the grant rather than merely
   // discouraged.
-  assert.match(gitWorkflow, /Every other subcommand of that extension stays the user's to run/,
+  assert.match(destructiveText, /Every other subcommand of that extension stays the user's to run/,
     'the granted set is closed — rebase, sync and modify are not in it');
   // `view` used to be granted as "read-only". It is not: it syncs PR metadata and rewrites
   // .git/gh-stack (`SaveNonBlocking`, cmd/view.go at v0.1.1). The skill now reads the file and the
   // Stacks REST API directly, so the grant names view on the excluded side.
-  assert.match(gitWorkflow, /and its `view` as well, which rewrites the extension's local tracking file/,
+  assert.match(destructiveText, /and its `view` as well, which rewrites the extension's local tracking file/,
     'view writes, so it must sit outside the grant rather than inside it as a read');
   // The pre-push hook is opt-in, so the rule must pin BOTH states. Asserting only the
   // installed branch would stay green on a rule that had quietly dropped the other one —
   // and the other one is the branch where nothing stronger than AskUserQuestion exists.
-  assert.match(gitWorkflow, /Primary gate = `pre-push-gate\.sh` \(git hook, `\/dev\/tty` confirmation\)/,
+  assert.match(destructiveText, /Primary gate = `pre-push-gate\.sh` \(git hook, `\/dev\/tty` confirmation\)/,
     'with the hook installed, push keeps its stronger terminal credential');
-  assert.match(gitWorkflow, /the `pre-push` hook is \*\*opt-in\*\*/,
+  assert.match(destructiveText, /the `pre-push` hook is \*\*opt-in\*\*/,
     'the rule must state that the gate is opt-in rather than assumed present');
-  assert.match(gitWorkflow, /AskUserQuestion in `\/push-ci` \*\*is\*\* the authorization/,
+  assert.match(destructiveText, /AskUserQuestion in `\/push-ci` \*\*is\*\* the authorization/,
     'where no terminal credential runs, the in-session approval is the authorization, not a skipped step');
   // The hook prompts on a bounded set of classes — since 2026-08-21 two of them: a
   // protected branch with its bypass unset, and a push that overwrites an existing ref
@@ -196,7 +199,7 @@ test('approval workflows when pinned → each keeps its exact operations, approv
   // AskUserQuestion, leaving Anchor Register #4's per-use approval existing on paper
   // and nowhere else. What must stay pinned is that the set is bounded and that the
   // rule names the credential for everything outside it.
-  assert.match(gitWorkflow, /prompts on two classes/,
+  assert.match(destructiveText, /prompts on two classes/,
     'the rule must say the installed hook does not cover every push');
   // Ancestry is the BRANCH rule, and saying so is load-bearing. Round 31 shipped the tag
   // short-circuit into the gate while this rule still defined the class as "not an ancestor"
@@ -212,35 +215,35 @@ test('approval workflows when pinned → each keeps its exact operations, approv
   //       enumeration and left this one silently outside a class the same sentence called
   //       "every update to an existing tag". Pinned as a boundary, not as an approval of it:
   //       what must not happen again is the gap being invisible in the normative text.
-  assert.match(gitWorkflow,
+  assert.match(destructiveText,
     // "force semantics", not the bare flag: measured 2026-08-21, a forward tag move is rejected
     // plain and accepted by `--force`, by a satisfied `--force-with-lease=<ref>:<oid>`, and by a
     // leading `+`. Pinning one spelling would be a rule about a flag; the class is topological.
     /for a \*\*tag\*\* that test is the wrong question, since git requires force semantics — `--force`, a satisfied `--force-with-lease`, or a leading `\+` in the refspec — for any update to an existing `refs\/tags\/\*` ref, forward moves included/,
     'the rule must define the tag class by namespace rather than by ancestry (a)');
-  assert.match(gitWorkflow,
+  assert.match(destructiveText,
     /while a tag \*creation\*, having no history to overwrite, is not/,
     'the rule must keep tag creation outside the class (b)');
-  assert.match(gitWorkflow,
+  assert.match(destructiveText,
     /A ref listed with an unchanged OID moves nothing and is likewise not asked about\./,
     'the rule must keep an unchanged ref outside the class (c)');
-  assert.match(gitWorkflow,
+  assert.match(destructiveText,
     /the gate's rewrite test requires a non-null OID on \*\*both\*\* sides, so removing an existing ref/,
     'the rule must state that a deletion reaches no prompt, rather than implying it does (d)');
-  assert.match(gitWorkflow, /For every push in neither class, and whenever the hook is not installed/,
+  assert.match(destructiveText, /For every push in neither class, and whenever the hook is not installed/,
     'the rule must name the credential for the pushes the hook does not prompt on');
   // The hook is opt-in, so for a history-rewriting push the un-hooked configuration has
   // no terminal attestation at all. The rule closes that by obliging the three authorized
   // workflows to ask the unshared question themselves. Dropping this sentence would
   // leave option A as a property of a file a project may simply not have installed.
-  assert.match(gitWorkflow,
+  assert.match(destructiveText,
     /must put the unshared question to the user \*\*themselves, by name and before the force approval\*\*, and refuse the push when the answer is not the attestation/,
     'the rule must oblige the skills to attest where no hook does');
   // Clearing, not merely not-setting: an inherited value answers the hook for nobody.
-  assert.match(gitWorkflow, /must never set it \*\*and must clear it on every push they execute\*\*/,
+  assert.match(destructiveText, /must never set it \*\*and must clear it on every push they execute\*\*/,
     'the rule must require the bypass variable to be cleared, not merely left unset');
   // The exclusion that left the hole: it holds only while the protected prompt runs.
-  assert.match(gitWorkflow,
+  assert.match(destructiveText,
     /excluded from this prompt \*\*only while the protected prompt will actually ask about it\*\*/,
     'the rule must make the protected-target exclusion conditional on that prompt running');
   // Non-fast-forward reads like a prompt and is not one — it is a refusal. Which
@@ -251,15 +254,15 @@ test('approval workflows when pinned → each keeps its exact operations, approv
   // a guard for a rejection it never saw. But a refusal is not incapable of a prompt
   // either: with ALLOW_FORCE_WITH_LEASE=1 it is skipped and a protected non-fast-forward
   // push reaches /dev/tty. The rule must state the orthogonality, not either half of it.
-  assert.match(gitWorkflow, /orthogonal earlier refusal, not a class of its own/,
+  assert.match(destructiveText, /orthogonal earlier refusal, not a class of its own/,
     'a refusal must not be documented as a confirmation');
-  assert.match(gitWorkflow, /which mechanism refuses depends on the push form/,
+  assert.match(destructiveText, /which mechanism refuses depends on the push form/,
     'the rule must not attribute every non-fast-forward refusal to the hook');
-  assert.match(gitWorkflow, /the hook is invoked with an empty ref list/,
+  assert.match(destructiveText, /the hook is invoked with an empty ref list/,
     'and it must say what the hook actually receives on the flagless push — nothing to refuse');
-  assert.match(gitWorkflow, /a \*protected\* non-fast-forward push does reach `\/dev\/tty`/,
+  assert.match(destructiveText, /a \*protected\* non-fast-forward push does reach `\/dev\/tty`/,
     'the case where the terminal prompt does happen must be stated');
-  assert.doesNotMatch(gitWorkflow, /Install via `\/install-scripts`\./,
+  assert.doesNotMatch(destructiveText, /Install via `\/install-scripts`\./,
     '/install-scripts copies the script; it never wires up a hook');
 });
 
@@ -370,7 +373,7 @@ test('proposal channel when triggered → closed set, and uncertainty is explici
 });
 
 test('efficacy boundary when scoped → limits AskUserQuestion without revoking the enumerated workflows', () => {
-  const prop = section(discretion, 'Efficacy Boundary');
+  const prop = section(pushContract, 'Efficacy Boundary');
   assert.match(prop, /session caching/);
   assert.match(prop, /never the sole credential for a safety approval outside the workflow that defines it/);
   assert.match(prop, /pre-push-gate\.sh/, 'push keeps its stronger named mechanism');
@@ -503,7 +506,7 @@ const FROZEN_ANCHOR_INVENTORY = [
 
 test('legacy anchors when migrated → every pre-change anchor source still exists and maps to the register', () => {
   const reg = section(discretion, 'Anchor Register (closed list)');
-  const baselines = section(discretion, 'File Baselines (14 plugin-managed files)');
+  const baselines = section(discretion, 'File Baselines (12 plugin-managed files)');
   const mappingTargets = reg + baselines;
   for (const { file, phrase, mapped } of FROZEN_ANCHOR_INVENTORY) {
     const src = readFileSync(resolve(root, file), 'utf8');
@@ -895,7 +898,7 @@ function validateDestructiveContract(text) {
 }
 
 test('the destructive-git contract when validated → grants exactly what Anchor Register #4 enumerates', () => {
-  assert.deepEqual(validateDestructiveContract(gitWorkflow), []);
+  assert.deepEqual(validateDestructiveContract(destructiveText), []);
 });
 
 test('the validator when the contract is widened → reports it, and says which dimension moved', () => {
@@ -992,9 +995,9 @@ test('the validator when the contract is widened → reports it, and says which 
   // validator for a defect that was entirely in the fixture. The precondition names the fixture
   // instead, which is the only way the next reword reads as maintenance rather than a hole.
   for (const [label, mutate] of Object.entries(widenings)) {
-    assert.notStrictEqual(mutate(gitWorkflow), gitWorkflow,
+    assert.notStrictEqual(mutate(destructiveText), destructiveText,
       `fixture stale — its anchor text is no longer in rules/git-workflow.md: ${label}`);
-    assert.notDeepEqual(validateDestructiveContract(mutate(gitWorkflow)), [],
+    assert.notDeepEqual(validateDestructiveContract(mutate(destructiveText)), [],
       `widening undetected: ${label}`);
   }
 
@@ -1015,8 +1018,8 @@ test('the validator when the contract is widened → reports it, and says which 
     'a trailing newline added': (t) => `${t}\n`,
   };
   for (const [label, edit] of Object.entries(free)) {
-    const edited = edit(gitWorkflow);
-    assert.notEqual(edited, gitWorkflow, `the fixture must actually differ from the rule: ${label}`);
+    const edited = edit(destructiveText);
+    assert.notEqual(edited, destructiveText, `the fixture must actually differ from the rule: ${label}`);
     assert.deepEqual(validateDestructiveContract(edited), [],
       `Default-tier edit reported as a contract change: ${label}`);
   }
@@ -1052,8 +1055,8 @@ test('the validator when the contract is widened → reports it, and says which 
       'PR workflow: Develop', 'PR workflow: /release-bot may execute `git push -f` after approval. Develop'),
   };
   for (const [label, edit] of Object.entries(statedResidualRisk)) {
-    const edited = edit(gitWorkflow);
-    assert.notEqual(edited, gitWorkflow, `the residual-risk fixture must actually differ: ${label}`);
+    const edited = edit(destructiveText);
+    assert.notEqual(edited, destructiveText, `the residual-risk fixture must actually differ: ${label}`);
     assert.deepEqual(validateDestructiveContract(edited), [],
       `this is documented as OUT of coverage — if it now reports, widen the comment, not the claim: ${label}`);
   }
@@ -1061,17 +1064,17 @@ test('the validator when the contract is widened → reports it, and says which 
   // And a reword *inside* the block is reported, deliberately — that is the closure. Whoever edits
   // an Anchor surface updates the pin in the same change, which is the review the anchor already
   // requires.
-  const reworded = gitWorkflow.replace(
+  const reworded = destructiveText.replace(
     'after explicit user approval via AskUserQuestion. Bare',
     'only after the user explicitly approves via AskUserQuestion. Bare');
-  assert.notEqual(reworded, gitWorkflow, 'the rewording fixture must actually differ from the rule');
+  assert.notEqual(reworded, destructiveText, 'the rewording fixture must actually differ from the rule');
   assert.deepEqual(validateDestructiveContract(reworded),
     ['the authorization block no longer matches its pinned text'],
     'a reword that moves no command and no credential is exactly one pin mismatch, nothing more');
 
   // The structural half is genuinely live: a widening that leaves the pin satisfied is impossible,
   // so the only way to see the command comparison working is to hand it text no pin was taken of.
-  const foreign = gitWorkflow.replace(
+  const foreign = destructiveText.replace(
     'Exception: `/smart-commit --execute` may execute `git add`',
     'Exception: `/smart-commit --execute` may execute `git rebase --onto` and `git add`');
   assert.ok(
@@ -1160,7 +1163,7 @@ function validateEfficacyBoundary(text) {
 }
 
 test('the efficacy boundary when validated → matches its pinned section exactly', () => {
-  assert.deepEqual(validateEfficacyBoundary(discretion), []);
+  assert.deepEqual(validateEfficacyBoundary(pushContract), []);
 });
 
 test('the efficacy boundary when widened → reported wherever in the section it is placed', () => {
@@ -1174,7 +1177,9 @@ test('the efficacy boundary when widened → reported wherever in the section it
     'a contradictory paragraph of its own inside the section': (t) => t.replace(AUTHZ, `${WAIVER}\n\n${AUTHZ}`),
     // The same claim with an indent, which no line-prefix rule would recognise as a declaration.
     'an indented restatement inside the section': (t) => t.replace(AUTHZ, `  Efficacy boundary: ${WAIVER}\n\n${AUTHZ}`),
-    'a contradictory paragraph appended after the last line of the section': (t) => `${t.replace(/\s*$/, '')}\n\n${WAIVER}\n`,
+    // Since r3 the section is followed by § Proactive Offer, so "after its last line" is an insertion.
+    'a contradictory paragraph appended after the last line of the section': (t) => t.replace(
+      'remain Anchor under every assignment in this file.', `remain Anchor under every assignment in this file.\n\n${WAIVER}`),
     'a waiver joined into the canonical paragraph': (t) => t.replace(`\n\n${AUTHZ}`, `\n${WAIVER}\n\n${AUTHZ}`),
     // The residual this whole change removed, restored.
     'the pre-opt-in parenthetical restored': (t) => t.replace(
@@ -1185,8 +1190,8 @@ test('the efficacy boundary when widened → reported wherever in the section it
     'a second heading opened so a waiver can sit under a duplicate': (t) => `${t}\n${EFFICACY_HEADING}\n\n${WAIVER}\n`,
   };
   for (const [name, mutate] of Object.entries(widenings)) {
-    const mutated = mutate(discretion);
-    assert.notEqual(mutated, discretion, `precondition: the ${name} mutation must actually apply`);
+    const mutated = mutate(pushContract);
+    assert.notEqual(mutated, pushContract, `precondition: the ${name} mutation must actually apply`);
     assert.notDeepEqual(validateEfficacyBoundary(mutated), [], `undetected widening: ${name}`);
   }
 });
@@ -1194,36 +1199,28 @@ test('the efficacy boundary when widened → reported wherever in the section it
 test('the efficacy-boundary pin when Default-tier prose changes → stays silent', () => {
   // The negative control, and it is load-bearing rather than decorative: a pin reaching past its
   // contract makes ordinary edits fail an Anchor-named test, and the next maintainer fixes that by
-  // weakening the test. The first two fixtures are round 32's own counterexample — the trigger and
-  // uncertainty paragraphs, which used to sit inside the pinned section and now do not.
+  // weakening the test. Since r3 the pinned section lives in the push authorization contract, so the
+  // fixtures edit that file's Default-tier text outside the section: its load note, its tier note
+  // and § Proactive Offer.
   const lawful = {
-    'the uncertainty paragraph reworded without changing its meaning': (t) => t.replace(
-      'is the wrong reading of this file', 'remains the wrong reading of this file'),
-    'a human exit added to the triggers list': (t) => t.replace(
-      'feature removal, user-requested stop', 'feature removal, user-requested pause, user-requested stop'),
-    'a tier-table row reworded': (t) => t.replace('| **Guidance** | Advisory |', '| **Guidance** | Advisory guidance |'),
-    'a file-baseline row reworded': (t) => t.replace('| `framework.md` | Guidance |', '| `framework.md` | Guidance tier |'),
-    'a sentence added to the deviation section': (t) => t.replace(
-      'Silent deviation is a violation.', 'A deviation is stated once. Silent deviation is a violation.'),
+    'the load note reworded': (t) => t.replace('Loaded on demand — before any push', 'Loaded on demand, before any push'),
+    'the tier note reworded': (t) => t.replace('**Tier.** This file sits outside', '**Tier.** This file is outside'),
+    'a Proactive Offer bullet reworded': (t) => t.replace(
+      '**How**: one AskUserQuestion whose options follow `kind`', '**How**: a single AskUserQuestion whose options follow `kind`'),
     'an extra blank line inside the pinned section': (t) => t.replace(
       '\n\nAuthorization is never a reason to skip review:', '\n\n\nAuthorization is never a reason to skip review:'),
     'a trailing newline appended': (t) => `${t}\n`,
   };
   for (const [name, mutate] of Object.entries(lawful)) {
-    const mutated = mutate(discretion);
-    assert.notEqual(mutated, discretion, `precondition: the ${name} fixture must actually apply`);
+    const mutated = mutate(pushContract);
+    assert.notEqual(mutated, pushContract, `precondition: the ${name} fixture must actually apply`);
     assert.deepEqual(validateEfficacyBoundary(mutated), [], `false positive on a lawful edit: ${name}`);
   }
-  // The label is the claim, so it is checked rather than asserted in a comment: round 32 caught an
-  // earlier version of this block calling a fixture "a different section" when the text it edited
-  // was inside the pinned one, which is why it passed. Every non-whitespace fixture above must
-  // target text the pinned section does not contain.
+  // Every non-whitespace fixture above must target text the pinned section does not contain.
   for (const probe of [
-    'is the wrong reading of this file',
-    'feature removal, user-requested stop',
-    '| **Guidance** | Advisory |',
-    '| `framework.md` | Guidance |',
-    'Silent deviation is a violation.',
+    'Loaded on demand — before any push',
+    '**Tier.** This file sits outside',
+    '**How**: one AskUserQuestion whose options follow `kind`',
   ]) {
     assert.ok(!CANONICAL_EFFICACY_SECTION.includes(probe),
       `fixture target must sit outside the pinned section: ${probe}`);
@@ -1244,4 +1241,38 @@ test('rule 3 when it says how commits are guarded → names the real installer a
     assert.match(rule3, /without it, `\/smart-commit --execute` still runs every message through the same guard/,
       `${f}: say what still protects a project that has no hook`);
   }
+});
+
+// rules-residency r3: the three compact cores that stay resident after the verbatim move. Their
+// wording was approved by the maintainer on 2026-09-25 (INV-006; the Push safety core's first
+// sentence re-approved the same day to name the `/deploy-flow` run-step path, and its attestation
+// sentence re-approved to scope it to the three push workflows), so they are pinned by equality —
+// only equality fails on deletion, hedging, inversion and contradictory addition alike.
+const CANONICAL_R3_CORES = {
+  'rules/git-workflow.md § Push safety': "A push is authorized only through `/push-ci`, `/epic-merge` or `/gh-stack` after the per-use approval its skill defines, through a `/deploy-flow` run step the project declares under `Run Steps: execute` after its per-step approval, or by user-authorized execution. Never bare `--force`; `--force-with-lease` only when explicitly passed, never onto a protected branch. Where the opt-in `pre-push` hook is installed and prompts, `pre-push-gate.sh` is the terminal credential; where it is absent or does not prompt, the workflow's in-session approval is the whole credential — an absent gate never means no approval is needed. A history-rewriting push through `/push-ci`, `/epic-merge` or `/gh-stack` also needs the operator's attestation that the rewritten refs are not shared, asked by name before the force approval. A declared `/deploy-flow` run step is the project's own script, which the harness does not check — the risk the project accepted with `Run Steps: execute`. `ALLOW_PUSH_PROTECTED` and `ALLOW_FORCE_UNSHARED` are developer-set only and cleared on every push a skill runs. Before any push, Read `skills/push-ci/references/authorization-contract.md` in the sd0x-dev-flow plugin (the `push-ci` skill's own `references/`), § Push safety — the credential-selection topology, the two prompt classes and what each ref class counts as a rewrite. If that Read fails, do not push. PR workflow: Develop -> /codex-review-fast -> /precommit -> /pr-review -> PR",
+  'rules/git-workflow.md § Proactive Offer': "After a change's gates pass, offer the commit or push through one AskUserQuestion when `review-state.js offer --format=json` returns `offer: true`; never print a command for the user to paste; never invoke `/smart-commit --execute` or `/push-ci` except by menu selection, the user's explicit request, or Goal mode. **Goal mode** (commits only): while a goal the user set or approved is active and `review-state.js goal-commit --format=json` returns `ok: true`, `/smart-commit --execute` commits without the per-use question and prints a `[GOAL_COMMIT]` record. Before offering, or committing under Goal mode, Read `skills/push-ci/references/authorization-contract.md` § Proactive Offer — the menu shapes and validation order, the four Goal mode conditions and the custom-flow prompt. If that Read fails, offer nothing and make no Goal-mode commit.",
+  'rules/discretion.md § Efficacy Boundary': "An AskUserQuestion approval can be auto-approved by session caching, so it is **never the sole credential for a safety approval outside the workflow that defines it**: it authorizes nothing beyond the enumerated workflows and never bypasses a stronger mechanism an anchor names where that mechanism is in place. Inside an enumerated workflow that names none, its per-use approval is required and sufficient — except that a goal the user set or approved lets `/smart-commit --execute` commit without the per-use question. An absent gate moves the question, never deletes it; a refused push authorizes nothing. Authorization is never a reason to skip review: Register #5 and #6 remain Anchor under every assignment in this file. The full clause — which pushes the hook prompts on and how each workflow meets it — is `skills/push-ci/references/authorization-contract.md` § Efficacy Boundary in the sd0x-dev-flow plugin. Read it before relying on an approval as a push credential; if that Read fails, do not push.",
+};
+
+function r3Cores(gitText, discretionText) {
+  const { liveText: live, sectionAt: at } = require('../helpers/markdown-structure');
+  const n = (s) => s.replace(/\s+/g, ' ').trim();
+  return {
+    'rules/git-workflow.md § Push safety': n(at(live(gitText), 2, 'Push safety')),
+    'rules/git-workflow.md § Proactive Offer': n(at(live(gitText), 2, 'Proactive Offer')),
+    'rules/discretion.md § Efficacy Boundary': n(at(live(discretionText), 2, 'Efficacy Boundary')),
+  };
+}
+
+test('the r3 resident cores when read → match the wording the maintainer approved', () => {
+  assert.deepEqual(r3Cores(gitWorkflow, discretion), CANONICAL_R3_CORES);
+});
+
+test('an r3 resident core when hedged or cut → fails its pin (negative control)', () => {
+  const hedged = gitWorkflow.replace('If that Read fails, do not push.', 'If that Read fails, push with care.');
+  assert.notEqual(hedged, gitWorkflow, 'fixture premise: the hedge applied');
+  assert.notDeepEqual(r3Cores(hedged, discretion), CANONICAL_R3_CORES);
+  const cut = discretion.replace('An absent gate moves the question, never deletes it; ', '');
+  assert.notEqual(cut, discretion, 'fixture premise: the cut applied');
+  assert.notDeepEqual(r3Cores(gitWorkflow, cut), CANONICAL_R3_CORES);
 });

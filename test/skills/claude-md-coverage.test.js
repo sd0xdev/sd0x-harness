@@ -132,7 +132,12 @@ const ALLOWED_CLAUDE_READERS = new Set([
   'test/scripts/instruction-budget.test.js',      // copies CLAUDE.template.md into a fresh-install fixture for the ceiling (instruction-budget R3)
   'test/rules/path-scoped-rules.test.js',         // pins that the template never @-imports a path-scoped rule (instruction-budget R1)
   'test/rules/override-carriers.test.js',          // pins the override-template @rules/ lines in both tracked CLAUDE templates (git-autonomy R2)
-  'test/scripts/canary-stage.test.js',             // writes a fixture CLAUDE.md into a throwaway repo to measure resident chars; reads no tracked CLAUDE file (rules-residency 8a)
+  'test/rules/residency-budget.test.js',         // renders CLAUDE.template.md into a fresh-install fixture for the resident budget (rules-residency task 4)
+  'test/rules/kernel-digests.test.js',           // digest-pins CLAUDE.template.md and CLAUDE.md § Contract Triggers as kernel units; asserts no command registration (rules-residency task 6)
+  'test/rules/canary-log.test.js',               // checks the resident CLAUDE.md no longer carries the canary staging duty; asserts no command registration (rules-residency 8c)
+  'test/rules/kernel-moves.test.js',             // names CLAUDE.template.md as the source of moved rows, to check they left it (rules-residency task 3)
+  'test/rules/rule-retirement.test.js',           // pins that no tracked CLAUDE file still imports a retired rule; asserts no command registration (rules-residency task 3)
+  'test/rules/override-contract.test.js',        // pins /install-rules § Workflow, whose Retired row names the project CLAUDE.md Rules block; reads no tracked CLAUDE file (rules-residency task 3)
 ]);
 
 // Anchored to a trailing quote (', ", or `) so all three JS string-literal quote styles
@@ -280,8 +285,13 @@ test('auto-loop terminal gate routes to one precommit variant across rules, trac
     const required = routedPrecommit(content, /^\| code files \| `\/codex-review-fast` ->/);
     assert.equal(required, canonical, `${label} Required Checks row should route to /${canonical}`);
 
-    const autoLoop = routedPrecommit(content, /^\| code files \| `\/codex-review-fast` \| `\//);
-    assert.equal(autoLoop, canonical, `${label} Auto-Loop Rule row should route to /${canonical}`);
+    // Every code-files routing row, not a named second table: rules-residency task 3 dropped the
+    // template's duplicate Auto-Loop table, so a row pinned by position would now be vacuous.
+    const rows = content.split('\n').filter((l) => /^\| code files \|/.test(l));
+    assert.ok(rows.length >= 1, `${label} has no code-files routing row`);
+    for (const row of rows) {
+      assert.equal(routedPrecommit(row, /./), canonical, `${label} routing row should route to /${canonical}: ${row}`);
+    }
 
     // The table sits under the Required Checks heading. Since hook-lightweighting the Stop hook
     // is a reminder, not a gate — a doc still claiming enforcement would advertise a backstop

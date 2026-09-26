@@ -2,8 +2,8 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md`.
 > **Created**: 2026-09-25
-> **Status**: In Progress
-> **Note**: 安裝本身已完成；20 個 baseline 變更要靠之後的實際工作累積，累積滿之前本單不結案
+> **Status**: Completed
+> **Note**: 安裝本身已完成；20 個 baseline 變更要靠之後的實際工作累積，累積滿之前本單不結案。2026-09-26 維護者決定不再要求 20 筆：記到 6 筆時結束，由 8c 匯入並移除記錄職責（[2026-09-26-canary-closeout-8b-8c.md](./2026-09-26-canary-closeout-8b-8c.md)）
 > **Priority**: P1
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) <- Technical detail (primary source)
 > **Requirements**: [1-requirements.md](../1-requirements.md) <- Feature-level problem-space rationale
@@ -45,8 +45,8 @@
 - [x] 記錄檔有格式不符的行（不完整、多出欄位、空白行、重複 id、缺結尾換行）時，`record` 與 `count` 都拒絕，檔案不被附加
 - [x] 工具和 `review-state.js` 把狀態寫進同一個目錄（測試直接比對），`review-state.js` 本身不改
 - [x] 程式碼閘門：`/codex-review-fast` ✅ Ready → `/precommit` ✅ PASS
-- [ ] 文件閘門：`/codex-review-doc` ✅ Mergeable
-- [ ] baseline cohort 累積滿 20 筆（`node scripts/dev/canary-stage.js count`）
+- [x] 文件閘門：`/codex-review-doc` ✅ Mergeable（2026-09-26，與 8c 收尾的文件一起審查）
+- [x] ~~baseline cohort 累積滿 20 筆（`node scripts/dev/canary-stage.js count`）~~ 2026-09-26 維護者決定取消此條件；記到 6 筆時結束
 
 ## Progress
 
@@ -55,7 +55,7 @@
 | Analysis | Done | 依 tech spec § 6 與 task 8a |
 | Development | Done | 程式碼審查 4 輪，修掉記錄檔完整性的 4 個漏洞：格式檢查太寬、超大整數寫成 `null`、並發重複記錄、缺結尾換行的記錄被接著寫。原本把 repo-key 推導抽成 `scripts/lib/state-dir.js`，precommit 發現它弄壞 `review-state.js` 的安裝副本，改為工具自帶推導並移到 `scripts/dev/` |
 | Testing | Done | `test/scripts/canary-stage.test.js` 13 個測試；測試充分度審查 4 輪後 ✅ Tests sufficient；全套 4972 pass、0 fail |
-| Acceptance | In progress | 程式碼閘門通過，文件閘門進行中；baseline 累積中（0/20），滿 20 筆才結案 |
+| Acceptance | Done | 程式碼閘門通過，文件閘門進行中；baseline 累積中（0/20），滿 20 筆才結案。2026-09-26：取消 20 筆條件，記錄在 6 筆時結束並由 8c 匯入 |
 
 ## References
 

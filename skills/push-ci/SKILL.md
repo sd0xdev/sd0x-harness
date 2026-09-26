@@ -6,6 +6,9 @@ allowed-tools: Bash(git:*), Bash(gh:*), Bash(bash:*), Bash(/bin/bash:*), Read, G
 
 # Push & CI Monitor
 
+**Read first**: `references/authorization-contract.md` before any push — § Push safety for the credential and the two prompt classes, § Efficacy Boundary for what an approval here does and does not authorize. If that Read fails, stop and report it; do not push.
+
+
 Push to remote with user approval, then monitor CI run until completion.
 
 ## Authorization

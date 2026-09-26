@@ -1191,7 +1191,7 @@ test('every git command in the document → carries the canonical prefix', () =>
     'a table cell naming git is not a command and must not be judged as one');
 });
 
-const SKILL_DIGEST = "28e05bb11a60dc2cbcaf36e4f5c0bac2eac5f85f08ac11e0831435aa9e162f34";
+const SKILL_DIGEST = "87c8cbabcc7484addf70482a5139199404b2772e6918977501eab5ef17e5e54d";
 
 test('the skill document when read → matches its pinned digest', () => {
   assert.equal(createHash('sha256').update(readSkill()).digest('hex'), SKILL_DIGEST,
@@ -2887,6 +2887,24 @@ test('each guarded step when its command fails → stops the run and says what i
   } finally {
     rmSync(manifests, { recursive: true, force: true });
   }
+});
+
+// Regression (r3 doc review): `--keep-backup-tags` promised to keep the backup tags under --cleanup,
+// but the cleanup fence deleted them unconditionally — losing the recovery points the flag was for.
+test('cleanup when --keep-backup-tags is bound → never runs `git tag -d`; without it → does', () => {
+  const skill = readSkill();
+  const start = skill.indexOf('## Post-Merge Cleanup (--cleanup flag)\n\n```bash\n');
+  assert.ok(start > 0, 'the cleanup fence must exist');
+  const body = skill.slice(skill.indexOf('```bash\n', start) + 8, skill.indexOf('\n```', start + 40));
+  assert.match(body, /^KEEP_BACKUP_TAGS=false$/m, 'the flag is bound literally, defaulting to false');
+  const run = (keep) => withFakeGit(body.replace('KEEP_BACKUP_TAGS=false', `KEEP_BACKUP_TAGS=${keep}`)
+    .split('<quoted branch>').join('feat/x'), { gitExit: 0 });
+  const kept = run('true');
+  assert.ok(!kept.calls.some((c) => /^tag -d /.test(c.replace(/^-C \S+ /, ''))), 'no tag deletion under --keep-backup-tags');
+  assert.match(kept.stderr, /--keep-backup-tags — the backup tags stay/);
+  // The other direction, through the same fence: without the flag the tags are deleted.
+  const deleted = run('false');
+  assert.ok(deleted.calls.some((c) => /(^| )tag -d /.test(c)), 'the tags are deleted without the flag');
 });
 
 test('the manifest comparison when the two manifests differ → restores from the backup tag and refuses', () => {

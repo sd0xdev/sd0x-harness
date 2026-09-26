@@ -49,7 +49,7 @@ whether the finding is actionable, which is the other axis.
 | `UNCERTAIN`, or below the confidence floor | any | `UNCERTAIN` |
 | `NOT_ASSESSED` — the dispatch was not a clarify | any | `UNCERTAIN`, and say the intent was mismatched |
 
-Confirm/clarify intents are **informational only** — they produce no dismiss authorization and do not create exceptions in `fix-all-issues.md`.
+Confirm/clarify intents are **informational only** — they produce no dismiss authorization and do not create exceptions in `skills/codex-code-review/references/scope-contract.md` § Fix Obligation.
 
 ## Audit Trail Format
 

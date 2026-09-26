@@ -8,7 +8,8 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 
-const RULE = readFileSync(resolve(__dirname, '../../rules/git-workflow.md'), 'utf8');
+// rules-residency r3: § Proactive Offer (Goal mode) moved verbatim into the push authorization contract.
+const RULE = readFileSync(resolve(__dirname, '../../skills/push-ci/references/authorization-contract.md'), 'utf8');
 const flat = (s) => s.replace(/\s+/g, ' ');
 
 const CLAUSES = {
@@ -39,7 +40,7 @@ const CLAUSES = {
 test('## Goal Commit off narrows → the row lives in rules/override-contract.md, the resident core names it', () => {
   const contract = readFileSync(resolve(__dirname, '../../rules/override-contract.md'), 'utf8');
   assert.ok(flat(contract).includes('| `## Goal Commit` | Setting — `on` (default) · `off`, read by `review-state.js goal-commit`'));
-  assert.match(RULE, /`## Goal Commit`/);
+  assert.match(readFileSync(resolve(__dirname, '../../rules/git-workflow.md'), 'utf8'), /`## Goal Commit`/);
 });
 
 function missingClauses(text) {
@@ -47,7 +48,7 @@ function missingClauses(text) {
   return Object.entries(CLAUSES).filter(([, c]) => !t.includes(flat(c))).map(([k]) => k);
 }
 
-test('rules/git-workflow.md Goal mode when read → carries every § 3.5 condition and fallback', () => {
+test('authorization-contract.md Goal mode when read → carries every § 3.5 condition and fallback', () => {
   assert.deepEqual(missingClauses(RULE), []);
 });
 

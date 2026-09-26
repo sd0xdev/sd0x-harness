@@ -55,7 +55,7 @@ This skill is an **analysis tool by default**. It loads PR review comments and p
 
 ### Precedence
 
-> **Rule priority**: Plan mode's analysis-only constraint overrides the "Skill analysis-only mode" exception in `fix-all-issues.md`.
+> **Rule priority**: Plan mode's analysis-only constraint overrides the "Skill analysis-only mode" exception in `@skills/codex-code-review/references/scope-contract.md` § Fix Obligation.
 > Issues found in plan mode are recorded in the analysis report (logged as `[ANALYSIS_ONLY_DEFERRED]`), not auto-fixed. User must explicitly invoke `--mode fix` to apply changes.
 
 ### Mode Behavior

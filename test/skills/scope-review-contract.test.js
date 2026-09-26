@@ -383,7 +383,7 @@ test('obligation when a round rotates → derived afresh from the report, never 
     'review-common.md': common,
     'SKILL.md': skill,
     'scope-discipline.md': readFileSync(resolve(root, 'rules/scope-discipline.md'), 'utf8'),
-    'fix-all-issues.md': readFileSync(resolve(root, 'rules/fix-all-issues.md'), 'utf8'),
+    // The Fix All Issues rule now lives in scope-contract.md § Fix Obligation, scanned above.
     '2-tech-spec.md': readFileSync(resolve(root, 'docs/features/opportunistic-fix-envelope/2-tech-spec.md'), 'utf8'),
   };
   for (const [name, text] of Object.entries(carriers)) {

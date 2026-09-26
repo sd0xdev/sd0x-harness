@@ -6,6 +6,9 @@ allowed-tools: Bash(/bin/bash:*), Bash(git:*), Read, Grep, Glob, AskUserQuestion
 
 # Deploy Flow
 
+**Read first**: `@skills/push-ci/references/authorization-contract.md` before executing a declared merge or run step — § Efficacy Boundary for what the per-step approval authorizes, § Push safety for any step that pushes. If that Read fails, stop and report it; execute no step.
+
+
 Run the steps a project declares for its own release — nothing it does not declare, and nothing
 without a per-step approval.
 

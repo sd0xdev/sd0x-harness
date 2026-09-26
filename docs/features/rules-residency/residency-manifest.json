@@ -1,0 +1,179 @@
+{
+  "about": "Residency manifest (rules-residency tech spec § 3.5). One entry per always-loaded block of a rendered fresh install. Each entry records its measured contribution (characters and lines; the template as rendered for the worst ecosystem with representative values). test/rules/residency-budget.test.js re-measures every entry, fails on a stale one, and holds the plugin-managed total to the budget below.",
+  "budget": {
+    "plugin_managed_chars": 50000,
+    "plugin_managed_lines": 600,
+    "measured_on": "a rendered fresh install: CLAUDE.template.md rendered by /project-setup for each ecosystem block (worst case kept), plus every rules/*.md without paths: frontmatter; *-project.md files are user-owned and reported separately"
+  },
+  "blocks": [
+    {
+      "file": "CLAUDE.template.md",
+      "owner": "plugin",
+      "tier": "Default, with Anchor rules 3-4 marked inline",
+      "justification": "The project's entry point: the tier system, the required gates, the contract trigger table and the Anchor git rules must hold from the first turn, before any task type is known.",
+      "detail": [
+        "skills/codex-code-review/references/codex-invocation-contract.md",
+        "skills/codex-code-review/references/review-common.md",
+        "skills/codex-code-review/references/scope-contract.md",
+        "skills/codex-code-review/references/loop-diagnostics.md",
+        "skills/push-ci/references/authorization-contract.md",
+        "skills/test-review/references/testing-contract.md",
+        "skills/doc-review/references/documentation-contract.md",
+        "rules/override-contract.md"
+      ],
+      "carrier": [
+        "scripts/review-state.js"
+      ],
+      "chars": 10692,
+      "lines": 141
+    },
+    {
+      "file": "rules/discretion.md",
+      "owner": "plugin",
+      "tier": "Default, Anchor Register",
+      "justification": "Tier resolution decides how every other instruction binds, so it is needed before anything else is read (pre-activation); the Anchor Register is gate supremacy.",
+      "detail": [
+        "skills/push-ci/references/authorization-contract.md"
+      ],
+      "carrier": [
+        "test/rules/discretion-tiers.test.js"
+      ],
+      "chars": 8712,
+      "lines": 73
+    },
+    {
+      "file": "rules/auto-loop.md",
+      "owner": "plugin",
+      "tier": "Default, Register #3 and #5-#7 Anchor",
+      "justification": "Every edit owes its gates; the terminal completion invariant and the tier table must hold before the task type is knowable (gate supremacy).",
+      "detail": [
+        "skills/codex-code-review/references/review-common.md",
+        "skills/codex-code-review/references/loop-diagnostics.md",
+        "skills/codex-code-review/references/scope-contract.md",
+        "rules/override-contract.md",
+        "docs/features/hook-lightweighting/2-tech-spec.md"
+      ],
+      "carrier": [
+        "scripts/review-state.js",
+        "scripts/validate-family-sentinel.js",
+        "scripts/lib/review-dispatch.js"
+      ],
+      "chars": 10630,
+      "lines": 80
+    },
+    {
+      "file": "rules/git-workflow.md",
+      "owner": "plugin",
+      "tier": "Default, Register #4 and #2 Anchor",
+      "justification": "A git mutation is irreversible and outward-facing and can be asked for in any session; the prohibitions, grants and attribution rule cannot wait for a Read.",
+      "detail": [
+        "skills/push-ci/references/authorization-contract.md",
+        "rules/override-contract.md"
+      ],
+      "carrier": [
+        "scripts/pre-push-gate.sh",
+        "scripts/commit-msg-guard.sh",
+        "skills/smart-commit/scripts/smart-commit-execute.sh"
+      ],
+      "chars": 6597,
+      "lines": 62
+    },
+    {
+      "file": "rules/security.md",
+      "owner": "plugin",
+      "tier": "Anchor (whole file)",
+      "justification": "A security failure cannot wait for a Read.",
+      "detail": [],
+      "carrier": [],
+      "chars": 1063,
+      "lines": 23
+    },
+    {
+      "file": "rules/logging.md",
+      "owner": "plugin",
+      "tier": "Default, never-log list Anchor",
+      "justification": "Secret recording (Register #2) can happen in any code the session writes.",
+      "detail": [],
+      "carrier": [],
+      "chars": 301,
+      "lines": 10
+    },
+    {
+      "file": "rules/scope-discipline.md",
+      "owner": "plugin",
+      "tier": "Default, Register-inherited lines Anchor",
+      "justification": "Scope is decided on the first finding of any review round; the frozen baseline and the fail-closed rule must precede it (pre-activation).",
+      "detail": [
+        "skills/codex-code-review/references/scope-contract.md"
+      ],
+      "carrier": [],
+      "chars": 5246,
+      "lines": 67
+    },
+    {
+      "file": "rules/codex-invocation.md",
+      "owner": "plugin",
+      "tier": "Default",
+      "justification": "A first dispatch that feeds the reviewer a conclusion cannot be undone; the review is spent before any contract loads.",
+      "detail": [
+        "skills/codex-code-review/references/codex-invocation-contract.md",
+        "skills/codex-code-review/references/codex-transport.md"
+      ],
+      "carrier": [
+        "scripts/codex-exec.js"
+      ],
+      "chars": 2069,
+      "lines": 49
+    },
+    {
+      "file": "rules/context-management.md",
+      "owner": "plugin",
+      "tier": "Default, Register #7 and #2 lines Anchor",
+      "justification": "Capacity claims arise before any task type and must never close a gate (Register #7); compact summaries must never carry secrets (Register #2).",
+      "detail": [
+        "skills/orchestrate/SKILL.md"
+      ],
+      "carrier": [],
+      "chars": 1951,
+      "lines": 35
+    },
+    {
+      "file": "rules/self-improvement.md",
+      "owner": "plugin",
+      "tier": "Default, redaction Anchor",
+      "justification": "A correction can arrive in any session, and the redaction rule (Register #2) must bind the first record written.",
+      "detail": [],
+      "carrier": [],
+      "chars": 2353,
+      "lines": 42
+    },
+    {
+      "file": "rules/auto-loop-project.md",
+      "owner": "user",
+      "tier": "User-owned — resolved by rules/override-contract.md",
+      "justification": "The plugin user's settings, resident exactly as the user left them; outside the plugin-managed budget and never modified by the plugin.",
+      "detail": [
+        "rules/override-contract.md"
+      ],
+      "carrier": [
+        "scripts/review-state.js"
+      ],
+      "chars": 3874,
+      "lines": 86
+    },
+    {
+      "file": "rules/git-workflow-project.md",
+      "owner": "user",
+      "tier": "User-owned — resolved by rules/override-contract.md",
+      "justification": "The plugin user's settings, resident exactly as the user left them; outside the plugin-managed budget and never modified by the plugin.",
+      "detail": [
+        "rules/override-contract.md"
+      ],
+      "carrier": [
+        "scripts/review-state.js"
+      ],
+      "chars": 3430,
+      "lines": 79
+    }
+  ]
+}

@@ -11,7 +11,7 @@ test('hooks.json is valid JSON with hooks key', () => {
   assert.ok(hooksConfig.hooks.SessionStart, 'should have SessionStart entries');
 });
 
-test('namespace-hint SessionStart hook uses "startup|compact" matcher, not empty string', () => {
+test('namespace-hint SessionStart hook uses "startup|clear|compact" matcher, not empty string', () => {
   const sessionStartEntries = hooksConfig.hooks.SessionStart;
   const namespaceHintEntry = sessionStartEntries.find(
     (e) => e.hooks?.some((h) => h.command?.includes('namespace-hint'))
@@ -20,9 +20,11 @@ test('namespace-hint SessionStart hook uses "startup|compact" matcher, not empty
   assert.ok(namespaceHintEntry, 'should have namespace-hint SessionStart entry');
   assert.equal(
     namespaceHintEntry.matcher,
-    'startup|compact',
-    'namespace-hint matcher must be "startup|compact" to inject namespace guidance on startup ' +
-    'and after compaction, but NOT on resume where CLAUDE_PLUGIN_ROOT may be unavailable'
+    'startup|clear|compact',
+    'namespace-hint matcher must be "startup|clear|compact": it injects namespace guidance and the ' +
+    'plugin root the resident contract triggers resolve against on startup, after /clear (which wipes ' +
+    'the context that carried them) and after compaction — but NOT on resume, where CLAUDE_PLUGIN_ROOT ' +
+    'may be unavailable and the resumed transcript already carries the lines'
   );
 });
 

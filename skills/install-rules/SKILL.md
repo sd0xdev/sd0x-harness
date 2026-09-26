@@ -21,6 +21,7 @@ allowed-tools: Read, Grep, Glob, Write, AskUserQuestion, Bash(mkdir:*), Bash(dif
 ```
 Phase 1: Locate plugin rules dir
 Phase 2: Enumerate *.md, MINUS the override templates (*-project.md) — see below
+Phase 2.5: Retired sweep — every name on the Retired table, checked in .claude/rules/
 Phase 3: Determine install set (--all, specific names, or interactive)
 Phase 3.5: Read manifest + classify (new/unchanged/modified/conflict)
 Phase 4: Install (smart merge with manifest tracking)
@@ -57,6 +58,21 @@ Uses `.sd0x/install-state.json` to track installed file hashes. Smart merge logi
 | Unchanged (hash match) | Auto-upgrade |
 | Modified by user | Skip (preserve edits) |
 | Conflict (both changed) | AskUserQuestion |
+| Retired (listed below; the plugin no longer ships it) | Unchanged since install (hash match) → remove the local copy, mark its manifest entry `deleted: true`, and drop its line from the project `CLAUDE.md` `## Rules` block. Modified by user → keep the file, report it, change nothing |
+
+**Retired rules** — files the plugin once installed and no longer ships. A retired rule is never
+re-copied; a user-modified copy is the user's to delete.
+
+| Retired | Since | Its content now lives in |
+|---------|-------|--------------------------|
+| `fix-all-issues.md` | rules-residency task 3 | `rules/auto-loop.md` § Fix Obligation (resident core) and the review skill's scope contract, § Fix Obligation |
+| `framework.md` | rules-residency task 3 | — (template placeholders with no consumer; nothing replaces it) |
+
+**Phase 2.5 runs on every invocation, whatever install set Phase 3 picks.** A retired rule is absent
+from the plugin's `rules/` directory, so Phase 2's enumeration never reaches it: the sweep walks this
+table instead, checks `.claude/rules/<name>`, and applies the Retired row above to each copy it finds
+(hash against the manifest entry; no manifest entry reads as modified — kept and reported).
+`--list` and `--dry-run` report what the sweep would do and change nothing.
 
 ### Customize Mode (`--customize`)
 

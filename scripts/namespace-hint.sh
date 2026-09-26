@@ -3,6 +3,13 @@
 echo "Plugin sd0x-dev-flow: all /command references should be invoked as /sd0x-dev-flow:command"
 echo "Plugin scripts: use 'bash scripts/run-skill.sh <skill> <script> [args]' for execution"
 
+# Plugin root: the resident contract triggers name contracts as skills/… paths, which exist only
+# inside the plugin install — this line is how a session in any project resolves them.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)}"
+echo "Plugin root: $PLUGIN_ROOT"
+echo "Contract paths (skills/…) named in CLAUDE.md and .claude/rules/ resolve under it"
+
 # --- Drift sentinel (< 50ms budget) ---
 # Detects plugin version mismatch with installed manifest and warns user.
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
@@ -16,10 +23,7 @@ MANIFEST_VER=$(grep -o '"plugin_version"[[:space:]]*:[[:space:]]*"[^"]*"' "$MANI
   | sed 's/.*"plugin_version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [ -z "$MANIFEST_VER" ] && exit 0
 
-# Resolve current plugin version from plugin root (not CWD)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)}"
-
+# Resolve current plugin version from plugin root (not CWD) — PLUGIN_ROOT is set above.
 CURRENT_VER=""
 PLUGIN_JSON="$PLUGIN_ROOT/.claude-plugin/plugin.json"
 PKG_JSON="$PLUGIN_ROOT/package.json"

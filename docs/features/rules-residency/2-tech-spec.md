@@ -24,8 +24,8 @@
   measures 78,369), plus a line ceiling fixed in task 4, test-pinned; (2) every Anchor and gate
   invariant preserved with zero policy weakening;
   (3) detailed procedures reachable on demand from ad-hoc sessions, not only via skills;
-  (4) a placement rule that stops regrowth; (5) canary shows behavioural non-inferiority before
-  5.0.0 is released (§ 6).
+  (4) a placement rule that stops regrowth. A fifth goal — a canary showing behavioural
+  non-inferiority before 5.0.0 — was withdrawn by maintainer decision 2026-09-26 (§ 6).
 - **Scope**: `CLAUDE.md`, `rules/*.md`, the skills that gain reference files, hook fact-line
   output, and the tests that pin rules prose. Out of scope: any change to what the anchors
   prohibit, the gate semantics, or `pre-push-gate.sh` / guard scripts themselves.
@@ -118,7 +118,14 @@ plugin-managed `rules/*.md` (every `*-project.md` excluded — see item 7):
 Each row names its canonical file in the residency manifest. The instruction is an actual Read of
 that file as the first step, and a failed Read stops the governed action (FR-6) — the shape
 `rules/codex-invocation.md` already uses for the Codex prompt contract ([0-feasibility-study.md](./0-feasibility-study.md)
-§ 7, Q1-C). Skills make the same Read their first step, pinned by routing tests.
+§ 7, Q1-C). Skills make the same Read their first step, pinned by routing tests. The table ships
+as § Contract Triggers in `CLAUDE.template.md` and this repository's `CLAUDE.md`, followed by the
+placement rule (§ 3.5). Its `skills/…` paths exist only inside the plugin install, so they resolve
+against the plugin root that the `namespace-hint` SessionStart hook prints as `Plugin root:` (matcher
+`startup|clear|compact`; a resumed transcript already carries the line). Where no such line is in
+context, the template names a fallback: the directory holding `skills/push-ci/SKILL.md` under
+`~/.claude/plugins/`. `test/rules/residency-budget.test.js` runs the hook inside a rendered install
+and checks every contract path the install names can be found under the printed root.
 
 **7.** **User-owned project settings are not kernel content.** The `*-project.md` files are the
 plugin user's customization space. The migration never modifies, strips or re-heads any of them.
@@ -127,10 +134,11 @@ launch exactly as the user left them; they count toward the total resident measu
 toward the plugin-managed budget. A path-scoped one (`testing-project.md`) loads only when a
 matching file is read and is outside every resident measure — in a **rendered install**, where
 `CLAUDE.template.md` never `@`-imports it (pinned by `test/rules/path-scoped-rules.test.js`).
-This repository's own `CLAUDE.md` still `@`-imports it today (rule 5 and the § Rules list), along
-with the three other path-scoped rules `testing.md`, `docs-writing.md` and `docs-numbering.md`, so
-here all four are resident until task 3 removes every such import; the canary in § 6 measures the
-candidate only after that removal ([1-requirements.md](./1-requirements.md) FR-4, § 7).
+Task 3 removed this repository's own `@` imports of it and of the three other path-scoped rules
+(`testing.md`, `docs-writing.md`, `docs-numbering.md`); `CLAUDE.md` now names each in plain text
+with when to Read it, so the checkout loads the same resident set as a rendered install (pinned for
+both files by `test/rules/path-scoped-rules.test.js`) ([1-requirements.md](./1-requirements.md) FR-4,
+§ 7).
 
 ### 3.3 Three-path activation
 
@@ -182,8 +190,11 @@ scope contract; duplicate anchor restatements in `CLAUDE.md` reduced to the sing
 
 - **Dual budget test**: the plugin-managed resident set (the rendered `CLAUDE.md` template +
   transitively imported plugin rules without `paths:`, excluding every `*-project.md`) ≤ 50,000
-  characters, measured on a rendered fresh install, AND ≤ a physical-line ceiling that task 4
-  fixes from the landed kernel. The user-owned resident set (the `*-project.md` files
+  characters, measured on a rendered fresh install, AND ≤ 600 physical lines (fixed by task 4 from
+  the landed kernel's 581). The install is rendered the way `/project-setup` writes it — one
+  ecosystem block per render, every ecosystem measured, placeholders filled with representative
+  values — and measured through `scripts/instruction-budget.js`
+  (`test/rules/residency-budget.test.js`). The user-owned resident set (the `*-project.md` files
   without `paths:`) is reported separately and never rejected; the total is reported alongside
   both, and a path-scoped override is in none of the three
   ([1-requirements.md](./1-requirements.md) § 7). The 50,000 target is the maintainer's
@@ -193,9 +204,10 @@ scope contract; duplicate anchor restatements in `CLAUDE.md` reduced to the sing
   an irreversible/security/attribution/secret/gate-supremacy failure mode that cannot wait for a
   reference load. Over-budget additions must displace or compress. A genuinely new Anchor takes a
   human-approved exception (budget must not outrank safety).
-- **Residency manifest**: per resident block — owner, tier, pre-activation justification,
-  canonical detail reference, line/character contribution, mechanical carrier if any.
-  Test-verified.
+- **Residency manifest** (`docs/features/rules-residency/residency-manifest.json`): per resident
+  block — owner, tier, pre-activation justification, canonical detail reference, line/character
+  contribution, mechanical carrier if any. The budget test fails on an unlisted, duplicated or
+  stale entry.
 
 ### 3.6 Test policy for the migrated layer
 
@@ -203,18 +215,22 @@ Adversarial observation from the 2026-08-28 review session, unpersisted as a sta
 record: claim-keyed semantic tests were the failure class — paraphrase-plus-decoy and equal-length
 in-fence edits passed them — while digest pins and executable tests survived. The surviving
 artifacts (`test/skills/create-request-scan.test.js`'s header and commit `6bbc589`) record the
-resulting executable-test philosophy, not the specific experiments. Task 6 **must** persist a
-minimal reproduction alongside the re-pinning so this policy rests on a committed record.
-Therefore:
+resulting executable-test philosophy, not the specific experiments. Task 6 persisted a minimal
+reproduction beside the re-pinning, in `test/rules/kernel-digests.test.js`: a paraphrase plus a
+decoy, and an equal-length edit inside a fence, each passing the phrase or live-text check it
+targets and failing the digest. Code review added a third — a duplicate heading, which a name-keyed
+digest map silently overwrote until `unitDigests()` refused duplicates. Therefore:
 
 - Compact resident kernel: **exact digest pins** per stable contract unit (small + rarely edited ⇒
   hash churn is proportionate friction, not the old chore).
 - Executable claims (regexes, recipes, commands): **executable fixture tests**.
 - Claim-keyed semantic assertions: supplemental diagnostics only, never the authorizing guard.
 - Every guard ships with a negative control (reversed contract + plausible decoy must fail).
-- Existing pinned Anchors (`discretion-tiers.test.js` et al.) stay unchanged until task 3 lands
-  the approved Anchor migration (approved 2026-09-25); compaction and re-pinning land as one
-  reviewed specification change.
+- Existing pinned Anchors (`discretion-tiers.test.js` et al.) are unchanged by task 3: the Anchor
+  Register, `security.md`, `logging.md` and `git-workflow.md`'s Anchor sections are byte-identical;
+  compaction and re-pinning landed as one reviewed change. The kernel's digest pins cover the
+  preamble and each `##` section of every plugin-managed resident rule, the whole template and this
+  checkout's § Contract Triggers.
 
 ## 4. Risks and Dependencies
 
@@ -226,7 +242,7 @@ Therefore:
 | Removing duplicate restatements loses reinforcement | Two-carrier: resident semantics + independent mechanical/workflow carrier beats three prose copies |
 | Budget gamed by dense lines or unreadable compression | Dual line+character ceiling; review still rejects clarity-damaging wording |
 | Anchor-level compaction (discretion § Efficacy, git-workflow § Push safety and § Proactive Offer / Goal mode) mis-migrated | Maintainer approval granted 2026-09-25 for all three; single reviewed change; old and new text diffed side-by-side; pinned tests updated in the same commit |
-| Local benefit unproven | Canary is a **non-inferiority** test (§ 6); certain token/drift costs mean a null result favours the slim layer |
+| Local benefit unproven | The canary that would have measured it was withdrawn 2026-09-26 (§ 6). What stands: the budget is measured (78,378 → 49,614 characters on a rendered install), the six logged changes carry no hard incident, and every Anchor and gate invariant is pinned by test |
 
 Dependencies: maintainer approval for the Anchor-level migrations (granted 2026-09-25 for
 § Push safety, § Efficacy Boundary and § Proactive Offer / Goal mode); `review-state.js` hook
@@ -243,15 +259,14 @@ output extension for `procedure_hint`.
 | 5 | Hook `procedure_hint` (fact-conditioned only) | S | 1 |
 | 6 | Re-pin: digest pins on compact kernel, executable tests, retire big prose pins; **persist the minimal adversarial reproduction** (§ 3.6) | M | 3 |
 | 7 | ~~Strip `*-project.md` scaffolds to live values; move tutorials to `/install-rules`~~ — **withdrawn** 2026-09-25: `*-project.md` files are user-owned and never modified ([1-requirements.md](./1-requirements.md) FR-4) | — | — |
-| 8a | Install the temporary staging duty on the **current** layer (own gated change: one resident line naming the duty + staging path), then log 20 baseline changes | M | — |
-| 8b | Land the prepared kernel change | — | 3–6, 8a |
-| 8c | Candidate cohort + decision per § 6; then freeze/import candidate records and **remove the staging duty** in a separately gated, non-cohort cleanup change | M | 8b |
-| 9 | `CHANGELOG.md` 5.0.0 entry with a migration guide, following the 3.0.0 precedent: (a) a 4.x → 5.0 comparison — what left residency and where each piece now lives; (b) no `*-project.md` edit is required; (c) the model line — 5.0 recommends Claude Opus 5.5 or later; (d) the 3.0 line is marked deprecated, suitable only for models before Claude Opus 4.8, and the 3.0.0 historical section keeps that mark; (e) **delivery** — `CHANGELOG.md` is today outside the npm package (`package.json` `files`) and unread by `.github/workflows/release.yml`, which builds the release body from commit subjects, so the task also adds `CHANGELOG.md` to `files` and makes the workflow append the 5.0.0 migration section (or a link to it) to the generated release body, verified by `npm pack --dry-run` listing the file and the published release page carrying the guide; (f) **installs without the plugin** — rules copied by `/install-rules` with the plugin not loaded get no push authorization contract, so a user-authorized push there stops at the trigger's failed Read (FR-6). Maintainer decision 2026-09-25: this case is not handled beyond stating it in the guide | S | 8c reads ship |
+| 8a | Install the temporary staging duty on the **current** layer (own gated change: one resident line naming the duty + staging path), then log baseline changes | M | — |
+| 8b | Land the prepared kernel change — it is committed on the stacked branch `feat/rules-residency-v5-kernel`; merging the stack is the pull request's step | — | 3–6, 8a |
+| 8c | Import the logged records into `canary-log.jsonl` and **remove the staging duty**. No candidate cohort and no decision table: maintainer decision 2026-09-26 (§ 6) | S | 8b |
+| 9 | `CHANGELOG.md` 5.0.0 entry with a migration guide, following the 3.0.0 precedent: (a) a 4.x → 5.0 comparison — what left residency and where each piece now lives; (b) no `*-project.md` edit is required; (c) the model line — 5.0 recommends Claude Opus 5.5 or later; (d) the 3.0 line is marked deprecated, suitable only for models before Claude Opus 4.8, and the 3.0.0 historical section keeps that mark; (e) **delivery** — `CHANGELOG.md` is today outside the npm package (`package.json` `files`) and unread by `.github/workflows/release.yml`, which builds the release body from commit subjects, so the task also adds `CHANGELOG.md` to `files` and makes the workflow append the 5.0.0 migration section (or a link to it) to the generated release body, verified by `npm pack --dry-run` listing the file and the published release page carrying the guide; (f) **installs without the plugin** — rules copied by `/install-rules` with the plugin not loaded get no push authorization contract, so a user-authorized push there stops at the trigger's failed Read (FR-6). Maintainer decision 2026-09-25: this case is not handled beyond stating it in the guide | S | 8c |
 | 10 | Make `review-state.js` `overrideSetting` fail closed: a selected override file that cannot be read answers each setting's most restrictive value (`Offer Mode` → `off`, `Goal Commit` → `off`) instead of the default, matching `protected-branches.sh` for that case. `review-state.js` also treats an override whose existence cannot be decided (an `lstat` error other than `ENOENT`/`ENOTDIR`) the same way; the shell guards do not — their `[ -e ] \|\| [ -L ]` test reads that case as absent, and fixing them is deferred as a mechanical-guard change. `protectedStatus`'s fallback shares the same selection; regression test in both directions ([request](./requests/2026-09-25-override-setting-fail-closed.md)). Independent of the migration; lands on this branch (maintainer decision 2026-09-25) | S | — |
 
 Suggested tickets: one per row 1–2 (movement), one covering 3–4+6 (the kernel change, single
-reviewed unit), one for 5, one for 8, one for 9, one for 10. 5.0.0 is released only after 8c reads
-ship and task 9 lands.
+reviewed unit), one for 5, one for 8, one for 9, one for 10. 5.0.0 is released once 8c and task 9 land.
 
 ## 6. Testing Strategy
 
@@ -265,58 +280,21 @@ ship and task 9 lands.
   an ad-hoc session that meets a trigger with the contract missing — is **demonstrated** with a
   headless `claude -p` probe in an isolated repository, the way instruction-budget measured
   path-scoped loading, and reported as behaviour observed, never as a guarantee a hook supplies.
-- **Canary (non-inferiority)** — executable protocol:
-  - **Metrics artifact — two stages, so recording cannot invalidate what it records.** A record
-    written into the repo at change close would move the code-plane digest (`tree-digest.js`
-    classifies non-`.md` paths as code) and reopen the very gates the record just measured.
-    Instead: (1) **staging** — at each change's close, append the record to an out-of-tree
-    append-only log at `~/.cache/sd0x-dev-flow/state/<repo-key>/canary-staging.jsonl` (the same
-    directory as review-state, which the tool resolves the same way; no digest impact), through
-    `scripts/dev/canary-stage.js record`, which refuses a second record for one change id and
-    any log it cannot vouch for — a line that is not exactly the nine-field record it writes, a
-    blank line, a repeated change id, or a last record without its newline. Shape is what it can
-    check; it cannot tell who wrote a well-formed line. The measured change's gates and rounds are
-    those noted **before** the record is staged. (2) **import** — when a cohort completes, copy
-    the frozen records into the committed `docs/features/rules-residency/canary-log.jsonl` as one
-    separate, non-cohort change with its own gates (two imports total: baseline, candidate).
-    Record schema: `{date, change_id, review_rounds, scope_expansions, deviations,
-    contracts_activated[], resident_chars, resident_tokens, hard_incidents[]}` — `resident_chars`
-    is measured by the script (the checkout's always-loaded set, `instruction-budget.js`
-    accounting); `resident_tokens` is recorded only when measured and is `null` otherwise, so an
-    estimate never stands in for a measurement. Staging is a behaviour-layer duty with an
-    explicit lifecycle: installed on the current layer by task 8a (its own gated change, before
-    any baseline change is counted), carried into the candidate kernel by task 3 as a
-    manifest-marked **temporary** block, and removed by task 8c's separately gated cleanup change
-    after the decision. An early hard rollback still imports the frozen partial candidate records
-    before cleanup — evidence survives the rollback. `review-state.js` is a single-slot overwrite store
-    and git history does not recover session boundaries, so **no retrospective baseline exists** —
-    the baseline is prospective.
-  - **Baseline cohort (task 8a, BEFORE the kernel change)**: the next **20** completed changes on
-    the current layer that run at least one review gate (read-only sessions excluded), logged to
-    the artifact. The kernel change does not land until the baseline is complete — no fallback
-    thresholds; an absent baseline blocks, it is not substituted.
-  - **Candidate cohort (task 8c, AFTER)**: the next **20** qualifying completed changes, same
-    artifact, same schema.
-  - **Hard metrics (gated on occurrence — any → rollback)**: anchor violations; gates declared
-    passed without a noted fresh verdict; destructive-git or AI-attribution incidents.
-  - **Soft metrics (non-inferiority, margin +20% vs. baseline mean, per completed change)**:
-    review rounds; scope-expansion incidents; `[DEVIATION]` count.
-  - **Certain gain (measured, not gated)**: resident tokens per session. The character budget
-    shrinks ≈ 36% (plugin-managed share 78,369 → ≤ 50,000); the token saving is measured
-    separately and may differ.
-  - **Attribution (fixed map, no operator judgment)**: review-rounds breach → roll back the
-    review-loop contract to residency; scope-expansion breach → the scope contract; deviations
-    breach, a multi-metric breach, or any ambiguity → **whole-kernel rollback**. The
-    `contracts_activated` field exists to audit the map, not to replace it.
-  - **Decision table (in precedence order)**: (1) any hard incident → immediate whole-kernel
-    rollback, **regardless of cohort size** — zero tolerance takes precedence over every other
-    rule here. (2) Soft metric exceeds margin → extend candidate cohort by 10 once; still
-    exceeding → apply the attribution map. (3) Otherwise → ship. Underpowered (<20 qualifying
-    changes in 30 days, either cohort) → extend window; an underpowered **soft-metric** read
-    never ships and never rolls back — hard incidents remain immediate whatever the count.
-  - **Release gate** (maintainer decision 2026-09-25): the canary gates 5.0.0. The candidate
-    cohort runs in this repository on the landed kernel before any release; 5.0.0 is released
-    only when the decision table reads ship. A rollback or an underpowered read holds the release.
+- **Canary — closed by maintainer decision 2026-09-26.** The prospective non-inferiority design
+  (20 baseline + 20 candidate changes, +20% soft-metric margins, a fixed attribution map, and a
+  release gate on 5.0.0) was withdrawn before its cohorts filled: the 20-change baseline is no
+  longer required, no candidate cohort runs, and the canary does not gate 5.0.0. What remains is
+  the record. The task 8a staging duty logged six changes to an out-of-tree, append-only file;
+  task 8c imported them into `docs/features/rules-residency/canary-log.jsonl` with the nine-field
+  schema `{date, change_id, review_rounds, scope_expansions, deviations, contracts_activated[],
+  resident_chars, resident_tokens, hard_incidents[]}`, corrected three counts at import, and
+  removed the duty, its resident line and its tool. `resident_chars` shows which layer each change
+  ran on: the last record was measured on the compacted kernel, not the baseline layer. The
+  corrections and the per-record layer are in
+  [requests/2026-09-26-canary-closeout-8b-8c.md](./requests/2026-09-26-canary-closeout-8b-8c.md);
+  `test/rules/canary-log.test.js` pins the log's shape. No imported record carries a hard incident
+  (an Anchor violation, a gate declared passed without a noted fresh verdict, or a destructive-git
+  or AI-attribution incident).
 
 ## 7. Open Questions
 
@@ -327,7 +305,7 @@ ship and task 9 lands.
    replacement wording still goes to the maintainer inside task 3's reviewed change.
 2. ~~Exact byte ceiling: 40,000 is ~10K tokens by heuristic; confirm or tune after task 3 lands.~~
    **Resolved 2026-09-25**: the target is ≤ 50,000 characters of plugin-managed resident text on a
-   rendered fresh install (§ 3.5); task 4 fixes the paired line ceiling from the landed kernel.
+   rendered fresh install (§ 3.5); task 4 fixed the paired line ceiling at 600.
 3. ~~`procedure_hint` shape: extend `[AUTO_LOOP_STATE]` line vs. second fact line — decide in task 5.~~
    **Resolved 2026-09-25 (task 5)**: an optional field on the existing line, § 3.3 item 3.
 4. Whether `docs-numbering.md`'s mechanical taxonomy half stays resident for `doc-classifier.js`
@@ -335,5 +313,8 @@ ship and task 9 lands.
 5. ~~Installs without the plugin: install the push authorization contract with the rules?~~
    **Resolved 2026-09-25**: not handled. A user-authorized push there stops at the failed Read;
    task 9 (f) states it in the migration guide.
-6. Exact wording and character cost of the compact override core in the three stubs (target
-   ≤ ~0.6k together) — measured in task 3.
+6. ~~Exact wording and character cost of the compact override core in the three stubs (target
+   ≤ ~0.6k together) — measured in task 3.~~ **Measured 2026-09-25 (task 3)**: 1,069 + 1,141 +
+   1,238 = 3,448 characters, of which 2,210 are resident (`testing.md` is path-scoped). The target is
+   not met: each stub must name its closed heading list, Anchor supremacy, the fail-closed rule, both
+   Read locations and the stop, which costs about 1.1k per stub. The 50,000 budget holds regardless.

@@ -21,7 +21,12 @@ const root = resolve(__dirname, '../..');
 const rule = readFileSync(resolve(root, 'rules/scope-discipline.md'), 'utf8');
 const contract = readFileSync(
   resolve(root, 'skills/codex-code-review/references/scope-contract.md'), 'utf8');
-const fixAll = readFileSync(resolve(root, 'rules/fix-all-issues.md'), 'utf8');
+// rules-residency task 3: the Fix All Issues rule moved verbatim into the scope contract's
+// § Fix Obligation; its subsections are promoted back to `##` so the section helper reads them as before.
+const fixAll = (() => {
+  const c = readFileSync(resolve(root, 'skills/codex-code-review/references/scope-contract.md'), 'utf8');
+  return c.slice(c.indexOf('\n## Fix Obligation\n')).replace(/^### /gm, '## ');
+})();
 
 function section(doc, heading) {
   const start = doc.indexOf(`## ${heading}`);
@@ -384,7 +389,7 @@ test('resident guard when it defers → it names the contract file that carries 
   }
 });
 
-// ── rules/fix-all-issues.md (the third carrier) ───────────────────────────────────────────────
+// ── scope-contract.md § Fix Obligation (the third carrier, formerly rules/fix-all-issues.md) ───────────────────────────────────────────────
 // The obligation axis is stated in three files and an executor may read any one of them alone.
 // Until this test existed, reverting every change in fix-all-issues.md left the suite green — so
 // the file that actually tells an executor what to fix was the one nothing guarded.

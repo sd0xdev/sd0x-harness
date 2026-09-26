@@ -7,6 +7,9 @@ allowed-tools: Bash(git:*), Bash(gh:*), Bash(bash:*), Read, Grep, Glob, AskUserQ
 
 # Epic Merge — Stacked PR Chain Squash-Merge
 
+**Read first**: `@skills/push-ci/references/authorization-contract.md` before any push or merge — § Push safety for the credential, the unshared attestation and the force-with-lease rules, § Efficacy Boundary for what the per-iteration approval authorizes. If that Read fails, stop and report it; push and merge nothing.
+
+
 Sequentially squash-merge a chain of stacked PRs into an epic branch, producing one squash commit per PR for clean per-PR review on the epic. Every destructive iteration is gated by `AskUserQuestion` to keep the operator in control.
 
 ## When NOT to Use
@@ -2480,6 +2483,9 @@ For chains of 10+ PRs, mid-failure recovery without restart:
 ## Post-Merge Cleanup (--cleanup flag)
 
 ```bash
+# Bound from THIS invocation and written literally: `true` only if it contained --keep-backup-tags,
+# `false` otherwise. Never guarded by `:=` or `-z` — an inherited value must not decide it.
+KEEP_BACKUP_TAGS=false
 # Remove local merged branches — one per invocation, each name bound and separated.
 # Deleting is destructive, so an option-shaped name reaching git as a flag is worse here
 # than anywhere else in this document; `--` after `-D` makes the name an operand.
@@ -2499,12 +2505,18 @@ if ! /usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TRE
   : "${SD0X_EPIC_MERGE_REFUSED:?refusing — the backup tags could not be listed}"
 fi
 
-# Remove backup tags only after confirming nothing went wrong
+# Remove backup tags only after confirming nothing went wrong — never under --keep-backup-tags.
+# The guard keeps its standard shape (a line beginning `if ! /usr/bin/env`, closed by its own `fi`);
+# the flag check wraps it rather than joining it as an `elif`.
+if [[ "$KEEP_BACKUP_TAGS" == true ]]; then
+  echo "cleanup: --keep-backup-tags — the backup tags stay." >&2
+else
 if ! /usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git tag -d backup/pr-100 backup/pr-101 ...; then
   echo "⛔ cleanup: git tag -d failed. Some tags may be gone and some may remain, so the" >&2
   echo "   run-owned manifests below are left in place as the record. STOP." >&2
   SD0X_EPIC_MERGE_REFUSED=
   : "${SD0X_EPIC_MERGE_REFUSED:?refusing — the backup tags could not be deleted}"
+fi
 fi
 
 # Remove manifest files — the whole run-owned directory, expected and actual alike.
@@ -2535,7 +2547,7 @@ fi
 | `<PR-list>` | Comma-separated PR numbers | Auto-detect from chain |
 | `--dry-run` | Show plan + commands; performs one bounded local fetch — remote unchanged, but see § `--dry-run` for the local residue (objects, `FETCH_HEAD`, possible auto-maintenance) | off |
 | `--per-step` | Four gates per iteration **2..N** (rebase / unshared question / push / merge); iteration 1 is unaffected — it has no rebase and no force-push | off (the unshared question plus one bundled gate) |
-| `--cleanup` | Delete local branches + manifests after success | off |
+| `--cleanup` | Delete local branches, backup tags and manifests after success — backup tags stay with `--keep-backup-tags` | off |
 | `--keep-backup-tags` | Keep backup tags even with --cleanup | off |
 | `--ci-timeout <min>` | Timeout passed to `/watch-ci` | 15 |
 
