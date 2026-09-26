@@ -141,7 +141,7 @@ function severityRank(verdict) {
 }
 
 // Gate wording appears in two conventions across specs:
-//   rules/testing.md §Adequacy Gate Sentinels — "Adequate with exceptions" (space, icon-prefixed)
+//   testing-contract.md §Adequacy Gate Sentinels — "Adequate with exceptions" (space, icon-prefixed)
 //   Codex --ac-trace contract                  — "Adequate_with_exceptions" (snake_case)
 // Accept both (plus optional leading sentinel icon and `gate: …` / `Gate: …`
 // label). Matching both prevents an empty per_ac + space-form gate from

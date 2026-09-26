@@ -2,6 +2,7 @@
 
 > **Current behavior authority**: Yes
 > **Doc role**: Current authority
+> **Requirements**: [1-requirements.md](./1-requirements.md) · **Feasibility**: [0-feasibility-study.md](./0-feasibility-study.md) § 7 (trigger carriers and override placement, decided 2026-09-25; folded into § 3.2–§ 3.4 below) · **Intent**: [intent-rules-residency.md](./intent-rules-residency.md)
 
 > Restructure the rules layer around **residency**: a budgeted resident activation kernel,
 > on-demand canonical contracts, mechanical carriers for exact-and-dangerous behaviour, and an
@@ -18,10 +19,13 @@
   has repeatedly caught the restatements contradicting each other. Compaction alone is refuted by
   history: the 2026-07-30 tier rewrite cut the layer to 767 lines and it regrew +339 within
   24 days, because incident knowledge defaults into resident prose.
-- **Goals**: (1) resident surface ≤ 350 physical lines AND ≤ 40,000 UTF-8 bytes (~10K tokens),
-  test-pinned; (2) every Anchor and gate invariant preserved with zero policy weakening;
+- **Goals**: (1) plugin-managed resident surface (§ 3.5 — user-owned `*-project.md` excluded)
+  ≤ 50,000 characters on a rendered fresh install (maintainer decision 2026-09-25; v4.7.0
+  measures 78,369), plus a line ceiling fixed in task 4, test-pinned; (2) every Anchor and gate
+  invariant preserved with zero policy weakening;
   (3) detailed procedures reachable on demand from ad-hoc sessions, not only via skills;
-  (4) a placement rule that stops regrowth; (5) canary shows behavioural non-inferiority.
+  (4) a placement rule that stops regrowth; (5) canary shows behavioural non-inferiority before
+  5.0.0 is released (§ 6).
 - **Scope**: `CLAUDE.md`, `rules/*.md`, the skills that gain reference files, hook fact-line
   output, and the tests that pin rules prose. Out of scope: any change to what the anchors
   prohibit, the gate semantics, or `pre-push-gate.sh` / guard scripts themselves.
@@ -57,13 +61,15 @@ noncompliance but the certain token tax, drift between restatements, and unbound
 
 ```mermaid
 flowchart TD
-    K["Resident activation kernel\n≤350 lines ∧ ≤40KB, digest-pinned"] --> K1["Anchors first (primacy)\n+ terminal completion + gate invariants"]
-    K --> K2["Active project settings"]
+    K["Resident activation kernel\n≤50,000 chars ∧ line ceiling, digest-pinned"] --> K1["Anchors first (primacy)\n+ terminal completion + gate invariants"]
+    U["User-owned *-project.md without paths:\nresident as-is, outside the kernel budget"]
+    UP["User-owned path-scoped *-project.md\nloads on matching file reads, not resident"]
     K --> K3["Codex-independence core (4 lines)"]
     K --> K4["Semantic trigger table\nsituation → contract"]
     K4 -->|ad-hoc work| C["On-demand canonical contracts\nskills/*/references/"]
     S["Skills"] -->|tested reference edges| C
-    H["Hooks"] -->|"fact-conditioned procedure_hint\n(reminders, never decisions)"| C
+    H["Hooks"] -->|"fact-conditioned procedure_hint\n(reminders; § 3.3)"| C
+    H -.->|"deny on a mechanical fact only\n(required contract missing; never a verdict)"| C
     C --> C1["review-loop / stall / cap diagnostics"]
     C --> C2["scope contract (fields, breaker, dispositions)"]
     C --> C3["push authorization topology"]
@@ -75,19 +81,22 @@ flowchart TD
 
 ### 3.2 Resident kernel content (the whole of it)
 
-Ordered for primacy. Target ≈ 250–350 lines total across `CLAUDE.md` + surviving `rules/*.md`:
+Ordered for primacy. Target ≤ 50,000 characters across the rendered `CLAUDE.md` + surviving
+plugin-managed `rules/*.md` (every `*-project.md` excluded — see item 7):
 
 1. **Anchor Register + tier system** (`discretion.md`, compacted to ~40–50 lines): three tiers,
    closed register, `[DEVIATION]` syntax, proposal channel. § Efficacy Boundary is replaced by a
    compact semantic rule + pointer to the push authorization contract (**Anchor-level change —
-   requires explicit human approval and coordinated test updates**).
+   approved by the maintainer 2026-09-25; lands with coordinated test updates**).
 2. **Auto-loop core** (~70–90 lines): terminal completion invariant, per-plane freshness, gate
    sequence, tier table + blocking thresholds, sentinel vocabulary, sub-threshold rule, human-exit
    summary, "hooks are reminders". Dispatch/fallback/rotation/stall/cap/override mechanics move
    out.
-3. **Git/security anchors** (compact): prohibited mutations, the three approved workflows and
-   their exact operations, no bare force, protected branches, no secrets, attribution whitelist.
-   The 7,493-char topology matrix moves to the push contract (Anchor-level, same approval).
+3. **Git/security anchors** (compact): prohibited mutations, the enumerated approval workflows
+   and their exact operations, no bare force, protected branches, no secrets, attribution
+   whitelist. The 7,493-char topology matrix (`git-workflow.md` § Push safety) and the
+   § Proactive Offer / Goal mode procedure move to the push authorization contract (Anchor-level,
+   same approval); the resident core keeps a one-line rule for each.
 4. **Codex-independence core** (~4 lines, resident as high-priority Default): first dispatch —
    metadata only, mandate exploration, never feed conclusions or diff; same-thread reply may carry
    the new diff but never the interpretation; rotation restores the first-dispatch rule.
@@ -95,7 +104,7 @@ Ordered for primacy. Target ≈ 250–350 lines total across `CLAUDE.md` + survi
    fails closed, no repo-wide helper sweeps, out-of-scope critical → human exit.
 6. **Semantic trigger table** — the ad-hoc activation kernel:
 
-| Situation observed | Load |
+| Situation observed | Read first — stop the governed action if the Read fails |
 |---|---|
 | First or rotated Codex dispatch | independent-dispatch contract |
 | First review report, or any blocking verdict | review-loop contract |
@@ -103,9 +112,25 @@ Ordered for primacy. Target ≈ 250–350 lines total across `CLAUDE.md` + survi
 | Repeated failed rounds; no-progress evidence | stall-diagnosis contract |
 | Git mutation intent | push/git authorization contract |
 | Test or AC work | testing contract |
-| Feature-document work | documentation contract |
+| Splitting a feature document; claiming a line-budget exemption the resident list does not settle; relying on a comment-block exemption or changing the comment-block checker | documentation contract (pruning and merging need only the resident core) |
+| Interpreting, auditing or editing a `*-project.md` override | override resolution contract (`rules/override-contract.md`) |
 
-**7.** **Active project settings** (`*-project.md` stripped to live values, ~10–15 lines each).
+Each row names its canonical file in the residency manifest. The instruction is an actual Read of
+that file as the first step, and a failed Read stops the governed action (FR-6) — the shape
+`rules/codex-invocation.md` already uses for the Codex prompt contract ([0-feasibility-study.md](./0-feasibility-study.md)
+§ 7, Q1-C). Skills make the same Read their first step, pinned by routing tests.
+
+**7.** **User-owned project settings are not kernel content.** The `*-project.md` files are the
+plugin user's customization space. The migration never modifies, strips or re-heads any of them.
+Those without `paths:` frontmatter (`auto-loop-project.md`, `git-workflow-project.md`) load at
+launch exactly as the user left them; they count toward the total resident measure but never
+toward the plugin-managed budget. A path-scoped one (`testing-project.md`) loads only when a
+matching file is read and is outside every resident measure — in a **rendered install**, where
+`CLAUDE.template.md` never `@`-imports it (pinned by `test/rules/path-scoped-rules.test.js`).
+This repository's own `CLAUDE.md` still `@`-imports it today (rule 5 and the § Rules list), along
+with the three other path-scoped rules `testing.md`, `docs-writing.md` and `docs-numbering.md`, so
+here all four are resident until task 3 removes every such import; the canary in § 6 measures the
+candidate only after that removal ([1-requirements.md](./1-requirements.md) FR-4, § 7).
 
 ### 3.3 Three-path activation
 
@@ -113,41 +138,64 @@ Ordered for primacy. Target ≈ 250–350 lines total across `CLAUDE.md` + survi
    situations hooks cannot (baseline membership, finding identity, semantic progress).
 2. **Skills** — each mutating/reviewing skill lists its required contracts; routing tests pin the
    skill→contract edges.
-3. **Hooks** — `[AUTO_LOOP_STATE]` gains an optional `procedure_hint=<contract,…>` field derived
-   from mechanical facts only (e.g. `rounds≥3` → review-loop,stall). Hooks never diagnose,
-   classify, or block; `rounds` remains a floor, not a semantic stall verdict.
+3. **Hooks** — `[AUTO_LOOP_STATE]` gains an optional `procedure_hint=<contract,…>` field on the
+   same line, after `intent_hint=` (task 5; one fact line, not two). It carries plugin-relative
+   contract paths, sorted and de-duplicated, derived from three mechanical facts only: a plane
+   whose slot records ≥ 3 failed rounds → `review-common.md` and `loop-diagnostics.md`; a changed
+   `*-project.md` directly under `rules/` or `.claude/rules/` → `rules/override-contract.md`; a changed feature document under `docs/features/`
+   (request tickets excluded) past 500 lines → `documentation-contract.md`. A hook may **deny** a
+   recognisable tool call on a mechanical fact — a required contract file missing — with a reason
+   naming the contract and the route to retry. Hooks never diagnose, classify, interpret a verdict
+   or grant git authorization, and `rounds` remains a floor, not a semantic stall verdict. A
+   denial is a bounded refusal, not a guarantee: a timed-out or crashing command hook does not
+   block (Claude Code hooks reference). A PreToolUse git-mutation guard is optional hardening for
+   a separately measured post-5.0 change, not part of the kernel change
+   ([0-feasibility-study.md](./0-feasibility-study.md) § 7).
 
 ### 3.4 Two-carrier principle and destinations
 
 Every critical policy = one compact resident semantic rule + one behaviourally independent carrier
-(mechanical guard or workflow-loaded exact contract). No third resident paraphrase. Moves:
+(mechanical guard or workflow-loaded exact contract). No third resident paraphrase. One recorded
+exception: an ad-hoc git mutation — lawful only as a user-authorized execution — has the resident
+Anchor rule and a behavioural Read, and an independent carrier only where the opt-in
+`commit-msg-guard.sh` / `pre-push-gate.sh` hooks are installed ([0-feasibility-study.md](./0-feasibility-study.md)
+§ 5.5). Moves:
 
 | Content | Destination |
 |---|---|
-| Review fallback, rotation, stall/cap diagnostics, override parsing | `skills/codex-code-review/references/` |
-| Push authorization topology (the 7,493-char line + Efficacy narrative) | `skills/push-ci/references/authorization-contract.md`, shared by `/epic-merge` |
+| Review fallback, rotation, stall/cap diagnostics | `skills/codex-code-review/references/` |
+| Override resolution tables (`auto-loop.md` § Override Contract, `testing.md` and `git-workflow.md` § Project Customization) | `rules/override-contract.md`, one canonical path-scoped rule (`paths: [".claude/rules/*-project.md"]`) that `/install-rules` installs beside the user-owned files. Each parent keeps its heading as a live stub with the compact core — Anchor-first; the closed list of 16 shipped settings and the one section replacement; an exact parent heading is a replacement; an unknown heading fails closed to Default and is reported; user files are never edited — and a Read pointer, so links from installed `*-project.md` files keep resolving |
+| Push authorization topology (the 7,493-char line + Efficacy narrative) and the § Proactive Offer / Goal mode procedure | `skills/push-ci/references/authorization-contract.md`, loaded by every git-mutating skill (§ 6) |
 | Scope field normalization, gate derivation, breaker counters, dispositions | `skills/codex-code-review/references/scope-contract.md` |
-| Test pyramid/naming/evidence caps (non-anchor rows) | `skills/test-review/references/` + feature/bug skills |
-| Doc numbering/splitting/comment mechanics | document skills' references |
+| Evidence priority, exception gates and caps, Adequacy Gate sentinels, pre-PR execution (non-anchor rows) | `skills/test-review/references/testing-contract.md`, read first by `/test-review` and before `/pre-pr-audit`'s exception checks. The test pyramid (a `testing-project.md` section-replacement target), the conventions (cited throughout the repo) and the three Anchor domain rows stay in `rules/testing.md` |
+| Split procedure, functional-document exemption rationale, comment-block counting, exemptions and checker wiring | `skills/doc-review/references/documentation-contract.md`, read first by `/doc-review`. The numbering tables, the size-limit core with its prune/merge/split order, and the comment thresholds stay in `rules/docs-numbering.md` and `rules/docs-writing.md` |
 | Context thresholds, lesson-log format | on-demand references |
-| Rule customization tutorials (commented scaffolds) | `skills/install-rules/references/` |
 | Historical rationale and measurements | `docs/features/…` records |
+
+Not moved: anything inside a `*-project.md`, including its comments and customization guidance.
+Those files are user-owned and outside this migration (§ 3.2 item 7).
 
 Cut/merge: `framework.md` deleted (0 consumers); `fix-all-issues.md` merged into auto-loop core +
 scope contract; duplicate anchor restatements in `CLAUDE.md` reduced to the single early summary.
 
 ### 3.5 Growth control
 
-- **Dual budget test**: resident set (`CLAUDE.md` + transitively imported shipped rules + shipped
-  override scaffolds) ≤ 350 physical lines AND ≤ 40,000 bytes. User-authored override content
-  reported separately, never rejected.
+- **Dual budget test**: the plugin-managed resident set (the rendered `CLAUDE.md` template +
+  transitively imported plugin rules without `paths:`, excluding every `*-project.md`) ≤ 50,000
+  characters, measured on a rendered fresh install, AND ≤ a physical-line ceiling that task 4
+  fixes from the landed kernel. The user-owned resident set (the `*-project.md` files
+  without `paths:`) is reported separately and never rejected; the total is reported alongside
+  both, and a path-scoped override is in none of the three
+  ([1-requirements.md](./1-requirements.md) § 7). The 50,000 target is the maintainer's
+  2026-09-25 decision (requirements § 9).
 - **Placement rule** (resident, one paragraph): new policy lands on-demand by default; promotion
   to residency requires either pre-activation necessity (needed before task type is knowable) or
   an irreversible/security/attribution/secret/gate-supremacy failure mode that cannot wait for a
   reference load. Over-budget additions must displace or compress. A genuinely new Anchor takes a
   human-approved exception (budget must not outrank safety).
 - **Residency manifest**: per resident block — owner, tier, pre-activation justification,
-  canonical detail reference, line/byte contribution, mechanical carrier if any. Test-verified.
+  canonical detail reference, line/character contribution, mechanical carrier if any.
+  Test-verified.
 
 ### 3.6 Test policy for the migrated layer
 
@@ -164,8 +212,9 @@ Therefore:
 - Executable claims (regexes, recipes, commands): **executable fixture tests**.
 - Claim-keyed semantic assertions: supplemental diagnostics only, never the authorizing guard.
 - Every guard ships with a negative control (reversed contract + plausible decoy must fail).
-- Existing pinned Anchors (`discretion-tiers.test.js` et al.) unchanged until the Anchor migration
-  is approved; compaction and re-pinning land as one reviewed specification change.
+- Existing pinned Anchors (`discretion-tiers.test.js` et al.) stay unchanged until task 3 lands
+  the approved Anchor migration (approved 2026-09-25); compaction and re-pinning land as one
+  reviewed specification change.
 
 ## 4. Risks and Dependencies
 
@@ -175,30 +224,34 @@ Therefore:
 | On-demand contract not loaded before an ad-hoc dangerous act | Anchors + mutation prohibitions stay resident; mechanical guards are load-independent |
 | Copied-not-moved content → split-brain contracts | Each contract has exactly one canonical file; skills/rules point, never restate; manifest + routing tests pin the edges |
 | Removing duplicate restatements loses reinforcement | Two-carrier: resident semantics + independent mechanical/workflow carrier beats three prose copies |
-| Budget gamed by dense lines or unreadable compression | Dual line+byte ceiling; review still rejects clarity-damaging wording |
-| Anchor-level compaction (discretion § Efficacy, git-workflow push line) mis-migrated | Blocking dependency: explicit human approval; single reviewed change; old and new text diffed side-by-side; pinned tests updated in the same commit |
+| Budget gamed by dense lines or unreadable compression | Dual line+character ceiling; review still rejects clarity-damaging wording |
+| Anchor-level compaction (discretion § Efficacy, git-workflow § Push safety and § Proactive Offer / Goal mode) mis-migrated | Maintainer approval granted 2026-09-25 for all three; single reviewed change; old and new text diffed side-by-side; pinned tests updated in the same commit |
 | Local benefit unproven | Canary is a **non-inferiority** test (§ 6); certain token/drift costs mean a null result favours the slim layer |
 
-Dependencies: maintainer approval for the two Anchor-level migrations; `review-state.js` hook
-output extension for `procedure_hint`; `/install-rules` update for the new scaffold shape.
+Dependencies: maintainer approval for the Anchor-level migrations (granted 2026-09-25 for
+§ Push safety, § Efficacy Boundary and § Proactive Offer / Goal mode); `review-state.js` hook
+output extension for `procedure_hint`.
 
 ## 5. Work Breakdown
 
 | # | Task | Size | Depends on |
 |---|---|---|---|
-| 1 | Create canonical on-demand contracts (move, don't copy): push authorization, scope, review-loop/stall, testing, docs | M | — |
-| 2 | Point skills at contracts; add routing tests (skill → required references) | M | 1 |
-| 3 | Compact resident kernel: rewrite `CLAUDE.md`, `auto-loop.md`, `discretion.md`, `git-workflow.md`, `security.md`, scope guard; add trigger table; carry the temporary canary-staging duty as a manifest-marked temporary block; delete `framework.md`, merge `fix-all-issues.md` | L | 1, 2, **human approval for Anchor migrations** |
+| 1 | Create canonical on-demand contracts (move, don't copy): push authorization, scope, review-loop/stall, testing, docs, and `rules/override-contract.md` (§ 3.4) — path-scoped, picked up by `/install-rules`' `*.md` enumeration (it is not a `*-project.md`, so the managed-set exclusion does not apply), added to `/project-setup`'s fixed rule list, covered by `path-scoped-rules.test.js` including a check that nothing `@`-imports it; the three parent override headings become stubs carrying the compact core and a Read pointer; `override-contract.test.js` is re-pointed to the canonical file with every check it has today | M | — |
+| 2 | Point skills at contracts: each governed workflow's **first step Reads its contract and stops when the Read fails** (§ 3.2); register every contract in `contract-routing.test.js` with its activation sources, including the override contract and its three stubs; add FR-6 tests that remove a contract and show the governed workflow refuses | M | 1 |
+| 3 | Compact resident kernel: rewrite `CLAUDE.md`, `auto-loop.md`, `discretion.md`, `git-workflow.md`, `security.md`, scope guard; add trigger table; carry the temporary canary-staging duty as a manifest-marked temporary block; delete `framework.md`, merge `fix-all-issues.md`; remove every `@` import of a path-scoped rule from this repository's own `CLAUDE.md` — today `testing.md`, `testing-project.md`, `docs-writing.md` and `docs-numbering.md`, in rule 5 and in the § Rules list — so the dev checkout loads the same resident set as the rendered template, with a test that pins `CLAUDE.md` the way `path-scoped-rules.test.js` pins the template | L | 1, 2 (Anchor-migration approval granted 2026-09-25) |
 | 4 | Dual-budget test + residency manifest + placement rule | S | 3 |
 | 5 | Hook `procedure_hint` (fact-conditioned only) | S | 1 |
 | 6 | Re-pin: digest pins on compact kernel, executable tests, retire big prose pins; **persist the minimal adversarial reproduction** (§ 3.6) | M | 3 |
-| 7 | Strip `*-project.md` scaffolds to live values; move tutorials to `/install-rules` | S | 3 |
+| 7 | ~~Strip `*-project.md` scaffolds to live values; move tutorials to `/install-rules`~~ — **withdrawn** 2026-09-25: `*-project.md` files are user-owned and never modified ([1-requirements.md](./1-requirements.md) FR-4) | — | — |
 | 8a | Install the temporary staging duty on the **current** layer (own gated change: one resident line naming the duty + staging path), then log 20 baseline changes | M | — |
-| 8b | Land the prepared kernel change (carries task 3's human-approval dependency) | — | 3–7, 8a |
+| 8b | Land the prepared kernel change | — | 3–6, 8a |
 | 8c | Candidate cohort + decision per § 6; then freeze/import candidate records and **remove the staging duty** in a separately gated, non-cohort cleanup change | M | 8b |
+| 9 | `CHANGELOG.md` 5.0.0 entry with a migration guide, following the 3.0.0 precedent: (a) a 4.x → 5.0 comparison — what left residency and where each piece now lives; (b) no `*-project.md` edit is required; (c) the model line — 5.0 recommends Claude Opus 5.5 or later; (d) the 3.0 line is marked deprecated, suitable only for models before Claude Opus 4.8, and the 3.0.0 historical section keeps that mark; (e) **delivery** — `CHANGELOG.md` is today outside the npm package (`package.json` `files`) and unread by `.github/workflows/release.yml`, which builds the release body from commit subjects, so the task also adds `CHANGELOG.md` to `files` and makes the workflow append the 5.0.0 migration section (or a link to it) to the generated release body, verified by `npm pack --dry-run` listing the file and the published release page carrying the guide; (f) **installs without the plugin** — rules copied by `/install-rules` with the plugin not loaded get no push authorization contract, so a user-authorized push there stops at the trigger's failed Read (FR-6). Maintainer decision 2026-09-25: this case is not handled beyond stating it in the guide | S | 8c reads ship |
+| 10 | Make `review-state.js` `overrideSetting` fail closed: a selected override file that cannot be read answers each setting's most restrictive value (`Offer Mode` → `off`, `Goal Commit` → `off`) instead of the default, matching `protected-branches.sh` for that case. `review-state.js` also treats an override whose existence cannot be decided (an `lstat` error other than `ENOENT`/`ENOTDIR`) the same way; the shell guards do not — their `[ -e ] \|\| [ -L ]` test reads that case as absent, and fixing them is deferred as a mechanical-guard change. `protectedStatus`'s fallback shares the same selection; regression test in both directions ([request](./requests/2026-09-25-override-setting-fail-closed.md)). Independent of the migration; lands on this branch (maintainer decision 2026-09-25) | S | — |
 
-Suggested tickets: one per row 1–2 (movement), one covering 3–4+6–7 (the kernel change, single
-reviewed unit), one for 5, one for 8.
+Suggested tickets: one per row 1–2 (movement), one covering 3–4+6 (the kernel change, single
+reviewed unit), one for 5, one for 8, one for 9, one for 10. 5.0.0 is released only after 8c reads
+ship and task 9 lands.
 
 ## 6. Testing Strategy
 
@@ -206,18 +259,31 @@ reviewed unit), one for 5, one for 8.
   skill loads the authorization contract; every review skill loads loop+scope+dispatch contracts;
   doc/test skills load theirs); digest pins on kernel units; executable fixture tests for every
   executable claim; negative controls per guard.
+- **Fail-closed contracts (FR-6)**: per governed workflow, a test removes the contract and shows
+  the workflow refuses before acting; `override-contract.test.js` keeps its live-text, Anchor
+  supremacy, mapping and unknown-heading checks against the canonical file. The no-skill case —
+  an ad-hoc session that meets a trigger with the contract missing — is **demonstrated** with a
+  headless `claude -p` probe in an isolated repository, the way instruction-budget measured
+  path-scoped loading, and reported as behaviour observed, never as a guarantee a hook supplies.
 - **Canary (non-inferiority)** — executable protocol:
   - **Metrics artifact — two stages, so recording cannot invalidate what it records.** A record
     written into the repo at change close would move the code-plane digest (`tree-digest.js`
     classifies non-`.md` paths as code) and reopen the very gates the record just measured.
     Instead: (1) **staging** — at each change's close, append the record to an out-of-tree
-    append-only log at `~/.cache/sd0x-dev-flow/state/<repo-key>/canary-staging.jsonl` (same
-    location class as review-state; no digest impact). The measured change's gates and rounds are
+    append-only log at `~/.cache/sd0x-dev-flow/state/<repo-key>/canary-staging.jsonl` (the same
+    directory as review-state, which the tool resolves the same way; no digest impact), through
+    `scripts/dev/canary-stage.js record`, which refuses a second record for one change id and
+    any log it cannot vouch for — a line that is not exactly the nine-field record it writes, a
+    blank line, a repeated change id, or a last record without its newline. Shape is what it can
+    check; it cannot tell who wrote a well-formed line. The measured change's gates and rounds are
     those noted **before** the record is staged. (2) **import** — when a cohort completes, copy
     the frozen records into the committed `docs/features/rules-residency/canary-log.jsonl` as one
     separate, non-cohort change with its own gates (two imports total: baseline, candidate).
     Record schema: `{date, change_id, review_rounds, scope_expansions, deviations,
-    contracts_activated[], resident_tokens, hard_incidents[]}`. Staging is a behaviour-layer duty with an
+    contracts_activated[], resident_chars, resident_tokens, hard_incidents[]}` — `resident_chars`
+    is measured by the script (the checkout's always-loaded set, `instruction-budget.js`
+    accounting); `resident_tokens` is recorded only when measured and is `null` otherwise, so an
+    estimate never stands in for a measurement. Staging is a behaviour-layer duty with an
     explicit lifecycle: installed on the current layer by task 8a (its own gated change, before
     any baseline change is counted), carried into the candidate kernel by task 3 as a
     manifest-marked **temporary** block, and removed by task 8c's separately gated cleanup change
@@ -235,7 +301,9 @@ reviewed unit), one for 5, one for 8.
     passed without a noted fresh verdict; destructive-git or AI-attribution incidents.
   - **Soft metrics (non-inferiority, margin +20% vs. baseline mean, per completed change)**:
     review rounds; scope-expansion incidents; `[DEVIATION]` count.
-  - **Certain gain (measured, not gated)**: resident tokens per session (expected ≈ −60%).
+  - **Certain gain (measured, not gated)**: resident tokens per session. The character budget
+    shrinks ≈ 36% (plugin-managed share 78,369 → ≤ 50,000); the token saving is measured
+    separately and may differ.
   - **Attribution (fixed map, no operator judgment)**: review-rounds breach → roll back the
     review-loop contract to residency; scope-expansion breach → the scope contract; deviations
     breach, a multi-metric breach, or any ambiguity → **whole-kernel rollback**. The
@@ -246,13 +314,26 @@ reviewed unit), one for 5, one for 8.
     exceeding → apply the attribution map. (3) Otherwise → ship. Underpowered (<20 qualifying
     changes in 30 days, either cohort) → extend window; an underpowered **soft-metric** read
     never ships and never rolls back — hard incidents remain immediate whatever the count.
+  - **Release gate** (maintainer decision 2026-09-25): the canary gates 5.0.0. The candidate
+    cohort runs in this repository on the landed kernel before any release; 5.0.0 is released
+    only when the decision table reads ship. A rollback or an underpowered read holds the release.
 
 ## 7. Open Questions
 
 1. **Anchor-level approvals** (blocking): compaction of `discretion.md` § Efficacy Boundary and
    `git-workflow.md`'s push-safety line into the push authorization contract — maintainer must
-   approve the migration and the replacement wording before task 3.
-2. Exact byte ceiling: 40,000 is ~10K tokens by heuristic; confirm or tune after task 3 lands.
-3. `procedure_hint` shape: extend `[AUTO_LOOP_STATE]` line vs. second fact line — decide in task 5.
+   approve the migration and the replacement wording before task 3. **Migration approved
+   2026-09-25** for § Push safety, § Efficacy Boundary and § Proactive Offer / Goal mode; the
+   replacement wording still goes to the maintainer inside task 3's reviewed change.
+2. ~~Exact byte ceiling: 40,000 is ~10K tokens by heuristic; confirm or tune after task 3 lands.~~
+   **Resolved 2026-09-25**: the target is ≤ 50,000 characters of plugin-managed resident text on a
+   rendered fresh install (§ 3.5); task 4 fixes the paired line ceiling from the landed kernel.
+3. ~~`procedure_hint` shape: extend `[AUTO_LOOP_STATE]` line vs. second fact line — decide in task 5.~~
+   **Resolved 2026-09-25 (task 5)**: an optional field on the existing line, § 3.3 item 3.
 4. Whether `docs-numbering.md`'s mechanical taxonomy half stays resident for `doc-classifier.js`
    parity, or moves with the rest — decide during task 1 by checking what the classifier reads.
+5. ~~Installs without the plugin: install the push authorization contract with the rules?~~
+   **Resolved 2026-09-25**: not handled. A user-authorized push there stops at the failed Read;
+   task 9 (f) states it in the migration guide.
+6. Exact wording and character cost of the compact override core in the three stubs (target
+   ≤ ~0.6k together) — measured in task 3.

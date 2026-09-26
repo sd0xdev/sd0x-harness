@@ -63,6 +63,30 @@ const CONTRACTS = [
       'Attention-Diffusion Subtypes and the Banking Sequence'],
     minHeadings: 3,
   },
+  {
+    // rules-residency Q2-F: the override resolution contract, path-scoped to the installed
+    // override files; each parent's compact core carries the Read pointer (tech spec § 3.4).
+    path: 'rules/override-contract.md',
+    activatedBy: ['rules/auto-loop.md', 'rules/testing.md', 'rules/git-workflow.md'],
+    headings: ['Resolution', 'Kinds', 'auto-loop-project.md → auto-loop.md',
+      'testing-project.md → testing.md', 'git-workflow-project.md → git-workflow.md'],
+    minHeadings: 5,
+  },
+  {
+    // rules-residency r2: the testing procedure, read first by the test-review skill.
+    path: 'skills/test-review/references/testing-contract.md',
+    activatedBy: ['rules/testing.md', 'skills/test-review/SKILL.md'],
+    headings: ['Evidence Model', 'Adequacy Gate Sentinels', 'Execution'],
+    minHeadings: 3,
+  },
+  {
+    // rules-residency r2: the documentation procedure, read first by the doc-review skill.
+    path: 'skills/doc-review/references/documentation-contract.md',
+    activatedBy: ['rules/docs-numbering.md', 'rules/docs-writing.md', 'skills/doc-review/SKILL.md'],
+    headings: ['Why the Budget Targets Bloat', 'Splitting a Feature Document', 'Functional-Document Exemption',
+      'Comment Blocks: Counting, Exemptions and the Checker'],
+    minHeadings: 4,
+  },
 ];
 
 // Files that may carry a reference: tracked, **plus untracked-but-not-ignored**. Tracked-only was
@@ -196,6 +220,22 @@ test('contract references when scanned → every fully-qualified path resolves a
   const dangling = scannedMarkdown()
     .flatMap((file) => scan(read(file)).map((p) => `${file} → ${p}`));
   assert.deepEqual(dangling, [], `dangling contract references:\n${dangling.join('\n')}`);
+});
+
+test('the override contract when looked up → stays registered with all three parent activators', () => {
+  // The registry floor below counts entries; it cannot tell which one was dropped.
+  const entry = CONTRACTS.find((c) => c.path === 'rules/override-contract.md');
+  assert.ok(entry, 'rules/override-contract.md must stay registered');
+  assert.deepEqual(entry.activatedBy, ['rules/auto-loop.md', 'rules/testing.md', 'rules/git-workflow.md']);
+});
+
+test('the testing and documentation contracts when looked up → stay registered with their activators', () => {
+  // The registry floor counts entries; it cannot tell which one was dropped (rules-residency r2).
+  const byPath = (p) => CONTRACTS.find((c) => c.path === p);
+  assert.deepEqual(byPath('skills/test-review/references/testing-contract.md')?.activatedBy,
+    ['rules/testing.md', 'skills/test-review/SKILL.md']);
+  assert.deepEqual(byPath('skills/doc-review/references/documentation-contract.md')?.activatedBy,
+    ['rules/docs-numbering.md', 'rules/docs-writing.md', 'skills/doc-review/SKILL.md']);
 });
 
 test('registered contracts when checked → each exists and is reachable from its activation source', () => {

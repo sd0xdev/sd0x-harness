@@ -257,6 +257,7 @@ Replace these placeholders with your project values:
 - `rules/docs-numbering.md` (path-scoped — loads when a matching file is read; never `@`-imported)
 - @rules/git-workflow.md
 - @rules/git-workflow-project.md -- Project-specific git overrides (user-owned)
+- `rules/override-contract.md` (path-scoped — loads when a matching file is read; never `@`-imported) -- Resolution order and heading tables for the three user-owned override files
 - @rules/logging.md
 - @rules/self-improvement.md -- Corrected → record → prevent recurrence
 - @rules/context-management.md -- Data-driven context monitoring (measure before deciding)

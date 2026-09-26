@@ -69,8 +69,11 @@ test('auto-loop.md Priority 4 forges no sentinel: plan uses its own degraded for
   assert.match(autoLoop, /the rest emit nothing/);
 });
 
-test('auto-loop.md § Override Contract and the scaffold both carry ## Review Thread Rotation', () => {
-  assert.match(autoLoop, /\| `## Review Thread Rotation` \| Setting —[^|]*\| Default \|/);
+test('the override contract, the auto-loop core and the scaffold all carry ## Review Thread Rotation', () => {
+  // rules-residency Q2-F: the row lives in rules/override-contract.md; the resident core names it.
+  const overrideContract = readFileSync(resolve(__dirname, '../../rules/override-contract.md'), 'utf8');
+  assert.match(overrideContract, /\| `## Review Thread Rotation` \| Setting —[^|]*\| Default \|/);
+  assert.match(autoLoop, /`## Review Thread Rotation`/);
   assert.match(scaffold, /^## Review Thread Rotation$/m);
   assert.match(scaffold, /Range 2-6[\s\S]*?Unset = 3/, 'the scaffold documents range and default');
 });
@@ -138,8 +141,9 @@ test('review-common.md loop has three executable paths; the old "just Codex" abs
 });
 
 test('test-review sentinel table no longer reads exhaustion as a derivable gate', () => {
-  const testingRules = read('rules/testing.md');
-  for (const [name, text] of [['test-review SKILL', testSkill], ['rules/testing.md', testingRules]]) {
+  // rules-residency r2: the Adequacy Gate sentinel table moved to the testing contract.
+  const testingContract = read('skills/test-review/references/testing-contract.md');
+  for (const [name, text] of [['test-review SKILL', testSkill], ['testing-contract.md', testingContract]]) {
     assert.ok(!text.includes('Codex unavailable or inconclusive'),
       `${name}: the old Need-Human meaning must be gone — a fallback carrier is not "Codex unavailable"`);
     assert.match(text, /Every carrier exhausted/,

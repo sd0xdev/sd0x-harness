@@ -45,7 +45,7 @@ Phase 4: Verify CLAUDE.md
 Phase 5: Install Rules + Backfill CLAUDE.md (unless --no-rules or --lite)
     │
     ├─ Locate plugin rules dir (3-level fallback)
-    ├─ mkdir -p .claude/rules/ → copy 14 managed rules + 3 override templates
+    ├─ mkdir -p .claude/rules/ → copy 15 managed rules + 3 override templates
     ├─ Backfill: ensure .claude/CLAUDE.md has @rules/ references
     └─ Output rules install report
     │
@@ -178,7 +178,7 @@ Find the plugin's `rules/` directory using this priority (short-circuit on first
 ### 5.2 Copy Rules
 
 1. `mkdir -p ${REPO_ROOT}/.claude/rules/`
-2. Copy all 14 managed rules:
+2. Copy all 15 managed rules:
 
    | Rule | Purpose |
    |------|---------|
@@ -196,6 +196,7 @@ Find the plugin's `rules/` directory using this priority (short-circuit on first
    | `docs-numbering.md` | Document numbering scheme |
    | `self-improvement.md` | Self-improvement loop |
    | `context-management.md` | Data-driven context monitoring |
+   | `override-contract.md` | Resolution order and heading tables for the user-owned override files (path-scoped to `.claude/rules/*-project.md`) |
 
 3. Create override template (unmanaged, not manifest-tracked):
    - `auto-loop-project.md` · `testing-project.md` · `git-workflow-project.md` — user-owned override templates, copied when absent and stamped `Based on: <base> @ <installed base hash>` exactly as `/install-rules` Phase 4.5 does (never a byte copy of the shipped stamp)
@@ -228,7 +229,7 @@ Ensure `.claude/CLAUDE.md` contains `@rules/` references so the auto-loop engine
    - **Present** → skip that template (configured)
    - **Base line present, override line missing** → insert the override's line from `CLAUDE.template.md` `## Rules` directly after its base line (e.g. `- @rules/git-workflow-project.md -- Project-specific git overrides (user-owned)`). A path-scoped template (`testing-project.md`) and its base are inserted as the template's **plain** `rules/<file>` references, never as `@` imports — an import would load them at launch
    - **Base line missing too** → insert both lines from `CLAUDE.template.md` `## Rules` — the base line, then the override line — at the end of the file's `## Rules` list. An installed override whose base is unreferenced is not configured; never report it as present
-3. **Not found but file exists** → append `## Rules` block at end of file (17 rule references — 13 `@rules/` imports and 4 path-scoped plain references (14 managed + 3 override templates) from `CLAUDE.template.md` `## Rules` section)
+3. **Not found but file exists** → append `## Rules` block at end of file (18 rule references — 13 `@rules/` imports and 5 path-scoped plain references (15 managed + 3 override templates) from `CLAUDE.template.md` `## Rules` section)
 4. **File does not exist** (edge case: Phase 3 was skipped) → extract from `CLAUDE.template.md`: `## Required Checks` through the `### Auto-Loop` section (up to the next `##` heading) + `## Rules` section → create minimal `.claude/CLAUDE.md`
 
 When extracting from template, remove ecosystem block markers and leave unresolved placeholders as `{PLACEHOLDER}`.
@@ -531,7 +532,7 @@ Summarize all phases and perform closed-loop check:
 |-------|--------|
 | Detection | ✅ Framework: X, PM: Y, DB: Z |
 | CLAUDE.md | ✅ Configured (0 remaining placeholders) |
-| Rules | ✅ 14/14 managed rules + 3 override templates |
+| Rules | ✅ 15/15 managed rules + 3 override templates |
 | Hooks | ✅ 7/7 installed + settings merged |
 | Scripts | ✅ 6/6 scripts installed |
 | Env Config | ✅ AUTO_COMPACT_WINDOW=320000 (1M) |
@@ -554,7 +555,7 @@ Summarize all phases and perform closed-loop check:
 - [ ] All 9 auto-detected placeholders detected or marked N/A
 - [ ] User confirmed detection results before writing
 - [ ] No remaining auto-detected `{UPPER_CASE}` placeholders in `.claude/CLAUDE.md` after setup (manual placeholders like `{TICKET_PATTERN}` are acceptable)
-- [ ] `.claude/rules/` contains 17 `.md` files (14 managed + 3 override templates) (unless `--no-rules` or `--lite`)
+- [ ] `.claude/rules/` contains 18 `.md` files (15 managed + 3 override templates) (unless `--no-rules` or `--lite`)
 - [ ] `.claude/hooks/` contains 7 `.sh` files with execute permission (unless `--no-hooks` or `--lite`)
 - [ ] `.claude/settings.json` contains hook definitions (unless `--no-hooks` or `--lite`)
 - [ ] `.claude/scripts/` contains `precommit-runner.js`, `verify-runner.js`, `review-state.js`, `lib/utils.js`, `lib/tree-digest.js`, and `protected-branches.sh` (unless `--lite` or `--detect-only`)

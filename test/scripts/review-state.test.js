@@ -13,6 +13,7 @@ const {
   symlinkSync,
   existsSync,
   readdirSync,
+  chmodSync,
 } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
@@ -317,6 +318,125 @@ test('repo-key: two same-named checkouts do not collide; a worktree stays isolat
   assert.equal(stateKeys(home).length, 3, 'a worktree neither shares nor clobbers its origin state');
 });
 
+// --- procedure_hint: fact-conditioned contract hints (rules-residency task 5) ---
+
+const LOOP_HINT = 'skills/codex-code-review/references/loop-diagnostics.md,skills/codex-code-review/references/review-common.md';
+
+test('procedure_hint: a plane at 3 failed rounds → review-loop and stall contracts; 2 rounds → none', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  note(repo, home, 'code_review', 'fail');
+  note(repo, home, 'code_review', 'fail');
+  let fact = run(repo, home, ['check', '--format=fact']);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/, 'two failed rounds are below the signal');
+  note(repo, home, 'code_review', 'fail');
+  fact = run(repo, home, ['check', '--format=fact']);
+  assert.match(fact.stdout, new RegExp(` procedure_hint=${LOOP_HINT.replace(/\./g, '\\.')} source=state\\n$`));
+  // A pass resets the slot's rounds, and the hint goes with it.
+  note(repo, home, 'code_review', 'pass');
+  fact = run(repo, home, ['check', '--format=fact']);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/, 'a pass resets the fact the hint rests on');
+});
+
+test('procedure_hint: a changed *-project.md override → override contract; a changed parent rule → none', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  mkdirSync(join(repo, 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'rules', 'auto-loop.md'), '# parent\n');
+  let fact = run(repo, home, ['check', '--format=fact']);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/, 'a parent rule is not an override');
+  mkdirSync(join(repo, '.claude', 'rules'), { recursive: true });
+  writeFileSync(join(repo, '.claude', 'rules', 'testing-project.md'), '# Testing Project Overrides\n');
+  fact = run(repo, home, ['check', '--format=fact']);
+  assert.match(fact.stdout, / procedure_hint=rules\/override-contract\.md source=state\n$/);
+});
+
+test('procedure_hint: a feature doc past 500 lines → documentation contract; 500 lines or a record → none', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  const feat = join(repo, 'docs', 'features', 'x');
+  mkdirSync(join(feat, 'requests'), { recursive: true });
+  const lines = (n) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
+  writeFileSync(join(feat, '2-tech-spec.md'), lines(500));
+  writeFileSync(join(feat, 'requests', '2026-09-25-long.md'), lines(900));
+  let fact = run(repo, home, ['check', '--format=fact']);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/, '500 lines is at the signal, not past it; a record is exempt');
+  writeFileSync(join(feat, '2-tech-spec.md'), lines(501));
+  fact = run(repo, home, ['check', '--format=fact']);
+  assert.match(fact.stdout, / procedure_hint=skills\/doc-review\/references\/documentation-contract\.md source=state\n$/);
+});
+
+test('procedure_hint: several facts at once → one sorted, de-duplicated field', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  mkdirSync(join(repo, 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'rules', 'auto-loop-project.md'), '# a\n');
+  writeFileSync(join(repo, 'rules', 'git-workflow-project.md'), '# b\n');
+  for (let i = 0; i < 3; i += 1) note(repo, home, 'doc_review', 'fail');
+  const fact = run(repo, home, ['check', '--format=fact']);
+  assert.match(fact.stdout, new RegExp(` procedure_hint=rules/override-contract\\.md,${LOOP_HINT.replace(/\./g, '\\.')} source=state\\n$`));
+  assert.equal((fact.stdout.match(/procedure_hint=/g) || []).length, 1);
+});
+
+test('procedure_hint: every fact at once → one line, intent_hint first, then the full sorted value', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  const feat = join(repo, 'docs', 'features', 'x');
+  mkdirSync(feat, { recursive: true });
+  writeFileSync(join(feat, 'intent-x.md'), '# Intent — x\n');
+  git(repo, 'add', '-A');
+  git(repo, 'commit', '-q', '-m', 'intent');
+  writeFileSync(join(feat, '2-tech-spec.md'), 'line\n'.repeat(501));
+  mkdirSync(join(repo, 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'rules', 'auto-loop-project.md'), '# a\n');
+  for (let i = 0; i < 3; i += 1) note(repo, home, 'code_review', 'fail');
+  const fact = run(repo, home, ['check', '--format=fact']);
+  assert.equal(fact.status, 0, fact.stderr);
+  assert.match(fact.stdout,
+    / intent_hint=docs\/features\/x\/intent-x\.md procedure_hint=rules\/override-contract\.md,skills\/codex-code-review\/references\/loop-diagnostics\.md,skills\/codex-code-review\/references\/review-common\.md,skills\/doc-review\/references\/documentation-contract\.md source=state\n$/);
+  assert.equal(fact.stdout.trim().split('\n').length, 1, 'one fact line');
+});
+
+test('procedure_hint: a changed feature doc that can no longer be read → no hint, and check still answers', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  const doc = join(repo, 'docs', 'features', 'x', '2-tech-spec.md');
+  mkdirSync(join(repo, 'docs', 'features', 'x'), { recursive: true });
+  writeFileSync(doc, 'line\n'.repeat(501));
+  git(repo, 'add', '-A');
+  git(repo, 'commit', '-q', '-m', 'long feature doc');
+  rmSync(doc); // still a changed git path; reading it now fails
+  const fact = run(repo, home, ['check', '--format=fact']);
+  assert.equal(fact.status, 0, fact.stderr);
+  assert.match(fact.stdout, /^\[AUTO_LOOP_STATE\] change=doc /);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/);
+});
+
+test('procedure_hint: override paths are anchored to rules/ and .claude/rules/ only', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  mkdirSync(join(repo, 'docs', 'vendor', 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'docs', 'vendor', 'rules', 'testing-project.md'), '# vendored\n');
+  let fact = run(repo, home, ['check', '--format=fact']);
+  assert.doesNotMatch(fact.stdout, /procedure_hint=/, 'a rules/ directory elsewhere is not an override location');
+  mkdirSync(join(repo, 'rules'), { recursive: true });
+  writeFileSync(join(repo, 'rules', 'git-workflow-project.md'), '# b\n');
+  fact = run(repo, home, ['check', '--format=fact']);
+  assert.match(fact.stdout, / procedure_hint=rules\/override-contract\.md source=state\n$/, 'the checkout root rules/ is');
+});
+
+test('procedure_hint: a non-ASCII feature doc filename past 500 lines → documentation contract', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  const feat = join(repo, 'docs', 'features', 'x');
+  mkdirSync(feat, { recursive: true });
+  writeFileSync(join(feat, '設計.md'), 'line\n'.repeat(501));
+  const fact = run(repo, home, ['check', '--format=fact']);
+  assert.equal(fact.status, 0, fact.stderr);
+  assert.match(fact.stdout, / procedure_hint=skills\/doc-review\/references\/documentation-contract\.md source=state\n$/);
+});
+
 // --- intent_hint: exact-name doc mapping on the state-backed fact line ---
 
 test('intent_hint: changed feature doc + exact intent-<key>.md → hint; stray name → none', () => {
@@ -555,6 +675,59 @@ test('offer under Offer Mode off → disabled; commit-only → commit menu; comm
   const c = offerJson(repo, home);
   assert.deepEqual([c.offer, c.kind, c.push_dropped], [true, 'commit', 'commit-only']);
 });
+
+// A git override that exists but cannot be read answers each setting's narrowing value, the way
+// protected-branches.sh answers 2 for the same file — never the permissive default (tech spec
+// task 10, requests/2026-09-25-override-setting-fail-closed.md). A directory at the override path
+// is the unreadable case: portable, and unlike chmod 000 it stays unreadable when tests run as root.
+test('offer and goal-commit when the selected override cannot be read → disabled; readable → parsed', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 41;\n');
+  passAll(repo, home);
+  assert.equal(offerJson(repo, home).offer, true, 'no override file → the default applies');
+  mkdirSync(join(repo, 'rules', 'git-workflow-project.md'), { recursive: true });
+  assert.deepEqual([offerJson(repo, home).offer, offerJson(repo, home).reason], [false, 'disabled']);
+  assert.equal(goalJson(repo, home).reason, 'disabled');
+  rmSync(join(repo, 'rules', 'git-workflow-project.md'), { recursive: true });
+  writeOverride(repo, '# x\n\n## Offer Mode\n\non\n\n## Goal Commit\n\non\n');
+  passAll(repo, home);
+  assert.equal(offerJson(repo, home).offer, true, 'the same path readable → its values are parsed');
+  assert.equal(goalJson(repo, home).ok, true);
+});
+
+test('offer when the higher override is a dangling symlink → disabled, never the lower file', () => {
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeOverride(repo, '# x\n\n## Offer Mode\n\non\n');
+  mkdirSync(join(repo, '.claude', 'rules'), { recursive: true });
+  symlinkSync('/nonexistent/git-workflow-project.md', join(repo, '.claude', 'rules', 'git-workflow-project.md'));
+  writeFileSync(join(repo, 'a.js'), 'const a = 42;\n');
+  passAll(repo, home);
+  assert.deepEqual([offerJson(repo, home).offer, offerJson(repo, home).reason], [false, 'disabled']);
+});
+
+// Existence that cannot be decided is not absence: an untraversable `.claude/rules/` makes lstat
+// fail with EACCES, and reading that as "no higher file" would select the lower one. Skipped as
+// root, where the mode bits do not stop the lookup.
+test('offer and goal-commit when the higher override directory cannot be traversed → disabled, never the lower file',
+  { skip: process.getuid && process.getuid() === 0 }, () => {
+    const repo = makeRemoteRepo();
+    const home = tmp('rs-home-');
+    writeOverride(repo, '# x\n\n## Offer Mode\n\non\n\n## Goal Commit\n\non\n');
+    const dir = join(repo, '.claude', 'rules');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(repo, 'a.js'), 'const a = 43;\n');
+    passAll(repo, home);
+    assert.equal(offerJson(repo, home).offer, true, 'with the higher directory traversable, the lower file is read');
+    chmodSync(dir, 0o000);
+    try {
+      assert.deepEqual([offerJson(repo, home).offer, offerJson(repo, home).reason], [false, 'disabled']);
+      assert.equal(goalJson(repo, home).reason, 'disabled');
+    } finally {
+      chmodSync(dir, 0o755);
+    }
+  });
 
 test('offer on a detached HEAD → detached; offer-shown refuses a malformed digest', () => {
   const repo = makeRepo();

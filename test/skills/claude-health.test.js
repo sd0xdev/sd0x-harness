@@ -73,7 +73,7 @@ const CANONICAL_SYNC_CHECKS =
   '|----------|-----------|--------------|-------| | Rules | `.claude/rules/*.md` | `rules/*.md` | ' +
   '`auto-loop.md`, `codex-invocation.md`, `fix-all-issues.md`, `framework.md`, `testing.md`, ' +
   '`security.md`, `git-workflow.md`, `logging.md`, `docs-writing.md`, `docs-numbering.md`, ' +
-  '`self-improvement.md`, `context-management.md` | | Hooks | `.claude/hooks/*.sh` | `hooks/*.sh` ' +
+  '`self-improvement.md`, `context-management.md`, `discretion.md`, `scope-discipline.md`, `override-contract.md` | | Hooks | `.claude/hooks/*.sh` | `hooks/*.sh` ' +
   '| `pre-edit-guard.sh`, `pre-bash-codex-launch-guard.sh`, `post-edit-format.sh`, ' +
   '`post-skill-auto-loop.sh`, `post-compact-auto-loop.sh`, `stop-guard.sh`, ' +
   '`user-prompt-review-guard.sh` | | Scripts | `.claude/scripts/` | `scripts/` | ' +
@@ -463,4 +463,22 @@ test('Instruction Budget Module when read → sits after Fix Tiers, runs the plu
   assert.match(section, /\*\*never\*\* a copy inside the audited\s+repository/, 'a read-only audit never runs repository-controlled code');
   assert.doesNotMatch(section, /\$REPO_ROOT\/\.claude\/scripts\/instruction-budget\.js/, 'the repository copy is never the one run');
   assert.match(rawSkill.split('\n').find((l) => l.startsWith('allowed-tools:')), /Bash\(node:\*\)/);
+});
+
+// The S2 managed inventory is a hand-kept list, and it drifted: two managed rules were missing
+// while the install workflow copied all of them. Derived from disk so the next rule cannot be missed.
+test('S2 managed inventory Rules row when read → names exactly the managed rules on disk', () => {
+  const { readdirSync } = require('node:fs');
+  const skillText = readFileSync(resolve(__dirname, '../../skills/claude-health/SKILL.md'), 'utf8');
+  const namesIn = (text) => {
+    const row = liveText(text).split('\n').find((l) => l.startsWith('| Rules | `.claude/rules/*.md` |'));
+    assert.ok(row, 'the managed inventory must carry a live Rules row');
+    return [...row.split('|')[4].matchAll(/`([^`]+\.md)`/g)].map((m) => m[1]).sort();
+  };
+  const managed = readdirSync(resolve(__dirname, '../../rules'))
+    .filter((n) => n.endsWith('.md') && !n.endsWith('-project.md')).sort();
+  assert.deepEqual(namesIn(skillText), managed);
+  // Negative control through the same reader: a row missing one rule no longer matches.
+  const dropped = skillText.replace('`scope-discipline.md`, ', '');
+  assert.notDeepEqual(namesIn(dropped), managed);
 });

@@ -32,8 +32,15 @@ const CLAUSES = {
   'the push menu waits for the goal': 'while a user goal is active (Goal mode conditions 1–2) the commit follows Goal mode (else a commit-only menu), and no push menu is offered until the goal ends, then once as the deferred menu',
   'the deferred menu keeps its own marker end to end': 'The deferred menu adds `--deferred` to each `offer`/`offer-shown` call',
   'commits only': 'the one exception is Goal mode, below, and it covers commits only',
-  '## Goal Commit off narrows': '| `## Goal Commit` | Setting — `on` (default) · `off`, read by `review-state.js goal-commit`',
 };
+
+// rules-residency Q2-F: the `## Goal Commit` setting row moved to the path-scoped override contract;
+// git-workflow.md's resident core keeps the setting's name.
+test('## Goal Commit off narrows → the row lives in rules/override-contract.md, the resident core names it', () => {
+  const contract = readFileSync(resolve(__dirname, '../../rules/override-contract.md'), 'utf8');
+  assert.ok(flat(contract).includes('| `## Goal Commit` | Setting — `on` (default) · `off`, read by `review-state.js goal-commit`'));
+  assert.match(RULE, /`## Goal Commit`/);
+});
 
 function missingClauses(text) {
   const t = flat(text);

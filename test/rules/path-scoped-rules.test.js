@@ -17,6 +17,8 @@ const SCOPED = {
   'docs-writing.md': ['**/*.md', 'hooks/**', 'scripts/**', 'skills/**'],
   'testing.md': TESTING,
   'testing-project.md': TESTING,
+  // rules-residency Q2-F: the override tables load when an installed override file is read.
+  'override-contract.md': ['.claude/rules/*-project.md'],
 };
 
 function pathsOf(text) {
@@ -45,6 +47,17 @@ test('CLAUDE.template.md ## Rules → never @-imports a path-scoped rule, and na
   }
   // Negative control: the same check fails on the pre-R1 line.
   assert.match('- @rules/testing.md -- Test pyramid', /@rules\/testing\.md/);
+});
+
+// This checkout's own CLAUDE.md still @-imports four path-scoped rules until task 3 removes them;
+// the override contract must never join them, or it loads at launch in the dev checkout.
+test('CLAUDE.md and CLAUDE.template.md → never @-import rules/override-contract.md', () => {
+  const importLine = /@rules\/override-contract\.md\b/;
+  for (const file of ['CLAUDE.md', 'CLAUDE.template.md']) {
+    assert.doesNotMatch(liveText(read(file)), importLine, `${file} @-imports the override contract`);
+  }
+  // Negative control: the same pattern catches the import form.
+  assert.match('- @rules/override-contract.md -- Resolution order', importLine);
 });
 
 test('rules that stay resident → carry no frontmatter (every other shipped rule loads at launch)', () => {
