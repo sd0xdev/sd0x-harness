@@ -4318,3 +4318,32 @@ test('SKILL.md states the scan/publish residual instead of claiming byte binding
     'and must name what bounds it'
   );
 });
+
+// ── Removal operand is the literal mktemp -d path (claude-code-2-1-288-compat task 7) ──────────
+// Each Bash call is a fresh shell, so a removal that names a variable reads whatever that shell
+// has — nothing, or an ambient value such as macOS's shared `TMPDIR`. The run directory is removed
+// only by the literal path `mktemp -d` printed, which the fences carry as '<PR_BODY_DIR>'.
+
+function removalOperands(content) {
+  return bashFences(content)
+    .flatMap((node) => shellLines(node.text))
+    .filter((line) => /(^|[\s;|&(])(\/bin\/)?rm\s/.test(line))
+    .map((line) => line.replace(/^.*?(?:\/bin\/)?rm\s+(?:-[A-Za-z]+\s+)*(?:--\s+)?/, '').split(/\s+\|\|/)[0].trim());
+}
+
+const LITERAL_OPERAND = /^'<PR_BODY_DIR>(\/[A-Za-z0-9._-]+)?'$/;
+
+test('every rm in /create-pr fences removes the single-quoted <PR_BODY_DIR> literal, never an expansion', () => {
+  const operands = removalOperands(bothContents);
+  assert.ok(operands.length >= 5, `expected the teardown and guarded blocks, found ${operands.length}`);
+  const bad = operands.filter((op) => !LITERAL_OPERAND.test(op));
+  assert.deepEqual(bad, [], 'a removal operand must be the literal mktemp -d path');
+});
+
+test('the removal-operand check flags an expansion operand (negative control)', () => {
+  const planted = '```bash\nrm -rf -- "$PR_BODY_DIR" || set -- "$1" "$?"\n```\n';
+  const operands = removalOperands(planted);
+  assert.equal(operands.length, 1, 'the planted removal is found');
+  assert.ok(!LITERAL_OPERAND.test(operands[0]), 'and its expansion operand is rejected');
+  assert.match(skillContent, /substitute that \*\*literal absolute path\*\* into every later command/);
+});
