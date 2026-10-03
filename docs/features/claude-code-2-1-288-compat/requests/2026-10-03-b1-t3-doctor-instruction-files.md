@@ -51,7 +51,7 @@ hand edit but not an upgrade, and it says nothing about which instruction files 
 | Analysis | Done | tech spec § 3.3 |
 | Development | Done | Two doctor rows and the three-step subsection. Doc review rounds 1–2 added `.claude/AGENTS.md`, the availability step, the `--settings` source and `claudeMdExcludes`, all checked against the host memory docs |
 | Testing | Done | Six doctor tests in `test/skills/codex-setup.test.js`; they check the written procedure, not a live session |
-| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS` |
+| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS`. `--verify-ac` 2026-10-03: 5/6 ACs Complete at High; the gate AC is Complete at Medium — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 

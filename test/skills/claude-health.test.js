@@ -371,3 +371,44 @@ test('S2 managed inventory Rules row when read → names exactly the managed rul
   const dropped = skillText.replace('`scope-discipline.md`, ', '');
   assert.notDeepEqual(namesIn(dropped), managed);
 });
+
+// ── Plugin copies and Prompt Audit (claude-code-2-1-288-compat task 9) ─────────────────────────
+// Both are report-only and sit after the Instruction Budget Module, outside the pinned S1-S3 region
+// and its heading neighbourhood.
+
+test('S4 plugin copies → lists the three origins with their version source, report-only', () => {
+  const s4 = sectionAt(skill, 3, 'Plugin Copies (S4)');
+  for (const origin of [/\| Local install \|/, /\| Marketplace plugin \|/, /\| claude\.ai synced skills \| `~\/\.claude\/skills\/synced\/`/]) {
+    assert.match(s4, origin);
+  }
+  assert.match(s4, /It never deletes, moves or edits a copy/);
+  assert.match(s4, /`~\/\.claude\/plugins\/\*\*\/sd0x-dev-flow\/\*\*\/\.claude-plugin\/plugin\.json`/,
+    'the lookup reaches through the version segment of the cache');
+  assert.match(s4, /`cache\/<marketplace>\/sd0x-dev-flow\/<version>\/`/);
+  assert.match(s4, /never collapsed to one/);
+  assert.match(s4, /local-install drift is S1\.4's finding/, 'one mismatch, one severity');
+  assert.match(s4, /\| S4\.3 \| An origin cannot be read \| Reported as not checked, never as absent \|/);
+});
+
+test('Prompt Audit → named as a manual host step with its version, never run by the skill', () => {
+  const pa = sectionAt(skill, 3, 'Prompt Audit (manual step)');
+  assert.match(pa, /Claude Code 2\.1\.283 and later/);
+  assert.match(pa, /`\/doctor prompt-audit \[path\]`/);
+  assert.match(pa, /This skill does not run it/);
+});
+
+test('Prompt Audit → plugin-shipped findings are report-only and an Anchor-text edit is rejected', () => {
+  const pa = sectionAt(skill, 3, 'Prompt Audit (manual step)');
+  const rows = pa.split('\n').filter((l) => /^\| /.test(l) && !/^\| (Finding on|-)/.test(l));
+  assert.equal(rows.length, 3, 'installed copies, Anchor text, user-owned files');
+  assert.match(rows[0], /\| Report only\./);
+  assert.match(rows[1], /Anchor text/);
+  assert.match(rows[1], /\| Rejected\./);
+});
+
+test('the new sections sit after the Instruction Budget Module, outside the pinned neighbourhood', () => {
+  const order = ['### Instruction Budget Module', '### Plugin Copies (S4)', '### Prompt Audit (manual step)', '## Output'];
+  const at = order.map((h) => rawSkill.indexOf(`\n${h}\n`));
+  assert.ok(at.every((i) => i > 0), 'all four headings present');
+  assert.deepEqual([...at].sort((x, y) => x - y), at, 'in this order');
+});

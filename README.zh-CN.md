@@ -505,6 +505,10 @@ flowchart TD
 
 16 条规则 + 7 个钩子。规则是分层级的契约：在 13 个由插件管理的 rule 文件中，`discretion.md` 把其余 12 个的每条指令解析为 Anchor / Default / Guidance 三者中的确切一个，3 个用户自有的 override 文件则在其父规则之下以 Anchor 优先的方式解析。其中九条插件规则在启动时加载，四条在读到匹配路径的文件时加载；详细流程放在按需读取的 contract 中（[为什么是 v5](#为什么是-v5)、[docs/rules.md](docs/rules.md)）。Hook 的组成是 4 个建议性提醒 hook，加上 1 个自动格式化与 2 个会阻断的守卫。提醒角色各不相同：Stop 与 post-compact hook 从与 digest 绑定的状态（`review-state.js`）打印待偿 gate 提醒，prompt hook 打印 `[AUTO_LOOP_STATE]` 事实行，post-skill hook 打印固定的 gate 顺序行，post-compact hook 另外重新注入 git 基线；审查层永不阻断——pre-edit-guard 仍会阻断敏感路径编辑（安全守卫，需要 `jq`，缺 jq 时不会启动），pre-bash-codex-launch-guard 会阻断把进度导离任务面板的 Codex dispatch 启动命令，硬性 gate 位于 git 层（commit-msg-guard 由 `/codex-setup init` 安装；pre-push-gate 为 opt-in）。
 
+**Plugin 会执行与连接的对象。** Review 技能会调用 [Codex CLI](https://github.com/openai/codex)，按你自己的 Codex 配置，把每次的 review prompt 以及 Codex 在只读 sandbox 中读取的仓库文件发送给 OpenAI。Git 与 CI 技能会调用 `gh`，连接 GitHub 处理 pull request、CI run 与 `gh stack` 扩展；push 只在你逐次批准后才执行。`/deep-research` 等研究类技能会抓取网页。Hooks 只在本机运行 plugin 自带的 shell 与 Node 脚本，post-edit 格式化只在项目的 `node_modules/.bin` 中有 `prettier`，或项目有 Prettier 配置文件且 `PATH` 上有 `prettier` 时才运行——没有任何 hook 会下载东西。
+
+**用量上限的收尾额度（wrap-up）。** Claude 订阅在任务途中达到用量上限时，近期的 Claude Code 版本可能给 Claude 一小段额度，用来收尾到一个停止点。这能让变更停在干净的状态，但不会关闭任何 gate：仍欠着的 review 或 `/precommit` 依然欠着，而收尾期间 Stop hook 的提醒可能不会出现，所以把工作视为完成之前，请先看 `review-state.js check` 或下一条 `[AUTO_LOOP_STATE]`。这是宿主（host）的行为，此处只做文档说明，本仓库并未测试。
+
 > **定制化**：编辑 `auto-loop-project.md` 可覆写项目的 auto-loop 行为。插件更新不会冲突 — 详见 [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md)。
 
 完整的规则、钩子与环境变量参考，请见 [docs/rules.md](docs/rules.md) 与 [docs/hooks.md](docs/hooks.md)。

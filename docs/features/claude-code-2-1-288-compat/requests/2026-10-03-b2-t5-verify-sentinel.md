@@ -47,7 +47,7 @@ reserves for the precommit runner, so a verification run reads as a precommit ve
 | Analysis | Done | tech spec § 3.4 Batch 2 |
 | Development | Done | Runner prints `## Verify:`. Code review round 1 added the case of a child step that prints `## Overall:` itself: the live stream drops it and the summary tail shows it as `## (child) Overall:` |
 | Testing | Done | Pass, fail and all-skipped runs, plus a child step that prints the reserved sentinel; a mutant without the neutralization leaks it |
-| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS` (code review: 2 rounds) |
+| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS` (code review: 2 rounds). `--verify-ac` 2026-10-03: 3/4 ACs Complete at High; the gate AC is Inconclusive — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 

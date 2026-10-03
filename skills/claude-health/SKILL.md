@@ -22,7 +22,7 @@ context: fork
 | Argument | Description |
 |----------|-------------|
 | `--scope hygiene` | Only run C1-C7 hygiene checks |
-| `--scope sync` | Only run S1-S3 sync checks |
+| `--scope sync` | Only run S1-S3 sync checks and the S4 plugin-copies inventory |
 | `--scope budget` | Only run the Instruction Budget Module (B1-B3) |
 | `--scope all` | Run every module — hygiene, sync and budget (**default**) |
 
@@ -273,6 +273,39 @@ case "$(cd "$PR" 2>/dev/null && pwd -P)/" in "$(cd "$REPO_ROOT" && pwd -P)/"*|/)
 The script is read-only; it never edits or moves a file. A missing script skips the module with a
 note rather than guessing a total.
 
+### Plugin Copies (S4)
+
+Runs with the Sync module (`--scope sync` and `--scope all`). Report-only: it lists where copies of
+this plugin's content come from, so a stale or second copy is seen before it is mistaken for the
+plugin's current text. It never deletes, moves or edits a copy.
+
+| Origin | Where | Version read from |
+|--------|-------|-------------------|
+| Local install | `.claude/rules/`, `.claude/hooks/`, `.claude/scripts/` | `.sd0x/install-state.json` `plugin_version` (S1) |
+| Marketplace plugin | Every `~/.claude/plugins/**/sd0x-dev-flow/**/.claude-plugin/plugin.json` whose `name` is `sd0x-dev-flow` — the versioned cache (`cache/<marketplace>/sd0x-dev-flow/<version>/`) and the marketplace checkout both match | Each match's `version`; several matches are listed as found, never collapsed to one |
+| claude.ai synced skills | `~/.claude/skills/synced/` (Claude Code 2.1.273 and later) | None — a synced skill carries no plugin version; list each directory named like a skill this plugin ships |
+
+| # | Check | Severity |
+|---|-------|----------|
+| S4.1 | Marketplace copies carry different versions | P2 — the stale copies are the host's cache, cleared through `/plugin`; local-install drift is S1.4's finding, reported there once and never re-graded here |
+| S4.2 | A synced skill has the same name as a plugin skill | P2 — two skills of one name are offered; the plugin's runs as `/sd0x-dev-flow:<name>`. Rename or turn off the copy on claude.ai: sync overwrites a local edit |
+| S4.3 | An origin cannot be read | Reported as not checked, never as absent |
+
+### Prompt Audit (manual step)
+
+Claude Code 2.1.283 and later audit instruction files for outdated or conflicting content with
+`/doctor prompt-audit [path]` (alias `/checkup prompt-audit`). It covers `CLAUDE.md`,
+`CLAUDE.local.md` and `AGENTS.md` plus the rules and skills under `.claude/` and `~/.claude/`,
+reports findings with proposed edits, and changes nothing until asked. This skill does not run it:
+it is the host's command, and the report names it as the manual next step. Its findings on this
+plugin's content are handled by owner:
+
+| Finding on | Handling |
+|------------|----------|
+| `.claude/rules/*.md`, `.claude/hooks/` or `.claude/scripts/` installed by this plugin | Report only. Fix it upstream, or customize through a `*-project.md` override; S2 detects a local edit on every later run and classifies it by its hash table (`LOCAL_MODIFIED`, `CONFLICT` or `LEGACY`) |
+| Anchor text — the Anchor Register in `rules/discretion.md`, or the Anchors section of the generated `AGENTS.md` | Rejected. The plugin pins that text byte-for-byte and `/codex-setup sync` regenerates the `AGENTS.md` Anchors from `rules/`, so an edit there is a spec change for the maintainer, never an audit fix |
+| `*-project.md` overrides and the project's own `CLAUDE.md` | The user's call — these files are user-owned |
+
 ## Output
 
 ```markdown
@@ -320,6 +353,16 @@ note rather than guessing a total.
 | B1 Total | ✅/⚠️ | 89,472 / 150,000 chars; plugin share 89,472 |
 | B2 Per-file | ✅/⚠️ | None over / .claude/rules/big.md (152,000) |
 | B3 Lessons in rules/ | ✅/⚠️ | None / .claude/rules/lessons.md → move to .claude/sd0x-dev-flow-lessons.md |
+
+## Plugin Copies (S4)
+
+| Origin | Version | Note |
+|--------|---------|------|
+| Local install | 5.0.0 | from `.sd0x/install-state.json` |
+| Marketplace plugin | 5.0.0 / not checked | |
+| claude.ai synced skills | — | names shared with plugin skills, or none |
+
+Next step (manual): `/doctor prompt-audit` — findings on plugin-shipped content are report-only.
 
 ## Statistics
 
