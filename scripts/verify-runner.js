@@ -20,6 +20,8 @@ const {
   appendLog,
   runStep,
   testStdoutFilter,
+  defaultStdoutFilter,
+  stripAnsi,
   gitRepoRoot,
   gitShortHead,
   gitHead,
@@ -242,7 +244,7 @@ async function main() {
         tailFailure: args.tailFailure,
         tailLines: args.tail,
         heartbeatMs: 5000,
-        stdoutFilter: s.stdoutFilter,
+        stdoutFilter: withoutReservedSentinel(s.stdoutFilter || defaultStdoutFilter),
       });
       results.push(r);
       appendLog(
@@ -314,7 +316,7 @@ async function main() {
       );
       lines.push('');
       lines.push('```text');
-      lines.push(r.tailText);
+      lines.push(neutralizeReservedSentinel(r.tailText));
       lines.push('```');
       lines.push('</details>');
     }
@@ -327,13 +329,36 @@ async function main() {
   lines.push('```');
   lines.push('');
 
-  lines.push(`## Overall: ${summary.overallPass ? '✅ PASS' : '❌ FAIL'}`);
+  // `## Overall:` is the precommit runner's sentinel alone (rules/auto-loop.md § Gate Sentinels).
+  // A verification run that printed it would read as a precommit verdict.
+  lines.push(`## Verify: ${summary.overallPass ? '✅ PASS' : '❌ FAIL'}`);
   lines.push('');
 
   const summaryMd = lines.join('\n');
   writeText(path.join(logDir, 'summary.md'), summaryMd);
   appendLog(runnerLog, `[${nowISO()}] summary_md_written\n`);
   process.stdout.write(summaryMd);
+}
+
+// `## Overall:` belongs to the precommit runner alone (rules/auto-loop.md § Gate Sentinels), and a
+// step's own output can carry it — a test that prints one, or a nested precommit run. /verify never
+// forwards it: the live stream drops such a line (the step log keeps every byte), and the summary
+// tail shows it as `## (child) Overall:`, so nothing this runner prints reads as a precommit verdict.
+const RESERVED_SENTINEL = '## Overall:';
+const NEUTRALIZED_SENTINEL = '## (child) Overall:';
+
+function withoutReservedSentinel(filter) {
+  return (line) => !stripAnsi(line).includes(RESERVED_SENTINEL) && filter(line);
+}
+
+function neutralizeReservedSentinel(text) {
+  return text
+    .split('\n')
+    .map((line) => {
+      const clean = stripAnsi(line);
+      return clean.includes(RESERVED_SENTINEL) ? clean.split(RESERVED_SENTINEL).join(NEUTRALIZED_SENTINEL) : line;
+    })
+    .join('\n');
 }
 
 main().catch(e => {

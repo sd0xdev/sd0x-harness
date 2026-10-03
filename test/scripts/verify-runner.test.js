@@ -233,3 +233,59 @@ test('an opted-in lint script receives its flags and globs, with no stray separa
   assert.equal(argv[0], '--ignore-pattern', 'no stray separator leads the vector');
   assert.ok(argv.includes('--no-error-on-unmatched-pattern'), 'the flags arrive as flags');
 });
+
+// ── Sentinel (claude-code-2-1-288-compat task 5) ─────────────────────────────────────────────
+// Claude Code 2.1.286 sends Claude to a skill named `verify` before commits. `## Overall:` is the
+// precommit runner's sentinel alone, so a verify report must never carry it.
+
+test('verify runner → passing run ends with ## Verify: ✅ PASS and never prints ## Overall:', () => {
+  const dir = createTempRepo({ name: 'temp', version: '1.0.0', scripts: { 'test:unit': './pass.sh' } });
+  writeScript(dir, 'pass.sh', 0);
+  const { stdout } = runVerify(dir, ['--mode', 'fast']);
+  assert.match(stdout, /^## Verify: ✅ PASS$/m);
+  assert.doesNotMatch(stdout, /## Overall:/);
+});
+
+test('verify runner → failing run ends with ## Verify: ❌ FAIL and never prints ## Overall:', () => {
+  const dir = createTempRepo({ name: 'temp', version: '1.0.0', scripts: { 'test:unit': './fail.sh' } });
+  writeScript(dir, 'fail.sh', 1);
+  const { stdout, summary } = runVerify(dir, ['--mode', 'fast']);
+  assert.equal(summary.overallPass, false);
+  assert.match(stdout, /^## Verify: ❌ FAIL$/m);
+  assert.doesNotMatch(stdout, /## Overall:/);
+});
+
+test('verify runner → every step skipped still reports ## Verify: ✅ PASS', () => {
+  const dir = createTempRepo({ name: 'temp', version: '1.0.0', scripts: {} });
+  const { stdout } = runVerify(dir, ['--mode', 'fast']);
+  assert.match(stdout, /^## Verify: ✅ PASS$/m);
+  assert.doesNotMatch(stdout, /## Overall:/);
+});
+
+// A step's own output can carry the reserved sentinel. The runner drops it from the live stream and
+// renames it in the summary tail; the step log keeps the original bytes.
+
+function writeSentinelScript(dir, name, exitCode) {
+  const p = join(dir, name);
+  writeFileSync(p, `#!/bin/sh\nprintf '%s\\n' 'ok 1 - plain' '## Overall: ✅ PASS'\nexit ${exitCode}\n`);
+  chmodSync(p, 0o755);
+}
+
+test('verify runner → a passing step that prints ## Overall: does not reach stdout', () => {
+  const dir = createTempRepo({ name: 'temp', version: '1.0.0', scripts: { 'test:unit': './say.sh' } });
+  writeSentinelScript(dir, 'say.sh', 0);
+  const { stdout, logDir } = runVerify(dir, ['--mode', 'fast']);
+  assert.doesNotMatch(stdout, /## Overall:/);
+  assert.match(stdout, /^## Verify: ✅ PASS$/m);
+  assert.match(readFileSync(join(logDir, 'test_unit.log'), 'utf8'), /^## Overall: ✅ PASS$/m,
+    'the step log keeps the child output verbatim');
+});
+
+test('verify runner → a failing step that prints ## Overall: shows it renamed in the tail', () => {
+  const dir = createTempRepo({ name: 'temp', version: '1.0.0', scripts: { 'test:unit': './say.sh' } });
+  writeSentinelScript(dir, 'say.sh', 1);
+  const { stdout } = runVerify(dir, ['--mode', 'fast']);
+  assert.doesNotMatch(stdout, /## Overall:/);
+  assert.match(stdout, /## \(child\) Overall: ✅ PASS/, 'the failure tail still shows what the child said');
+  assert.match(stdout, /^## Verify: ❌ FAIL$/m);
+});
