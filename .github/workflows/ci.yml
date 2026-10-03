@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # A stacked merge (`gh stack merge`) updates main without a push event, so CI
+  # must be dispatchable by hand afterwards: gh workflow run ci.yml --ref main
+  workflow_dispatch:
 
 jobs:
   test:
