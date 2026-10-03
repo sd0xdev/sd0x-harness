@@ -16,6 +16,24 @@ allowed-tools: Bash(node:*), Bash(pnpm:*), Bash(yarn:*), Bash(npm:*), Bash(npx:*
 - Test coverage review (use `/codex-test-review`)
 - Running a single specific test (run directly)
 
+## Commit Context
+
+Claude Code 2.1.286 and later tell Claude to run a skill named `verify` before a commit. The gate
+that binds a commit is `/precommit` (`rules/auto-loop.md`), so when `/verify` runs as that
+pre-commit check it neither repeats a precommit that already passed nor stands in for one that did
+not:
+
+1. Read the gate state: `node scripts/review-state.js check --format=json`, installed copy first
+   (`.claude/scripts/review-state.js`).
+2. `precommit.passed` is exactly `true` → report "Precommit already passed at the current code
+   digest; no new checks executed" and stop. Emit no sentinel and write no verdict note.
+3. Anything else — `passed` false, no `precommit` slot, output that does not parse as JSON, or no
+   checker found → run `/precommit`. Its own report and evidence contract apply; `/verify` adds no
+   verdict of its own.
+
+`passed` is content-addressed — noted, at the current tree digest, with verdict `pass` — so no
+separate freshness check is needed. Run any other way, `/verify` performs the steps below unchanged.
+
 ## Workflow Steps
 
 | Step | Goal | Safety | Skip if Missing |
@@ -78,6 +96,10 @@ For Node.js projects, auto-detect package manager from lockfile.
 
 ## Output
 
+The last line is `## Verify:`, never `## Overall:`. `## Overall:` is the precommit runner's
+sentinel alone (`rules/auto-loop.md` § Gate Sentinels), so a verification report is never read as
+a precommit verdict.
+
 For **fast** mode:
 
 ```markdown
@@ -88,7 +110,7 @@ For **fast** mode:
 | lint | ✅/❌/⏭️ | |
 | unit | ✅/❌/⏭️ | |
 
-## Overall: ✅ PASS / ❌ FAIL
+## Verify: ✅ PASS / ❌ FAIL
 ```
 
 For **full** mode:
@@ -109,5 +131,5 @@ For **full** mode:
 - Root cause: <first error>
 - Fix: <suggestion>
 
-## Overall: ✅ PASS / ❌ FAIL
+## Verify: ✅ PASS / ❌ FAIL
 ```

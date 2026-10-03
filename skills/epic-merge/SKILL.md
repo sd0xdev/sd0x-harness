@@ -2539,6 +2539,16 @@ fi
 /bin/rm -rf "$MANIFEST_DIR"
 ```
 
+**How the host classifies this removal — measured, not assumed.** Claude Code 2.1.281 and later
+hold the removal of a critical path for approval and, in `auto` mode, deny it after two minutes.
+Measured 2026-10-03 on Claude Code 2.1.288 in `auto` mode: the derivation and removal above, run
+verbatim in a fixture repository, completed with no approval prompt and removed `.git/epic-merge`.
+The host did not classify the same-fence `rev-parse --git-path` derivation as a critical-path
+removal, so the fence stays as written. If a later host does flag it, the answer is to derive and
+validate the path in one Bash call and remove the literal path — re-read, never re-derived — in the
+next. It is never an environment opt-out, a different removal tool or a retry loop
+(`docs/features/claude-code-2-1-288-compat/2-tech-spec.md` § 3.4).
+
 ## Arguments
 
 | Argument | Description | Default |

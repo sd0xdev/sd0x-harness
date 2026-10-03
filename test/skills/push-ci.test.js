@@ -39,7 +39,7 @@ function readSkill() {
 // The section pins below survive because they give a precise message for the common case; the
 // digest is what makes the claim complete.
 
-const SKILL_DIGEST = "8ddbab63a875be99fe518db685713272f18976e1e47a598fae744e09e0ed35e9";
+const SKILL_DIGEST = "412475b8cdfe5bc194ebcabd7f5914d01aac1424f8bf6d7f31428742777d01a3";
 
 function digestOf(text) {
   return createHash('sha256').update(text).digest('hex');
@@ -5204,4 +5204,25 @@ test('frontmatter when read → push-ci is model-invocable while /epic-merge is 
   assert.match(skill, /Pushing without this invocation's own AskUserQuestion approval/,
     'the prohibition that replaced "Auto-triggering" names the per-invocation approval');
   assert.doesNotMatch(skill, /Auto-triggering this skill/);
+});
+
+// ── Backgrounded push (claude-code-2-1-288-compat task 8) ─────────────────────────────────────
+// Send-now backgrounds a running push. Its state is unknown until reconciled, and the message that
+// backgrounded it is not a credential (intent INV-005, Anchor Register #4).
+
+test('a backgrounded push → reconciled against the task and the remote tip before any retry', () => {
+  const skill = readSkill();
+  const at = skill.indexOf('### When the push runs where nobody can answer');
+  const section = skill.slice(at, skill.indexOf('\n## ', at));
+  assert.match(section, /still pending, hung on the gate's terminal prompt as above,\s+failed, or already published/);
+  assert.match(section, /read the background task's output and exit status, then read the branch's tip at \*\*every\s+destination the approved plan named\*\*/);
+  for (const outcome of ['published', 'partial', 'failed', 'unknown']) {
+    assert.match(section, new RegExp(`\\*\\*${outcome}\\*\\*`), `outcome ${outcome} is named`);
+  }
+  assert.match(section, /A match at one destination\s+settles that destination only/);
+  assert.match(section, /Nothing is retried while the original task can still run/);
+  assert.match(section, /with its exit confirmed before anything else happens/);
+  assert.match(section, /Once the task has\s+exited, a push published everywhere is reported and never pushed again/);
+  assert.match(section, /a retry is a new push — Phase 0 and Phase 1, plan and approval, run again/);
+  assert.match(section, /is not a push credential/);
 });

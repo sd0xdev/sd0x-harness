@@ -1191,7 +1191,7 @@ test('every git command in the document → carries the canonical prefix', () =>
     'a table cell naming git is not a command and must not be judged as one');
 });
 
-const SKILL_DIGEST = "87c8cbabcc7484addf70482a5139199404b2772e6918977501eab5ef17e5e54d";
+const SKILL_DIGEST = "ab1b9cc5c4474cf49d93741dc2815e4bfa84fa81fbc02710a2ddcbd79657f6a6";
 
 test('the skill document when read → matches its pinned digest', () => {
   assert.equal(createHash('sha256').update(readSkill()).digest('hex'), SKILL_DIGEST,
@@ -5196,4 +5196,19 @@ test('--force-if-includes beside a lease value when measured → refuses exactly
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── Host rm classification (claude-code-2-1-288-compat task 7) ─────────────────────────────────
+// The cleanup fence's removal shape was measured against the host's critical-path check, not
+// assumed. The record names the host version, the mode, the date and the result, and the remedy it
+// names for a later host never routes around the check (intent INV-006, INV-007).
+
+test('post-merge cleanup → records the measured host classification of its removal shape', () => {
+  const skill = readSkill();
+  const at = skill.indexOf('## Post-Merge Cleanup (--cleanup flag)');
+  const cleanup = skill.slice(at, skill.indexOf('\n## ', at + 1));
+  assert.match(cleanup, /Measured 2026-10-03 on Claude Code 2\.1\.288 in `auto` mode/);
+  assert.match(cleanup, /completed with no approval prompt and removed `\.git\/epic-merge`/);
+  assert.match(cleanup, /the fence stays as written/);
+  assert.match(cleanup, /never an environment opt-out, a different removal tool or a retry loop/);
 });
