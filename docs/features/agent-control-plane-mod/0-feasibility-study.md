@@ -206,7 +206,7 @@ Independent research first, then four adversarial rounds on one thread.
 | `allow` / `ask` | needs-user, on a verified interactive surface/mode | `ask` |
 | `allow` / `ask` | needs-user, on an unverified or non-interactive surface | `deny`, recorded |
 
-The Mod never answers `allow`, holds no approvals of its own, and has no Approval record in v1:
+The Mod never creates an `allow` — it passes a downstream `allow` through unchanged on a pass-through call and never upgrades any verdict — holds no approvals of its own, and has no Approval record in v1:
 approval is the host's, for the attempted call. A recorded `ask` followed by execution is not proof
 that a person approved — `ask` goes to the mode's decider.
 
