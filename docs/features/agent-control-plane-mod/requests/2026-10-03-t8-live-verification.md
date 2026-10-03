@@ -46,9 +46,9 @@ Stub tests cannot establish surface behaviour, abort semantics or removal; these
 | Phase | Status | Note |
 | ----- | ------ | ---- |
 | Analysis | Done | Tech spec § 3–§ 5 |
-| Development | In Progress | README written in agentctl-mod (tested version, native deny rules, limits, the owed live checks) |
+| Development | In Progress | README written in agentctl-mod; live results recorded there. A live run found task-less sessions escaping the per-task retention cap — fixed with a regression test |
 | Testing | - | |
-| Acceptance | - | V3–V10 need a live dev-mod session in a scratch repository; not run in this session |
+| Acceptance | In Progress | 2026-10-04 live, `claude -p --plugin-dir`, scratch repo: loads and answers `/agentctl` with no model turn; forbidden and unclassified Bash refused before running; `git status` ran through the host path; a non-zero exit arrives as `isError` (V5, Bash half); evidence bracketed, `git-hybrid`; two concurrent sessions kept both records (V9); no leftover process (V10, process half); tree reading ~90 ms with 500 changed paths, ~75 ms on 974 clean files (V8 — within NFR-4's 200 ms). A `-p` prompt is not `composer`, so headless runs cannot set a task. Still owed, interactive only: V3, V6, V7 (5 h window `missing` in every `-p` run), V4 beyond the main agent, V10 display; `GetTask` with a Bash id (V5, background half) |
 
 ## References
 
