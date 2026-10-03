@@ -1650,6 +1650,23 @@ route puts the question where they are, never removes it:
 There is no fifth mechanism to fall back to, and looking for one is the failure mode: an absent
 terminal moves the question, it does not delete it (`rules/git-workflow.md` § Push safety).
 
+**A push that went to the background is reconciled before anything else.** Since Claude Code
+2.1.281 a send-now message (Ctrl+Enter) moves a running tool to the background, a push included.
+From there it is in one of four states — still pending, hung on the gate's terminal prompt as above,
+failed, or already published — and nothing about the message tells you which. Before any retry,
+read the background task's output and exit status, then read the branch's tip at **every
+destination the approved plan named** — one guarded lookup per URL, exactly as Phase 2's
+partial-publication message directs — and compare each with the commit the push carried. Report the
+outcome per destination: **published** everywhere, **partial** (name which destinations hold the
+commit), **failed** (none do) or **unknown** (a lookup did not answer). A match at one destination
+settles that destination only. **Nothing is retried while the original task can still run**: a
+pending task is reported as pending and left to finish, and a hung task is stopped — never answered
+on the operator's behalf — with its exit confirmed before anything else happens. Once the task has
+exited, a push published everywhere is reported and never pushed again; any other outcome may be
+retried, and a retry is a new push — Phase 0 and Phase 1, plan and approval, run again. The message that
+backgrounded the push, like any later message, is not a push credential (`rules/discretion.md`
+Anchor Register #4).
+
 ## Arguments
 
 | Argument | Description | Default |
