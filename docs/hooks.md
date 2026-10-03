@@ -38,3 +38,9 @@ hook-lightweighting; the migration (`scripts/migrate-hook-lightweighting.js`) re
 git facts without it, claiming no verdict). Auto-format requires `prettier`. `pre-edit-guard`
 requires `jq`, and `pre-bash-codex-launch-guard` requires `jq` and `node` — without them each guard is **disabled**, not degraded. Other missing
 dependencies degrade gracefully — a reminder hook never fails the tool call it rides on.
+
+**Host behaviour (Claude Code 2.1.288)**: a PreToolUse or PermissionRequest hook whose matching fails,
+or whose tool input cannot be serialized to JSON, now blocks the tool call instead of being skipped.
+That is the host's rule for evaluating a hook — documented here, not tested by this repository — and
+it does not change the guards above, which keep their documented fail-open when `jq` or `node` is
+missing.

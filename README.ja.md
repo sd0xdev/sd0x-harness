@@ -505,6 +505,10 @@ flowchart TD
 
 16 ルール + 7 フック。ルールは tier 付きの契約です：プラグイン管理の 13 のルールファイルのうち、`discretion.md` が残り 12 のすべての指示を Anchor / Default / Guidance のいずれかちょうど 1 つに解決し、ユーザー所有の 3 つのオーバーライドファイルは親ルールの下で Anchor-first に解決されます。プラグインルールのうち 9 つは起動時に、4 つは一致するファイルを読んだときに読み込まれます。詳細な手順は必要なときに読む contract にあります（[なぜ v5 なのか](#なぜ-v5-なのか)、[docs/rules.md](docs/rules.md)）。フック構成は 4 本の advisory リマインダーフックに、自動フォーマッタ 1 本とブロックするガード 2 本を加えたものです。リマインダーの役割はフックごとに異なります：Stop と post-compact フックは digest 束縛の状態（`review-state.js`）から未完了ゲートのリマインダーを描画し、prompt フックは `[AUTO_LOOP_STATE]` の事実行を、post-skill フックは固定のゲート順序行を出力し、post-compact フックはさらに git ベースラインを再注入します。レビュー層は何もブロックしません — pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガード、`jq` 必須 — 無いと作動しない）、pre-bash-codex-launch-guard は進捗をタスクパネルから逸らす Codex dispatch の起動をブロックし、ハードなゲートは git レベルにあります（commit-msg-guard は `/codex-setup init` でインストール、pre-push-gate はオプトイン）。
 
+**プラグインが実行するもの・接続する先。** レビュー系スキルは [Codex CLI](https://github.com/openai/codex) を呼び出し、あなた自身の Codex 設定のもとで、各レビュープロンプトと、Codex が読み取り専用 sandbox で読んだリポジトリのファイルを OpenAI に送信します。Git・CI 系スキルは `gh` を呼び出し、pull request、CI run、`gh stack` 拡張のために GitHub に接続します。push はあなたが毎回承認した後にだけ実行されます。`/deep-research` などのリサーチ系スキルは Web ページを取得します。Hooks はプラグイン同梱の shell / Node スクリプトをローカルで実行するだけで、post-edit フォーマッタが `prettier` を実行するのは、プロジェクトの `node_modules/.bin` にある場合か、プロジェクトに Prettier の設定ファイルがあり `PATH` 上に `prettier` がある場合だけです。ダウンロードを行う hook はありません。
+
+**利用上限時の wrap-up。** Claude のサブスクリプションがタスク途中で利用上限に達すると、最近の Claude Code は区切りのよいところまで作業を終えるための小さな枠を Claude に与えることがあります。変更をきれいな状態で止める助けにはなりますが、ゲートを閉じるものではありません。未完了のレビューや `/precommit` は残ったままで、この枠の間は Stop hook のリマインダーが表示されないことがあります。作業完了とみなす前に `review-state.js check` か次の `[AUTO_LOOP_STATE]` 行を確認してください。これはホスト側の挙動で、ここでは文書化のみ行い、このリポジトリではテストしていません。
+
 > **カスタマイズ**：`auto-loop-project.md` を編集してプロジェクトの auto-loop 動作をオーバーライドできます。プラグイン更新と競合しません — [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md) 参照。
 
 ルール、フック、環境変数の完全なリファレンスは [docs/rules.md](docs/rules.md) と [docs/hooks.md](docs/hooks.md) をご覧ください。

@@ -505,6 +505,10 @@ flowchart TD
 
 16개 규칙 + 7개 Hook. 규칙은 tier화된 계약입니다: 플러그인이 관리하는 규칙 파일 13개 중 `discretion.md`가 나머지 12개의 모든 지시를 Anchor / Default / Guidance 중 정확히 하나로 해석하고, 사용자 소유의 오버라이드 파일 3개는 상위 규칙 아래에서 Anchor 우선으로 해석됩니다. 플러그인 규칙 중 9개는 시작 시, 4개는 일치하는 파일을 읽을 때 로드되며, 세부 절차는 필요할 때 읽는 contract에 있습니다([왜 v5인가](#왜-v5인가), [docs/rules.md](docs/rules.md)). Hook 구성은 4개의 권고형 reminder hook에 자동 포매터 1개와 차단형 가드 2개를 더한 것입니다. reminder 역할은 hook마다 다릅니다: Stop과 post-compact hook은 digest 기반 상태(`review-state.js`)로부터 미완료 gate reminder를 렌더링하고, prompt hook은 `[AUTO_LOOP_STATE]` 사실 라인을, post-skill hook은 고정된 gate 순서 라인을 출력하며, post-compact hook은 추가로 git baseline을 재주입합니다. 리뷰 레이어는 아무것도 차단하지 않습니다 — pre-edit-guard는 민감 경로 편집을 여전히 차단하고(보안 가드, `jq` 필요 — 없으면 작동하지 않음), pre-bash-codex-launch-guard는 진행 상황을 작업 패널 밖으로 돌리는 Codex dispatch 실행을 차단하며, 강제 gate는 git 레벨에 있습니다 (commit-msg-guard는 `/codex-setup init`으로 설치, pre-push-gate는 opt-in).
 
+**플러그인이 실행하고 연결하는 대상.** 리뷰 스킬은 [Codex CLI](https://github.com/openai/codex)를 호출하며, 사용자 자신의 Codex 설정에 따라 각 리뷰 프롬프트와 Codex가 읽기 전용 sandbox에서 읽은 저장소 파일을 OpenAI로 전송합니다. Git·CI 스킬은 `gh`를 호출해 pull request, CI run, `gh stack` 확장을 위해 GitHub에 연결합니다. push는 매번 사용자가 승인한 뒤에만 실행됩니다. `/deep-research` 등 리서치 스킬은 웹 페이지를 가져옵니다. Hooks는 플러그인에 포함된 shell·Node 스크립트를 로컬에서 실행할 뿐이며, post-edit 포매터는 프로젝트의 `node_modules/.bin`에 `prettier`가 있거나, 프로젝트에 Prettier 설정 파일이 있고 `PATH`에 `prettier`가 있을 때만 그것을 실행합니다. 무언가를 다운로드하는 hook은 없습니다.
+
+**사용량 한도의 wrap-up.** Claude 구독이 작업 도중 사용량 한도에 도달하면, 최근 Claude Code 버전은 작업을 멈출 지점까지 마무리할 수 있도록 Claude에게 작은 허용량을 줄 수 있습니다. 변경을 깨끗한 상태로 끝내는 데 도움이 되지만 게이트를 닫지는 않습니다. 남아 있는 리뷰나 `/precommit`은 여전히 남아 있으며, 이 허용량 동안에는 Stop hook의 알림이 나타나지 않을 수 있으므로, 작업을 완료로 보기 전에 `review-state.js check` 또는 다음 `[AUTO_LOOP_STATE]` 줄을 확인하세요. 이는 호스트의 동작으로, 여기서는 문서로만 설명하며 이 저장소에서 테스트하지 않습니다.
+
 > **커스터마이징**: `auto-loop-project.md`를 편집하여 프로젝트별 auto-loop 동작을 오버라이드할 수 있습니다. 플러그인 업데이트와 충돌하지 않습니다 — [Rule Override Pattern](docs/features/rule-override-pattern/2-tech-spec.md) 참조.
 
 전체 규칙, Hook, 환경 변수 레퍼런스는 [docs/rules.md](docs/rules.md)와 [docs/hooks.md](docs/hooks.md)를 참조하세요.
