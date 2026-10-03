@@ -46,7 +46,7 @@ false. The spec row is a record of its time and is not edited; a dated record su
 | Analysis | Done | tech spec § 3.4 Batch 1 |
 | Development | Done | Record written; the original spec is untouched |
 | Testing | Done | Link check: no failures, 0 unresolved; `git diff` of the original spec is empty |
-| Acceptance | Done | `/codex-review-doc` ✅ Mergeable (3 rounds; the findings were in `skills/codex-setup/SKILL.md`, none in this record) |
+| Acceptance | Done | `/codex-review-doc` ✅ Mergeable (3 rounds; the findings were in `skills/codex-setup/SKILL.md`, none in this record). `--verify-ac` 2026-10-03: 3/4 ACs Complete at High; the gate AC is Inconclusive — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 

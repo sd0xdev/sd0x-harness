@@ -54,7 +54,7 @@ Default tier and must not restate an Anchor (intent INV-002).
 | Analysis | Done | tech spec § 3.2 |
 | Development | Done | Kernel rewritten: four sentinels, owed-finding rule, Read-fails-stop, verify ≠ precommit; attribution and security paraphrases removed |
 | Testing | Done | Generated-kernel content tests and the remainder restatement check with a planted-paraphrase negative control |
-| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS` |
+| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS`. `--verify-ac` 2026-10-03: 4/5 ACs Complete at High; the gate AC is Inconclusive — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 

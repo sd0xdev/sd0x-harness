@@ -52,7 +52,7 @@ decides whether it is rewritten (tech spec § 7 Q1).
 | Analysis | Done | tech spec § 3.4 Batch 2, § 7 |
 | Development | Done | Measured 2026-10-03 on Claude Code 2.1.288 in `auto` mode: the cleanup shape ran with no prompt and removed the fixture manifests, so the fence was recorded, not rewritten |
 | Testing | Done | Record test in `test/skills/epic-merge.test.js`; literal-operand test with a negative control in `test/skills/create-pr.test.js` |
-| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS` |
+| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS`. `--verify-ac` 2026-10-03: 3/4 ACs Complete at High; the gate AC is Inconclusive — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 

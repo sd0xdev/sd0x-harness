@@ -52,7 +52,7 @@ digest nor stand in for one that did not (intent INV-003).
 | Analysis | Done | tech spec § 3.4 Batch 2 |
 | Development | Done | § Commit Context in `skills/verify/SKILL.md`; § Output names why `## Overall:` is not used |
 | Testing | Done | New `test/skills/verify.test.js`; one test reads a real `review-state.js check` to confirm `precommit.passed` is a boolean |
-| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS` |
+| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS`. `--verify-ac` 2026-10-03: 3/4 ACs Complete at High; the gate AC is Inconclusive — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 

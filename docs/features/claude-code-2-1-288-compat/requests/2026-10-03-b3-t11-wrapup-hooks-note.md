@@ -47,7 +47,7 @@ can exercise (intent INV-007), and neither is stated in its docs.
 | Analysis | Done | tech spec § 3.4 Batch 3; Claude Code changelog 2.1.288 |
 | Development | Done | Wrap-up paragraph in six READMEs; `docs/hooks.md` sentence on 2.1.288. Doc review round 1 corrected the formatter wording: a project-local or `PATH` `prettier` with a project config |
 | Testing | Done | Link check clean |
-| Acceptance | Done | `/codex-review-doc` ✅ Mergeable (2 rounds) |
+| Acceptance | Done | `/codex-review-doc` ✅ Mergeable (2 rounds). `--verify-ac` 2026-10-03: 2/3 ACs Complete at High; the gate AC is Complete at Medium — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 

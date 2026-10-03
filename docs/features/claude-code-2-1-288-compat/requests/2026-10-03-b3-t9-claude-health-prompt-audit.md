@@ -50,7 +50,7 @@ proposed edit to Anchor text, or a second copy of a plugin skill, reaches the us
 | Analysis | Done | tech spec § 3.4 Batch 3; host docs: memory § Audit your instruction files, skills § synced |
 | Development | Done | § Plugin Copies (S4) and § Prompt Audit (manual step) after the Instruction Budget Module. Code review round 1 reached the versioned marketplace cache and left local-install drift to S1.4 alone |
 | Testing | Done | Four tests in `test/skills/claude-health.test.js`; the S1–S3 region pin and the heading-sequence pin pass unchanged |
-| Acceptance | Done | `/codex-review-fast` ✅ Ready (3 rounds) → `/precommit` `## Overall: ✅ PASS` |
+| Acceptance | Done | `/codex-review-fast` ✅ Ready (3 rounds) → `/precommit` `## Overall: ✅ PASS`. `--verify-ac` 2026-10-03: 4/5 ACs Complete at High; the gate AC is Complete at Medium — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 

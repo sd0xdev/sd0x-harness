@@ -51,7 +51,7 @@ should say what the plugin runs, sends and fetches.
 | Analysis | Done | tech spec § 3.4 Batch 3; claude.com pre-submission checklist |
 | Development | Done | `checklist-directory.md` measured at 100fe3e, with a command beside every value. Holds accepted: 956 files, 3 non-image files over 256 KiB. `claude plugin validate --strict` warns on 8 unquoted hook commands, recorded as an out-of-scope follow-up |
 | Testing | Done | Link check clean; `claude plugin validate skills` and `agents` pass |
-| Acceptance | Done | `/codex-review-doc` ✅ Mergeable (3 rounds) |
+| Acceptance | Done | `/codex-review-doc` ✅ Mergeable (3 rounds). `--verify-ac` 2026-10-03: 3/4 ACs Complete at High; the gate AC is Complete at Medium — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 

@@ -53,7 +53,7 @@ own `rules/` (tech spec § 3.1–3.3, intent INV-001).
 | Analysis | Done | tech spec § 3.2–3.3 |
 | Development | Done | `extractCanonicalBlocks`, `assemble`, `--rules-dir`; generated kernel for this repo is 10,282 bytes |
 | Testing | Done | Byte equality, missing/duplicated boundary, placeholder boundary and `--rules-dir` tests; a weakened duplicate guard makes the duplicate test fail |
-| Acceptance | Done | `/codex-review-fast` ✅ Ready (2 rounds, no finding) → `/precommit` `## Overall: ✅ PASS` |
+| Acceptance | Done | `/codex-review-fast` ✅ Ready (2 rounds, no finding) → `/precommit` `## Overall: ✅ PASS`. `--verify-ac` 2026-10-03: 5/6 ACs Complete at High; the gate AC is Inconclusive — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 

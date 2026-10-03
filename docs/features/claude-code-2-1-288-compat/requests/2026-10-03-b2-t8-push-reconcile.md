@@ -48,7 +48,7 @@ published — and the message that backgrounded it can read like a go-ahead.
 | Analysis | Done | tech spec § 3.4 Batch 2 |
 | Development | Done | Reconcile-before-retry paragraph. Doc review rounds 1–2 added a check of every destination the plan named, the four reported outcomes, and no retry until the original task has exited |
 | Testing | Done | Section assertions in `test/skills/push-ci.test.js`; `SKILL_DIGEST` updated after reading the diff |
-| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS` (doc review: 3 rounds) |
+| Acceptance | Done | `/codex-review-fast` ✅ Ready → `/precommit` `## Overall: ✅ PASS` (doc review: 3 rounds). `--verify-ac` 2026-10-03: 3/4 ACs Complete at High; the gate AC is Complete at Medium — review verdicts are not stored per commit, only the current tree's state — so Status stays Candidate Complete (Phase 2.5 rule 5) |
 
 ## References
 
