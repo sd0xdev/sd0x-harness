@@ -547,11 +547,11 @@ Override 以 **Anchor 优先**解析：用户自有的 override 文件（`auto-l
 
 ## 可选：Agent Control Plane（`agentctl`）
 
-把任务交给 Claude 然后走开；回来时，有三个问题 — `agentctl` 在同一个 Claude Code session 内回答它们。它是独立、opt-in 的 plugin（`mods/agentctl/`）：**安装 sd0x-dev-flow 绝不会安装它**。运行 `/agentctl-setup` 即可安装并创建你的第一个 task。
+把任务交给 Claude 然后走开；回来时，有三个问题 — `agentctl` 在同一个 Claude Code session 内回答它们。它是独立、opt-in 的 plugin（`mods/agentctl/`）：**安装 sd0x-dev-flow 绝不会安装它**。运行 `/agentctl-setup` 即可安装；之后，`/feature-dev`、`/bug-fix` 和 `/refactor` 会主动提议为每个 task 起草范围，供你接受。
 
 | 问题 | 它做了什么 |
 |---|---|
-| 有没有待在范围内？ | 你只需声明一次 task（`/agentctl task set`）。范围之外的调用 — `git push`、`kubectl rollout`、在允许目录之外的编辑 — 会**在执行前被拒绝**，并指出是哪条规则。只有你亲自输入的那一行才能改变范围 |
+| 有没有待在范围内？ | Claude 根据 ticket 起草范围（编辑路径、检查、验收）；mod 先预览，只有当**你**输入 `/agentctl accept` 时才会绑定。直接的 `git push`、`gh pr merge` 或 production 写入会**在执行前被拒绝**，即使没有任何 task 也一样；在已接受目录之外的编辑也是如此。mod 无法分类的调用会交给 Claude Code 自己的权限提示或 auto mode — 它读取的是每一次 tool call，而不是脚本内部运行了什么 |
 | “测试通过”是真的吗？ | 测试运行会连同当时 tree 的 Git 指纹一起记录；之后 tracked 或 untracked 文件一有变更，30 秒内就会显示为**过期（stale）**，而不是“通过”。被 ignore 的文件、submodule 内容与环境变量不在指纹范围内 |
 | 它进行到哪了，我要介入吗？ | prompt 上方有一行 band，`/agentctl` 查看详情，`/agentctl handoff` 根据记录生成 hand-over，不调用任何模型 |
 
@@ -559,10 +559,14 @@ Override 以 **Anchor 优先**解析：用户自有的 override 文件（`auto-l
 
 ```mermaid
 flowchart LR
-    U([You]) -- "/agentctl task set" --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
-    C([Claude]) -- tool call --> P{"tool.call<br/>classify"}
+    C([Claude]) -- "drafts a proposal" --> F["proposal file<br/>outside the worktree"]
+    F --> V["preview + digest"]
+    U([You]) -- "/agentctl accept" --> V
+    V --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C -- tool call --> P{"tool.call<br/>classify"}
     S --> P
-    P -- forbidden or unclassified --> R["refused, rule named"]
+    P -- forbidden --> R["refused, rule named"]
+    P -- unclassified --> H
     P -- allowed --> E1["Git fingerprint<br/>before a check"]
     E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
     H -- runs if permitted --> E2["Git fingerprint<br/>after"]
@@ -575,10 +579,11 @@ flowchart LR
 | 成本 | 时机 | 大小 |
 |---|---|---|
 | `/agentctl-setup` 列表项 | 每个 session（仅名称 + 描述） | ≈ 60 tokens |
-| `/agentctl-setup` 正文 | 只在你或 Claude 调用它时；该轮使用 **Sonnet**（`model: sonnet`） | ≈ 1.8k tokens |
+| `/agentctl-setup` 正文 | 只在你或 Claude 调用它时；该轮使用 **Sonnet**（`model: sonnet`） | ≈ 2.2k tokens |
+| 在 `/feature-dev`、`/bug-fix`、`/refactor` 中 | 可选段落，外加每个 task 一行 `status` | ≈ 180 tokens；起草参考（≈ 850）与 proposal 预览仅在已安装 mod 且你同意时才会加载 |
 | 一次拒绝 | 每次被拒绝的调用，以 tool result 形式 | ≈ 25 tokens |
 | `/agentctl …` 回复 | 只在你运行它们时 — Claude 会读取命令输出 | 一般 ≈ 200–400 tokens；hand-over 上限为 16,384 个字符（UTF-16 code units），token 数依语言而定 |
-| mod 本身 | 从不调用模型；band 与重新打开时的 hand-over 都不会发送给 Claude | 0 |
+| mod 本身 | 从不调用模型；band、proposal 预览与重新打开时的 hand-over 都不会发送给 Claude | 0 |
 
 它是控制与显示工具，**不是安全边界** — production 仍由你的凭证保护。设计与测试：[docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
 [mods/agentctl/README.md](mods/agentctl/README.md)。

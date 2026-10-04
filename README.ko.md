@@ -547,11 +547,11 @@ flowchart TD
 
 ## 선택 사항: Agent Control Plane (`agentctl`)
 
-Claude에게 task를 맡기고 자리를 비웠다가 돌아오면 궁금한 세 가지 질문 — `agentctl`은 하나의 Claude Code session 안에서 이에 답합니다. 별도의 opt-in plugin(`mods/agentctl/`)입니다: **sd0x-dev-flow를 설치해도 이것이 설치되지는 않습니다**. `/agentctl-setup`을 실행하면 설치하고 첫 task를 만들 수 있습니다.
+Claude에게 task를 맡기고 자리를 비웠다가 돌아오면 궁금한 세 가지 질문 — `agentctl`은 하나의 Claude Code session 안에서 이에 답합니다. 별도의 opt-in plugin(`mods/agentctl/`)입니다: **sd0x-dev-flow를 설치해도 이것이 설치되지는 않습니다**. `/agentctl-setup`을 실행하면 설치할 수 있습니다. 그 후에는 `/feature-dev`, `/bug-fix`, `/refactor`가 각 task의 범위 초안을 작성해 주겠다고 제안하며, 사용자는 이를 수락하면 됩니다.
 
 | 질문 | 하는 일 |
 |---|---|
-| 범위를 지켰는가? | task는 한 번만 선언합니다(`/agentctl task set`). 범위 밖의 호출 — `git push`, `kubectl rollout`, 허용된 디렉터리 밖의 편집 — 은 **실행 전에 거부**되며 어떤 규칙인지 표시됩니다. 범위를 바꿀 수 있는 것은 사용자가 직접 입력한 줄뿐입니다 |
+| 범위를 지켰는가? | Claude가 ticket에서 범위(편집 경로, 검사, 인수 조건)의 초안을 작성하고, mod는 이를 미리 보여 준 뒤 **사용자**가 `/agentctl accept`를 입력할 때만 바인딩합니다. 직접적인 `git push`, `gh pr merge`, production 쓰기는 task가 없어도 **실행 전에 거부**되며, 수락된 디렉터리 밖의 편집도 마찬가지입니다. mod가 분류하지 못하는 호출은 Claude Code 자체의 권한 프롬프트나 auto mode로 넘어갑니다 — 이는 각 tool call을 읽을 뿐, 스크립트 내부에서 무엇이 실행되는지는 읽지 않습니다 |
 | "테스트 통과"는 사실인가? | 테스트 실행은 실행 당시 tree의 Git fingerprint와 함께 기록됩니다. 이후 tracked 또는 untracked 파일이 바뀌면 30초 안에 "통과"가 아니라 **오래됨(stale)**으로 표시됩니다. ignore된 파일, submodule 내용, 환경 변수는 fingerprint 범위 밖입니다 |
 | 지금 어디까지 왔고, 개입해야 하는가? | prompt 위의 한 줄 band, 자세한 내용은 `/agentctl`, `/agentctl handoff`는 모델 호출 없이 기록으로 hand-over를 만듭니다 |
 
@@ -559,10 +559,14 @@ Claude에게 task를 맡기고 자리를 비웠다가 돌아오면 궁금한 세
 
 ```mermaid
 flowchart LR
-    U([You]) -- "/agentctl task set" --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
-    C([Claude]) -- tool call --> P{"tool.call<br/>classify"}
+    C([Claude]) -- "drafts a proposal" --> F["proposal file<br/>outside the worktree"]
+    F --> V["preview + digest"]
+    U([You]) -- "/agentctl accept" --> V
+    V --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C -- tool call --> P{"tool.call<br/>classify"}
     S --> P
-    P -- forbidden or unclassified --> R["refused, rule named"]
+    P -- forbidden --> R["refused, rule named"]
+    P -- unclassified --> H
     P -- allowed --> E1["Git fingerprint<br/>before a check"]
     E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
     H -- runs if permitted --> E2["Git fingerprint<br/>after"]
@@ -575,10 +579,11 @@ flowchart LR
 | 비용 | 시점 | 크기 |
 |---|---|---|
 | `/agentctl-setup` 목록 | 매 session (이름 + 설명만) | ≈ 60 tokens |
-| `/agentctl-setup` 본문 | 사용자나 Claude가 호출할 때만; 해당 턴은 **Sonnet**(`model: sonnet`)으로 실행됩니다 | ≈ 1.8k tokens |
+| `/agentctl-setup` 본문 | 사용자나 Claude가 호출할 때만; 해당 턴은 **Sonnet**(`model: sonnet`)으로 실행됩니다 | ≈ 2.2k tokens |
+| `/feature-dev`, `/bug-fix`, `/refactor` 안에서 | 선택 섹션과 task마다 `status` 한 줄 | ≈ 180 tokens; 초안 작성 참고 자료(≈ 850)와 proposal 미리보기는 mod가 설치되어 있고 사용자가 수락할 때만 |
 | 거부 | 거부된 호출마다 tool result로 | ≈ 25 tokens |
 | `/agentctl …` 응답 | 실행할 때만 — Claude가 명령 출력을 읽습니다 | 보통 ≈ 200–400 tokens; hand-over는 최대 16,384자(UTF-16 code units)이며 token 수는 언어에 따라 다릅니다 |
-| mod 자체 | 모델을 호출하지 않으며, band와 다시 열 때의 hand-over는 Claude에게 전송되지 않습니다 | 0 |
+| mod 자체 | 모델을 호출하지 않으며, band, proposal 미리보기, 다시 열 때의 hand-over는 Claude에게 전송되지 않습니다 | 0 |
 
 제어 및 표시 도구이며 **보안 경계가 아닙니다** — production은 여전히 사용자의 자격 증명으로 보호됩니다. 설계와 테스트: [docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
 [mods/agentctl/README.md](mods/agentctl/README.md).

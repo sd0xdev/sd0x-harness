@@ -547,11 +547,11 @@ flowchart TD
 
 ## 選用：Agent Control Plane（`agentctl`）
 
-把任務交給 Claude 然後走開；回來時，有三個問題 — `agentctl` 在同一個 Claude Code session 內回答它們。它是獨立、opt-in 的 plugin（`mods/agentctl/`）：**安裝 sd0x-dev-flow 絕不會安裝它**。執行 `/agentctl-setup` 即可安裝並建立你的第一個 task。
+把任務交給 Claude 然後走開；回來時，有三個問題 — `agentctl` 在同一個 Claude Code session 內回答它們。它是獨立、opt-in 的 plugin（`mods/agentctl/`）：**安裝 sd0x-dev-flow 絕不會安裝它**。執行 `/agentctl-setup` 即可安裝；之後，`/feature-dev`、`/bug-fix` 和 `/refactor` 會主動提議為每個 task 起草範圍，供你接受。
 
 | 問題 | 它做了什麼 |
 |---|---|
-| 有沒有待在範圍內？ | 你只需宣告一次 task（`/agentctl task set`）。範圍之外的呼叫 — `git push`、`kubectl rollout`、在允許目錄之外的編輯 — 會**在執行前被拒絕**，並指出是哪條規則。只有你親自輸入的那一行才能改變範圍 |
+| 有沒有待在範圍內？ | Claude 根據 ticket 起草範圍（編輯路徑、檢查、驗收）；mod 先預覽，只有當**你**輸入 `/agentctl accept` 時才會綁定。直接的 `git push`、`gh pr merge` 或 production 寫入會**在執行前被拒絕**，即使沒有任何 task 也一樣；在已接受目錄之外的編輯也是如此。mod 無法分類的呼叫會交給 Claude Code 自己的權限提示或 auto mode — 它讀取的是每一次 tool call，而不是腳本內部執行了什麼 |
 | 「測試通過」是真的嗎？ | 測試執行會連同當時 tree 的 Git 指紋一起記錄；之後 tracked 或 untracked 檔案一有變更，30 秒內就會顯示為**過期（stale）**，而不是「通過」。被 ignore 的檔案、submodule 內容與環境變數不在指紋範圍內 |
 | 它進行到哪了，我要介入嗎？ | prompt 上方有一行 band，`/agentctl` 看詳情，`/agentctl handoff` 以紀錄產生 hand-over，不呼叫任何模型 |
 
@@ -559,10 +559,14 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    U([You]) -- "/agentctl task set" --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
-    C([Claude]) -- tool call --> P{"tool.call<br/>classify"}
+    C([Claude]) -- "drafts a proposal" --> F["proposal file<br/>outside the worktree"]
+    F --> V["preview + digest"]
+    U([You]) -- "/agentctl accept" --> V
+    V --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C -- tool call --> P{"tool.call<br/>classify"}
     S --> P
-    P -- forbidden or unclassified --> R["refused, rule named"]
+    P -- forbidden --> R["refused, rule named"]
+    P -- unclassified --> H
     P -- allowed --> E1["Git fingerprint<br/>before a check"]
     E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
     H -- runs if permitted --> E2["Git fingerprint<br/>after"]
@@ -575,10 +579,11 @@ flowchart LR
 | 成本 | 時機 | 大小 |
 |---|---|---|
 | `/agentctl-setup` 清單 | 每個 session（僅名稱 + 描述） | ≈ 60 tokens |
-| `/agentctl-setup` 內文 | 只在你或 Claude 叫用它時；該回合使用 **Sonnet**（`model: sonnet`） | ≈ 1.8k tokens |
+| `/agentctl-setup` 內文 | 只在你或 Claude 叫用它時；該回合使用 **Sonnet**（`model: sonnet`） | ≈ 2.2k tokens |
+| 在 `/feature-dev`、`/bug-fix`、`/refactor` 中 | 選用段落，外加每個 task 一行 `status` | ≈ 180 tokens；起草參考（≈ 850）與 proposal 預覽僅在已安裝 mod 且你同意時才會載入 |
 | 一次拒絕 | 每次被拒絕的呼叫，以 tool result 形式 | ≈ 25 tokens |
 | `/agentctl …` 回覆 | 只在你執行它們時 — Claude 會讀取指令輸出 | 一般 ≈ 200–400 tokens；hand-over 上限為 16,384 個字元（UTF-16 code units），token 數依語言而定 |
-| mod 本身 | 從不呼叫模型；band 與重新開啟時的 hand-over 都不會送給 Claude | 0 |
+| mod 本身 | 從不呼叫模型；band、proposal 預覽與重新開啟時的 hand-over 都不會送給 Claude | 0 |
 
 它是控制與顯示工具，**不是安全邊界** — production 仍由你的憑證保護。設計與測試：[docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
 [mods/agentctl/README.md](mods/agentctl/README.md)。

@@ -547,11 +547,11 @@ Ejecuta `/deep-research` para orquestar 2-3 agentes de investigación en paralel
 
 ## Opcional: Agent Control Plane (`agentctl`)
 
-Entrega una tarea a Claude y aléjate; cuando vuelves, tres preguntas — `agentctl` las responde dentro de una sola session de Claude Code. Es un plugin aparte y opt-in (`mods/agentctl/`): **instalar sd0x-dev-flow nunca lo instala**. Ejecuta `/agentctl-setup` para instalarlo y crear tu primer task.
+Entrega una tarea a Claude y aléjate; cuando vuelves, tres preguntas — `agentctl` las responde dentro de una sola session de Claude Code. Es un plugin aparte y opt-in (`mods/agentctl/`): **instalar sd0x-dev-flow nunca lo instala**. Ejecuta `/agentctl-setup` para instalarlo; después, `/feature-dev`, `/bug-fix` y `/refactor` te ofrecen redactar el alcance de cada task para que lo aceptes.
 
 | Pregunta | Qué hace |
 |---|---|
-| ¿Se mantuvo dentro del alcance? | Declaras el task una sola vez (`/agentctl task set`). Una llamada fuera de él — `git push`, `kubectl rollout`, una edición fuera de los directorios permitidos — es **rechazada antes de ejecutarse**, indicando la regla. Solo una línea que escribas tú cambia el alcance |
+| ¿Se mantuvo dentro del alcance? | Claude redacta el alcance a partir del ticket (rutas de edición, checks, aceptación); el mod lo previsualiza y lo vincula solo cuando **tú** escribes `/agentctl accept`. Un `git push`, `gh pr merge` o escritura en production directos son **rechazados antes de ejecutarse**, incluso sin ningún task; también lo es una edición fuera de los directorios aceptados. Lo que el mod no puede clasificar pasa al propio prompt de permisos de Claude Code o al auto mode — que lee cada tool call, no lo que ejecuta un script por dentro |
 | ¿Es cierto que "los tests pasan"? | Una ejecución de tests se registra con una huella Git del árbol; un cambio posterior en un archivo tracked o untracked la muestra como **obsoleta (stale)** en 30 s, no como "pasada". Los archivos ignorados, el contenido de submódulos y el entorno quedan fuera de la huella |
 | ¿Dónde va y tengo que intervenir? | Una band de una línea sobre el prompt, `/agentctl` para el detalle, `/agentctl handoff` para un hand-over construido a partir de registros, sin llamar a ningún modelo |
 
@@ -559,10 +559,14 @@ Entrega una tarea a Claude y aléjate; cuando vuelves, tres preguntas — `agent
 
 ```mermaid
 flowchart LR
-    U([You]) -- "/agentctl task set" --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
-    C([Claude]) -- tool call --> P{"tool.call<br/>classify"}
+    C([Claude]) -- "drafts a proposal" --> F["proposal file<br/>outside the worktree"]
+    F --> V["preview + digest"]
+    U([You]) -- "/agentctl accept" --> V
+    V --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C -- tool call --> P{"tool.call<br/>classify"}
     S --> P
-    P -- forbidden or unclassified --> R["refused, rule named"]
+    P -- forbidden --> R["refused, rule named"]
+    P -- unclassified --> H
     P -- allowed --> E1["Git fingerprint<br/>before a check"]
     E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
     H -- runs if permitted --> E2["Git fingerprint<br/>after"]
@@ -575,10 +579,11 @@ flowchart LR
 | Costo | Cuándo | Tamaño |
 |---|---|---|
 | Entrada de `/agentctl-setup` en el listado | en cada session (solo nombre + descripción) | ≈ 60 tokens |
-| Cuerpo de `/agentctl-setup` | solo cuando tú o Claude lo invocan; en ese turno corre en **Sonnet** (`model: sonnet`) | ≈ 1.8k tokens |
+| Cuerpo de `/agentctl-setup` | solo cuando tú o Claude lo invocan; en ese turno corre en **Sonnet** (`model: sonnet`) | ≈ 2.2k tokens |
+| En `/feature-dev`, `/bug-fix`, `/refactor` | la sección opcional, más una línea `status` por task | ≈ 180 tokens; la referencia de redacción (≈ 850) y una vista previa de la propuesta solo cuando el mod está instalado y dices que sí |
 | Un rechazo | por cada llamada rechazada, como tool result | ≈ 25 tokens |
 | Respuestas de `/agentctl …` | solo cuando las ejecutas — Claude lee la salida del comando | típico ≈ 200–400 tokens; un hand-over tiene un tope de 16.384 caracteres (UTF-16 code units); sus tokens dependen del idioma |
-| El mod en sí | nunca llama a un modelo; la band y el hand-over al reabrir no se envían a Claude | 0 |
+| El mod en sí | nunca llama a un modelo; la band, la vista previa de la propuesta y el hand-over al reabrir no se envían a Claude | 0 |
 
 Es un control y una visualización, **no un límite de seguridad** — production sigue protegido por tus credenciales. Diseño y tests: [docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
 [mods/agentctl/README.md](mods/agentctl/README.md).

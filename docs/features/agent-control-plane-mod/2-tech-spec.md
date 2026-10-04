@@ -2,7 +2,7 @@
 
 > **Doc class**: Lifecycle — Phase 2 technical spec (per `@rules/docs-numbering.md`).
 > **Created**: 2026-10-03
-> **Requirements**: [1-requirements.md](./1-requirements.md) · **Feasibility**: [0-feasibility-study.md](./0-feasibility-study.md) (Option A, § 6 rules) · **Intent**: [intent-agent-control-plane-mod.md](./intent-agent-control-plane-mod.md)
+> **Requirements**: [1-requirements.md](./1-requirements.md) (its FR-7 "unclassifiable → refused" is superseded by the 2026-10-04 deny-list re-decision: § 3.4, intent INV-004) · **Feasibility**: [0-feasibility-study.md](./0-feasibility-study.md) (Option A, § 6 rules) · **Intent**: [intent-agent-control-plane-mod.md](./intent-agent-control-plane-mod.md)
 > **Host**: Claude Code 2.1.288; every API named here is in the type declarations the host writes beside a mod. The mod's code lives in `mods/agentctl/` of this repository, on no path the sd0x-dev-flow plugin loads or packages (intent Non-goals, re-decided 2026-10-04); users install it through the `/agentctl-setup` skill (the `agentctl` entry in this marketplace) or load it per session with `--plugin-dir mods/agentctl`.
 
 ## 1. Requirement Summary
@@ -63,6 +63,7 @@ Modules (plain ES modules; no Node APIs, no dynamic import — create page § st
 | `lib/view.js` | Band, `/agentctl` and policy text from state; the `AbovePrompt` element is built in the `ui.render` hook of `register.js` | None |
 | `lib/notices.js` | Notice de-duplication and task-notification parsing (FR-24, V5) | None |
 | `lib/store.js` | Store keys, task scoping, the per-session write chain, retention | `$.store` through `register.js` |
+| `lib/proposal.js` | Proposal reading, validation, effective object, SHA-256 digest, preview text (§ 3.6) | `crypto.subtle` only |
 
 Keeping every decision in pure modules is what makes `claude plugin test` cover them without a session.
 
@@ -70,14 +71,14 @@ Keeping every decision in pure modules is what makes `claude plugin test` cover 
 
 | Key | Value | Writer |
 |---|---|---|
-| `task/<scope>` | `{ id, goal, worktree, allow: [classes], editRoots: [paths], forbid: [classes], executors: [{argv, check: bool}], needsUser: [argv], tools: [names], acceptance: [text], policyVersion, result, confirmedAt }` | `/agentctl task` from a **composer** origin only (FR-25) |
+| `task/<scope>` | `{ id, goal, worktree, allow: [classes], editRoots: [paths], forbid: [classes], executors: [{argv, check: bool}], needsUser: [argv], tools: [names], acceptance: [text], policyVersion, result, confirmedAt }` | `/agentctl task set` or `/agentctl accept` from a **composer** origin only (FR-25) |
 | `binding/<worktreeKey>` | `taskId` | same |
-| `session/<sessionId>` | `{ taskId: <scope> or null, surface, interactive, startedAt, state, decisions: [PolicyDecision ≤ 50], evidence: {checkKey → Evidence}, notices: {reason → {at, severity, active}}, health }`; `state` is the reducer's `{ phase, runtime, interventions: {reason → {since, detail, severity}}, result, ops: {tool_use_id → Operation}, background, lastEventAt }` | hooks of this session only |
+| `session/<sessionId>` | `{ taskId: <scope> or null, surface, interactive, startedAt, state, decisions: [PolicyDecision ≤ 50], evidence: {checkKey → Evidence}, notices: {reason → {at, severity, active}}, pending: {effective, digest, at} or null, proposalSeen, health }`; `state` is the reducer's `{ phase, runtime, interventions: {reason → {since, detail, severity}}, result, ops: {tool_use_id → Operation}, background, lastEventAt }` | hooks of this session only |
 | `checkpoint/<scope>/<sessionId>` | `{ savedAt, taskId, markdown }` — the last hand-over | this session's `/agentctl handoff` and `/agentctl stop`; nothing is saved automatically at session end |
 
 - `<scope>` is `<worktreeKey>:<taskId>` (`taskScope` in `lib/store.js`): task ids are chosen at the prompt and not unique across worktrees, so the same id in two worktrees names two separate tasks and hand-overs. A binding whose record is missing resolves to a task that refuses everything but reads in the worktree. A record or checkpoint written before scoping (`task/<taskId>`, `checkpoint/<taskId>/…`) is read only when that legacy record names the current worktree.
 - `Operation`: `{ requested (sanitized), startedAt, endedAt?, outcome: 'refused'|'error'|'ok'|'backgrounded'|'unresolved', backgroundId? }`, capped at 200 per session, oldest resolved first.
-- `Evidence`: `{ checkKey, requested, outcome, before: Fingerprint, after?: Fingerprint, coverage, at }`; freshness is computed on read against the current fingerprint (FR-5).
+- `Evidence`: `{ checkKey, taskId, policyVersion, requested, outcome, before: Fingerprint, after?: Fingerprint, coverage, at }`; freshness is computed on read against the current fingerprint (FR-5), and only records of the bound task and policy version are shown. A `Fingerprint` carries the time it was read (`at`), and every view states it.
 - Writes are **serialized per session** through one promise chain in `register.js`. Every key a hook writes carries the session id (`session/*`, `checkpoint/<scope>/<sessionId>`), so no two sessions write one record; `task/*` and `binding/*` are written only by a composer command (feasibility § 7, store race). Resume shows the checkpoint with the newest `savedAt` among the scoped task's sessions.
 - Retention: at `session.start`, session records older than 7 days, and all but the 5 newest sessions and checkpoints per task, are deleted; text fields are capped (requested command 500 chars, reasons 300, hand-over 16 KiB); evidence keeps the latest record per check. A failed store write sets `health: store-error`, which the band and `/agentctl` show.
 - Sources stay apart (FR-25): `task/*` is user-confirmed; Claude's claims are never stored as facts; `ops` and `evidence` are tool-observed.
@@ -86,10 +87,12 @@ Keeping every decision in pure modules is what makes `claude plugin test` cover 
 
 | Command | Reply |
 |---|---|
-| `/agentctl` | Status text: the band's fields with source and age (FR-2, FR-3, FR-17) |
-| `/agentctl task show` · `task set <json>` · `task clear` | Show, set or clear the task; `set`/`clear` refused unless `e.origin.kind === 'composer'`. `set` validates the input (bounded `id`, array fields, no credential-like policy value), then stores only an allowlisted record with `goal` and `acceptance` redacted |
+| `/agentctl` | Status text: the band's fields with source and age (FR-2, FR-3, FR-17); a waiting proposal and the last hand-over as one pointer line each — this reply reaches Claude, so it stays bounded |
+| `/agentctl last` | The last hand-over in full |
+| `/agentctl proposal` · `accept [digest]` · `discard` | § 3.6; `accept` refused unless `e.origin.kind === 'composer'` |
+| `/agentctl task show` · `task set <json>` · `task clear` | Show, set or clear the task; `set`/`clear` refused unless `e.origin.kind === 'composer'`. `set` validates the input (bounded `id`, array fields, no credential-like policy value, no worktree other than the session's), then stores only an allowlisted record with `goal` and `acceptance` redacted |
 | `/agentctl policy` | Effective classes, executors, the policy version, and the disclosed limits (host skips, other mods, text-matching native rules) |
-| `/agentctl events [n]` | Last `n` policy decisions (refusals and needs-user outcomes included), sanitized; ordinary tool calls are in the `/agentctl` panel, not here |
+| `/agentctl events [n]` | Last `n` policy decisions (refusals, needs-user outcomes and calls delegated to the host), sanitized; ordinary tool calls are in the `/agentctl` panel, not here |
 | `/agentctl handoff` | The hand-over markdown from records and the last tree reading — no process, model or network call; also saved to `checkpoint/<scope>/<sessionId>` |
 | `/agentctl stop` | § 3.4 stop |
 
@@ -100,22 +103,23 @@ Keeping every decision in pure modules is what makes `claude plugin test` cover 
 ```js
 on('tool.call', ($, e, next) => {
   const v = classify(task, e)            // pure; throws → .catch
-  if (v.outcome === 'deny' || v.outcome === 'unknown') return { deny: refusal(v) }
+  if (v.outcome === 'deny') return { deny: refusal(v) }
+  if (v.delegated) record(v)              // the host's permission flow or auto mode decides
   return next(e)                          // evidence hook beneath records the call
 }).catch(($, e, next) => (next.called ? next(e) : { deny: 'agentctl: policy check failed; refused' }))
 ```
 
-`classify` order — **deny takes precedence over every pass**:
+`classify` is a **deny-list** (INV-004, re-decided 2026-10-04) — deny takes precedence over every pass, and what the mod cannot classify passes to the host marked `delegated`. It reads the tool input only, never a script's contents or its descendants, so a push inside a script or a compound fence is the host's and its workflow's to authorize (best-effort, disclosed):
 
-1. No bound task → pass-through (the mod observes only).
-2. Bash: split on `|` only between adapter commands; any other operator, substitution, redirection or unparseable quoting → `unknown`.
+1. No bound task → Bash is tokenized and checked against the built-in classes only (`deny` on a match); everything else passes.
+2. Bash: split on `|` only between plain words; any other operator, substitution, redirection or unparseable quoting → `delegated`.
 3. **Forbidden first**: the built-in hard classes (production write: `kubectl apply|delete|patch|rollout|scale|edit`, `helm install|upgrade|uninstall|rollback`, `gcloud … deploy|delete|update`; remote git write: `git push`, `gh pr merge`) and every `task.forbid` class are matched against **each** pipeline segment → `deny`, before any adapter or executor is consulted. An authorized executor that also matches a forbidden class is denied, and `/agentctl task set` rejects a task whose executors or needs-user entries overlap its forbidden classes.
 4. Exact argv prefix in `task.needsUser` → `needs-user`.
-5. First word → adapter grammar (`git` read forms, `ls`, `cat`, `head`, `tail`, `wc`, `rg`/`grep` without exec/pre/config options) → `pass`.
-6. Exact argv prefix in `task.executors` → `pass` (authorized, effects unclassified).
-7. Anything else → `unknown`.
+5. Exact argv prefix in `task.executors` → `pass` (authorized, effects unclassified) — before the adapters, so a declared check that is also observational still reaches the evidence bracket.
+6. First word → adapter grammar (`git` read forms, `ls`, `cat`, `head`, `tail`, `wc`, `rg`/`grep` without exec/pre/config options) → `pass`.
+7. Anything else → `delegated`.
 
-Non-Bash: `Read` → pass inside the worktree; `Write`/`Edit`/`NotebookEdit` → pass only when the task allows edits and the path is inside an allowed root, else deny; the host-internal `AskUserQuestion`, `TodoWrite`, `GetTask` and `ToolSearch` → pass (they change nothing outside the session, and refusing them would break supervision itself); MCP and every other tool → `unknown` unless the task names it.
+Non-Bash: `Read` → pass inside the worktree; `Write`/`Edit`/`NotebookEdit` → pass only when the task allows edits and the path is inside an allowed root, else deny; the host-internal `AskUserQuestion`, `TodoWrite`, `GetTask` and `ToolSearch` → pass (they change nothing outside the session, and refusing them would break supervision itself); MCP and every other tool → `delegated` unless the task names it.
 
 **Registration** (2.1.288 refuses a second unmatched registration of one event in a module, measured): the policy hook is the module's unmatched `tool.call`, registered first and therefore outermost; it also records start and end for allowed non-Bash calls. The evidence hook is `tool.call` with the `{ tool: 'Bash' }` matcher, nested beneath it; a third, `{ tool: 'GetTask' }`, observes terminal background results. Main-loop turns only: `turn.start`/`turn.complete` carrying an `agentId` are ignored, and a completion clears the held turn only when its `turnId` matches.
 
@@ -123,15 +127,15 @@ Non-Bash: `Read` → pass inside the worktree; `Write`/`Edit`/`NotebookEdit` →
 
 | Downstream | Outcome | Result |
 |---|---|---|
-| any | deny / unknown | `deny` |
+| any | deny | `deny` |
 | `deny` | other | `deny` unchanged |
-| `allow`/`ask` | pass | downstream unchanged |
+| `allow`/`ask` | pass or delegated | downstream unchanged |
 | `allow`/`ask` | needs-user, surface verified | `ask` |
 | `allow`/`ask` | needs-user, otherwise | `deny` + recorded |
 
 "Surface verified" means the interactive terminal under the `default`, `acceptEdits` or `auto` permission mode — the only combinations where a host dialog was recorded (T8). The mode is read from classic hook inputs (`permission_mode` on `classic.UserPromptSubmit`, `classic.PostToolUse`, `classic.PermissionRequest`); an unknown mode, `-p`, `dontAsk`, `plan`, `bypassPermissions` and every other surface keep needs-user refused. The mod never creates an `allow`: `allow` leaves this hook only as an unchanged downstream `allow` on a pass-through call, and no downstream verdict is ever upgraded.
 
-**Evidence** (FR-5, FR-6): the evidence hook runs beneath the policy hook. For a call classified through the authorized-executor branch with an executor marked `check` (a command that is already an observational adapter, such as `git status`, passes as observational first and gets no evidence), it reads a fingerprint before `next(e)` and after the result settles; the record is keyed by an opaque `check-<digest>` of the executor argv, through `$.process.run` with `timeoutMs` on each command:
+**Evidence** (FR-5, FR-6): the evidence hook runs beneath the policy hook. For a call classified through the authorized-executor branch with an executor marked `check`, it reads a fingerprint before `next(e)` and after the result settles; the record is keyed by an opaque `check-<digest>` of the executor argv, through `$.process.run` with `timeoutMs` on each command:
 `git --no-optional-locks -c core.fsmonitor=false rev-parse HEAD` · `… ls-files -s -z` · `… status --porcelain=v2 -z --untracked-files=all` · `git hash-object --no-filters --stdin-paths` for changed and untracked paths, at most 500 (`MAX_HASHED_PATHS`; more reads as partial). `assume-unchanged`/`skip-worktree` entries, conflicts, submodules, an unreadable path or a timeout set `coverage: partial`. A read where every git command failed records `evidence unavailable`; it never refuses. While evidence exists, the tree is re-read every 30 s and at each turn end, so a later edit shows the result stale within 30 s; the gate reading is refreshed on the same tick and the band shows its age and a stale marker. A `backgroundTaskId` result records `backgrounded`; only an observed terminal status closes it — a `GetTask` result, or the host's task notification (a `prompt.submit` whose origin is `task-notification`, carrying `<task-id>` and `<status>`; measured on 2.1.288). A prompt of any other origin closes nothing.
 
 **State** (FR-4): the reducer folds `turn.start`, `turn.complete`, `tool.call` results, `classic.PermissionRequest`, `classic.Stop` (`background_tasks` → "in flight as of T"), `session.measure` and refusals into the four dimensions. "Suspected stall" requires: no turn or tool event for the idle threshold **and** no tool running **and** no background task in flight; it is always labelled unconfirmed.
@@ -140,7 +144,7 @@ Non-Bash: `Read` → pass inside the worktree; `Write`/`Edit`/`NotebookEdit` →
 
 **Stop** (FR-12): `/agentctl stop` saves the hand-over first, then calls `$.turn.abort({ turnId })` for the turn held from `turn.start`; a rejection is reported as "cancellation request failed; turn outcome unconfirmed" with the sanitized reason, and "turn ended" appears only after a `turn.complete` or `turn.abort` for that id is observed; each tracked operation is listed with its observed state; the text never says "all stopped".
 
-**Resume** (FR-13, FR-16): on `session.start` the mod re-binds the task by worktree key, writes the whole newest checkpoint to the transcript with `$.ui.log` (not sent to the model; `-p` receives it as `ui_log`) before any work, marks it in the band, and replays nothing; `/agentctl` returns the stored checkpoint read-only. The mod holds no approvals, so none carries over.
+**Resume** (FR-13, FR-16): on `session.start` the mod re-binds the task by worktree key, writes the whole newest checkpoint to the transcript with `$.ui.log` (not sent to the model; `-p` receives it as `ui_log`) before any work, marks it in the band, and replays nothing; `/agentctl last` returns the stored checkpoint read-only, and bare `/agentctl` only points at it. The mod holds no approvals, so none carries over.
 
 **Sanitize** (NFR-9): before every store write and every reply, strip URL userinfo, query and fragment, `KEY=value` assignments whose key matches `/token|secret|pass|key|auth|cookie/i`, bearer headers, and values of `--token`-style flags. Paths are not shortened: a path is shown as given, after these redactions.
 
@@ -154,7 +158,9 @@ opt-in, and its deterministic half is `skills/agentctl-setup/scripts/agentctl-se
 |---|---|---|
 | `doctor` | Claude Code ≥ 2.1.288, `git`, the mod's manifest, `disableAllHooks` in user/project settings, install state from `claude plugin list --json` (`false` not installed, `null` unreadable, `{ id, enabled }`) | Nothing |
 | `alloc` | Creates a 0600 answers file in a fresh 0700 temporary directory and prints its path; the skill writes the free-text answers there with the Write tool, so they never pass through a shell | That temporary file |
-| `task-line --input <file>` | Reads the answers once and deletes their directory; builds `/agentctl task set {...}`; runs the mod's own `validateTask`, then `classify` on every check (must pass) and needs-user command (must ask) | Nothing persistent (removes its input) |
+| `status` | One line from `claude plugin list --json`: `installed/enabled`, `installed/disabled`, `not installed` or `unknown` — configuration only, never "running" | Nothing |
+| `task-line --input <file>` | Reads the answers once and deletes their directory; builds `/agentctl task set {...}`; runs the mod's own `validateTask`, then `classify` on every check (must match an executor) and needs-user command (must ask) | Nothing persistent (removes its input) |
+| `propose --input <file>` | The same answers plus `tools`, `acceptance`, `base`; the same checks, then the mod's own `readProposal`; prints the preview and digest the mod will show | `~/.claude/agentctl/proposals/<worktreeKey>.json` (0600, atomically) |
 | `deny-rules` | Lists, or with `--write` merges, recommended native `permissions.deny` rules into the settings file the user picked, keeping every other key; never offers `git push`, which `/push-ci` needs | The chosen settings file, atomically |
 
 The skill asks before each install, enable, settings write and uninstall, and never sends the task
@@ -168,13 +174,24 @@ version with a digest of the mod's runtime files (README and tests excluded) and
 lands without a bump (`.github/scripts/agentctl-version.js`). CI also runs `claude plugin validate` and
 `claude plugin test` on the mod with a pinned Claude Code, which needs no credentials.
 
+### 3.6 Proposals and the Workflow (2026-10-04)
+
+Claude drafts, the person accepts (INV-008). The proposal file is an untrusted submission channel:
+
+1. A workflow skill (`/feature-dev`, `/bug-fix`, `/refactor` when `status` reads `installed/enabled`, or `/agentctl-setup --task`) drafts the scope from the request ticket — `New`/`Modify` Related Files as edit paths, the project's checks found as `/verify` finds them plus the precommit runner as `/precommit` invokes it, the ACs as acceptance — and writes it with `propose` (`skills/agentctl-setup/references/workflow-integration.md`).
+2. At `session.start` and each main turn's end the mod reads the file once (an unchanged text is skipped), refuses a worktree other than the session's, a `base` other than the bound task id (stale), and anything `validateTask` refuses (a check overlapping a built-in class included); the reason is logged. An omitted `base` is the task bound at reading.
+3. The mod keeps the **effective** object (the stored task fields plus `base`), computes a SHA-256 digest (24 hex), and logs a preview listing every permission being accepted; the band names the waiting proposal.
+4. `/agentctl accept [digest prefix ≥ 8]` from a composer origin binds that retained object — never the file re-read — as a new task (`T<now>`, policy version after the replaced one), refusing a digest that does not match and a binding that changed since the preview. `/agentctl discard` drops it.
+
+Concurrent sessions share one binding and one non-atomic store; accept in the session that showed the preview (disclosed). The harness gates are unchanged: a `/precommit` run declared as a check is recorded as evidence beside its verdict, never in place of it, and a runner that edits files reads `tree changed during the run` while its verdict stands.
+
 ## 4. Risks and Dependencies
 
 | Risk | Mitigation |
 |---|---|
 | Mods API changes between releases | Version-pinned README; `claude plugin validate` inventory checked in tests; fallback is the native baseline (feasibility § 4 Option 0) |
-| Adapter grammar too narrow for real work | Authorized executors per task; `/agentctl policy` names what was refused and why |
-| Adapter grammar too wide | Unknown options are refused; ambient channels (`core.fsmonitor`, textconv, `RIPGREP_CONFIG_PATH`) declared per adapter and refused when set by the command |
+| Adapter grammar too narrow for real work | Since 0.2.0 an unclassified call goes to the host and `/agentctl events` lists it as delegated; authorized executors per task still decide what counts as a check |
+| Adapter grammar too wide | An unknown option, or an ambient channel (`core.fsmonitor`, textconv, `RIPGREP_CONFIG_PATH`) set by the command, keeps the call from being classified as observational; it is then delegated to the host, not refused by the mod — the host's permission flow, native rules and credentials carry the rest |
 | Host skips the hook (worker crash), another mod weakens a verdict | Disclosed in `/agentctl policy` and the hand-over; hard classes stay in native rules |
 | Store race or 4 MiB cap | Per-session keys, one write chain, bounded records |
 | Fingerprint cost on large dirty trees | Per-command timeouts → partial; measured in V8 before targets are fixed |
@@ -194,6 +211,8 @@ Dependencies: Claude Code ≥ 2.1.288 with mods enabled (V1 passed: no managed s
 | 7 | Stop + notices | FR-12, FR-18, FR-24 | Signals 7, 11 |
 | 8 | Live verification V3–V10, README with tested version, removal check | FR-26, NFR-4, NFR-7 | Results recorded; Signal 12 |
 | 9 | `/agentctl-setup` skill, marketplace entry, setup helper | FR-26, NFR-7 | Helper tests pass; a real install from the marketplace loads the mod and its removal restores settings |
+| 10 | Mod 0.2.0: deny-list classifier, proposals and accept, evidence by task and policy version, reading times, bounded status | FR-7, FR-25, INV-004, INV-008 | Direct push refused without a task; scripts and fences delegated; swap, stale and override cases refused; `claude plugin test` passes |
+| 11 | Workflow integration: `status` and `propose`, the shared reference, optional sections in `/feature-dev`, `/bug-fix`, `/refactor` | FR-25, FR-26 | Helper and skill tests pass; the sections never present agentctl as a gate |
 
 ## 6. Testing Strategy
 
