@@ -3,7 +3,7 @@
 > **Doc class**: Lifecycle — Phase 2 technical spec (per `@rules/docs-numbering.md`).
 > **Created**: 2026-10-03
 > **Requirements**: [1-requirements.md](./1-requirements.md) · **Feasibility**: [0-feasibility-study.md](./0-feasibility-study.md) (Option A, § 6 rules) · **Intent**: [intent-agent-control-plane-mod.md](./intent-agent-control-plane-mod.md)
-> **Host**: Claude Code 2.1.288; every API named here is in the type declarations the host writes beside a mod. The mod's code lives in `mods/agentctl/` of this repository, on no path the sd0x-dev-flow plugin loads or packages (intent Non-goals, re-decided 2026-10-04); install it on its own with `--plugin-dir mods/agentctl`.
+> **Host**: Claude Code 2.1.288; every API named here is in the type declarations the host writes beside a mod. The mod's code lives in `mods/agentctl/` of this repository, on no path the sd0x-dev-flow plugin loads or packages (intent Non-goals, re-decided 2026-10-04); users install it through the `/agentctl-setup` skill (the `agentctl` entry in this marketplace) or load it per session with `--plugin-dir mods/agentctl`.
 
 ## 1. Requirement Summary
 
@@ -21,7 +21,7 @@
 | `scripts/review-state.js` | Gate slots (read only, `check` never `note`) | Located installed-copy first, as the spike does |
 | `scripts/precommit-runner.js`, `scripts/verify-runner.js` | Not started by the mod | They note verdicts; starting them would make the mod a verdict producer (FR-19) |
 
-No file in sd0x-dev-flow changes.
+The mod changes none of sd0x-dev-flow's hooks, gates or verdict producers; its only additions are the opt-in setup skill and the marketplace entry (§ 3.5).
 
 ## 3. Technical Solution
 
@@ -132,7 +132,7 @@ Non-Bash: `Read` → pass inside the worktree; `Write`/`Edit`/`NotebookEdit` →
 "Surface verified" means the interactive terminal under the `default`, `acceptEdits` or `auto` permission mode — the only combinations where a host dialog was recorded (T8). The mode is read from classic hook inputs (`permission_mode` on `classic.UserPromptSubmit`, `classic.PostToolUse`, `classic.PermissionRequest`); an unknown mode, `-p`, `dontAsk`, `plan`, `bypassPermissions` and every other surface keep needs-user refused. The mod never creates an `allow`: `allow` leaves this hook only as an unchanged downstream `allow` on a pass-through call, and no downstream verdict is ever upgraded.
 
 **Evidence** (FR-5, FR-6): the evidence hook runs beneath the policy hook. For a call whose argv matches an executor marked `check`, it reads a fingerprint before `next(e)` and after the result settles; the record is keyed by an opaque `check-<digest>` of the executor argv, through `$.process.run` with `timeoutMs` on each command:
-`git --no-optional-locks -c core.fsmonitor=false rev-parse HEAD` · `… ls-files -s -z` · `… status --porcelain=v2 -z --untracked-files=all` · `git hash-object --no-filters --stdin-paths` for changed and untracked paths. `assume-unchanged`/`skip-worktree` entries, conflicts, submodules, an unreadable path or a timeout set `coverage: partial`. A read where every git command failed records `evidence unavailable`; it never refuses. While evidence exists, the tree is re-read every 30 s and at each turn end, so a later edit shows the result stale within 30 s; the gate reading is refreshed on the same tick and the band shows its age and a stale marker. A `backgroundTaskId` result records `backgrounded`; only an observed terminal status closes it — a `GetTask` result, or the host's task notification (a `prompt.submit` whose origin is `task-notification`, carrying `<task-id>` and `<status>`; measured on 2.1.288). A prompt of any other origin closes nothing.
+`git --no-optional-locks -c core.fsmonitor=false rev-parse HEAD` · `… ls-files -s -z` · `… status --porcelain=v2 -z --untracked-files=all` · `git hash-object --no-filters --stdin-paths` for changed and untracked paths, at most 500 (`MAX_HASHED_PATHS`; more reads as partial). `assume-unchanged`/`skip-worktree` entries, conflicts, submodules, an unreadable path or a timeout set `coverage: partial`. A read where every git command failed records `evidence unavailable`; it never refuses. While evidence exists, the tree is re-read every 30 s and at each turn end, so a later edit shows the result stale within 30 s; the gate reading is refreshed on the same tick and the band shows its age and a stale marker. A `backgroundTaskId` result records `backgrounded`; only an observed terminal status closes it — a `GetTask` result, or the host's task notification (a `prompt.submit` whose origin is `task-notification`, carrying `<task-id>` and `<status>`; measured on 2.1.288). A prompt of any other origin closes nothing.
 
 **State** (FR-4): the reducer folds `turn.start`, `turn.complete`, `tool.call` results, `classic.PermissionRequest`, `classic.Stop` (`background_tasks` → "in flight as of T"), `session.measure` and refusals into the four dimensions. "Suspected stall" requires: no turn or tool event for the idle threshold **and** no tool running **and** no background task in flight; it is always labelled unconfirmed.
 
@@ -143,6 +143,23 @@ Non-Bash: `Read` → pass inside the worktree; `Write`/`Edit`/`NotebookEdit` →
 **Resume** (FR-13, FR-16): on `session.start` the mod re-binds the task by worktree key, writes the whole newest checkpoint to the transcript with `$.ui.log` (not sent to the model; `-p` receives it as `ui_log`) before any work, marks it in the band, and replays nothing; `/agentctl` returns the stored checkpoint read-only. The mod holds no approvals, so none carries over.
 
 **Sanitize** (NFR-9): before every store write and every reply, strip URL userinfo, query and fragment, `KEY=value` assignments whose key matches `/token|secret|pass|key|auth|cookie/i`, bearer headers, and values of `--token`-style flags. Paths are not shortened: a path is shown as given, after these redactions.
+
+### 3.5 Distribution and Setup
+
+The mod is a second, optional plugin in this repository's marketplace (`agentctl`, source
+`./mods/agentctl`); the sd0x-dev-flow plugin never loads or packages it. `/agentctl-setup` is the
+opt-in, and its deterministic half is `skills/agentctl-setup/scripts/agentctl-setup.js`:
+
+| Subcommand | Does | Writes |
+|---|---|---|
+| `doctor` | Claude Code ≥ 2.1.288, `git`, the mod's manifest, `disableAllHooks` in user/project settings, install state from `claude plugin list --json` (`false` not installed, `null` unreadable, `{ id, enabled }`) | Nothing |
+| `alloc` | Creates a 0600 answers file in a fresh 0700 temporary directory and prints its path; the skill writes the free-text answers there with the Write tool, so they never pass through a shell | That temporary file |
+| `task-line --input <file>` | Reads the answers once and deletes their directory; builds `/agentctl task set {...}`; runs the mod's own `validateTask`, then `classify` on every check (must pass) and needs-user command (must ask) | Nothing persistent (removes its input) |
+| `deny-rules` | Lists, or with `--write` merges, recommended native `permissions.deny` rules into the settings file the user picked, keeping every other key; never offers `git push`, which `/push-ci` needs | The chosen settings file, atomically |
+
+The skill asks before each install, enable, settings write and uninstall, and never sends the task
+line: the mod accepts it only from the user's own prompt. `mods/agentctl/package.json` declares the
+ES-module format so `task-line` loads the mod's validator on Node versions without syntax detection.
 
 ## 4. Risks and Dependencies
 
@@ -169,6 +186,7 @@ Dependencies: Claude Code ≥ 2.1.288 with mods enabled (V1 passed: no managed s
 | 6 | Task command, binding, resume, hand-over | FR-1, FR-13, FR-15, FR-16, FR-25 | Signals 1, 8 |
 | 7 | Stop + notices | FR-12, FR-18, FR-24 | Signals 7, 11 |
 | 8 | Live verification V3–V10, README with tested version, removal check | FR-26, NFR-4, NFR-7 | Results recorded; Signal 12 |
+| 9 | `/agentctl-setup` skill, marketplace entry, setup helper | FR-26, NFR-7 | Helper tests pass; a real install from the marketplace loads the mod and its removal restores settings |
 
 ## 6. Testing Strategy
 
