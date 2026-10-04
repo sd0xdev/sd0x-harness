@@ -22,3 +22,47 @@ jobs:
           node-version-file: .nvmrc
       - name: Run tests
         run: npm test
+
+  # The agentctl mod (mods/agentctl) is tested by Claude Code itself, not by npm test. Both commands
+  # run offline with no credentials (checked with an empty HOME). The CLI is pinned to the version
+  # the mod was last verified on; raise it together with the mod README's "Tested with" line.
+  agentctl:
+    runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE_VERSION: 2.1.289
+      DISABLE_AUTOUPDATER: 1
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      # Compared with the lock at a base, not only with itself: a commit that changes the mod and
+      # rewrites the digest by hand, version unchanged, must still fail.
+      - name: Version lock (a change needs a version bump)
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          case "$EVENT" in
+            pull_request) BASE="origin/$BASE_REF" ;;
+            push) BASE="$BEFORE" ;;
+            *) BASE=$(git describe --tags --match 'agentctl-v*' --abbrev=0 2>/dev/null || true) ;;
+          esac
+          if [ -n "$BASE" ]; then
+            node .github/scripts/agentctl-version.js check --base "$BASE"
+          else
+            node .github/scripts/agentctl-version.js check
+          fi
+      - name: Install Claude Code
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      - name: Validate the mod
+        working-directory: mods/agentctl
+        run: claude plugin validate .
+      - name: Test the mod
+        working-directory: mods/agentctl
+        run: claude plugin test .
