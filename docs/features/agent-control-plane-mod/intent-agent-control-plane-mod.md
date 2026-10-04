@@ -22,7 +22,9 @@ sentence. The first version makes one session manageable; managing many is a lat
 - Rewriting a command's target (cluster, context, namespace) toward a safer one.
 - A cosmetic pause: a control the host cannot honour is not drawn.
 - A model-written hand-over in version one; it spends the user's quota.
-- Shipping inside sd0x-dev-flow while the mods API is marked as changeable between releases.
+- Shipping inside sd0x-dev-flow while the mods API is marked as changeable between releases. The
+  source lives in this repository under `mods/agentctl/` (re-decided by the user, 2026-10-04), on
+  no path the plugin loads or packages: installing sd0x-dev-flow never installs the mod.
 
 ## Invariants
 
@@ -48,6 +50,6 @@ sentence. The first version makes one session manageable; managing many is a lat
 Declare a read-only investigation task, let Claude run tests, edit one source file afterwards, then
 close and reopen the session. The panel shows the task and the last hand-over before any tool runs;
 the earlier test pass reads as stale; a `kubectl rollout restart` tool call is refused with its rule
-and no Allow control; `/handover` under `claude -p` prints the eight answers with no model, network
+and no Allow control; `/agentctl handoff` under `claude -p` prints the eight answers with no model, network
 or process call; and the mod's source and tests show no approve, verdict-write, prompt-write or
 model call.

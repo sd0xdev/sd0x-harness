@@ -3,7 +3,7 @@
 > **Doc class**: Lifecycle — Phase 2 technical spec (per `@rules/docs-numbering.md`).
 > **Created**: 2026-10-03
 > **Requirements**: [1-requirements.md](./1-requirements.md) · **Feasibility**: [0-feasibility-study.md](./0-feasibility-study.md) (Option A, § 6 rules) · **Intent**: [intent-agent-control-plane-mod.md](./intent-agent-control-plane-mod.md)
-> **Host**: Claude Code 2.1.288; every API named here is in the type declarations the host writes beside a mod. The mod's code lives **outside sd0x-dev-flow** (intent Non-goals); this repository holds only these documents.
+> **Host**: Claude Code 2.1.288; every API named here is in the type declarations the host writes beside a mod. The mod's code lives in `mods/agentctl/` of this repository, on no path the sd0x-dev-flow plugin loads or packages (intent Non-goals, re-decided 2026-10-04); install it on its own with `--plugin-dir mods/agentctl`.
 
 ## 1. Requirement Summary
 
@@ -60,7 +60,9 @@ Modules (plain ES modules; no Node APIs, no dynamic import — create page § st
 | `lib/reducer.js` | `reduce(state, observation) → state` over the four dimensions (FR-4) | None |
 | `lib/sanitize.js` | Redacts command text, URLs, paths, errors (NFR-9) | None |
 | `lib/handoff.js` | `handoff(state, task) → markdown` answering the eight questions | None |
-| `ui/band.js` | `AbovePrompt` element from state | None |
+| `lib/view.js` | Band, `/agentctl` and policy text from state; the `AbovePrompt` element is built in the `ui.render` hook of `register.js` | None |
+| `lib/notices.js` | Notice de-duplication and task-notification parsing (FR-24, V5) | None |
+| `lib/store.js` | Store keys, task scoping, the per-session write chain, retention | `$.store` through `register.js` |
 
 Keeping every decision in pure modules is what makes `claude plugin test` cover them without a session.
 
@@ -68,14 +70,15 @@ Keeping every decision in pure modules is what makes `claude plugin test` cover 
 
 | Key | Value | Writer |
 |---|---|---|
-| `task/<taskId>` | `{ id, goal, worktree, allow: [classes], forbid: [classes], executors: [{argv, check: bool}], needsUser: [argv], acceptance: [text], policyVersion, result, confirmedAt }` | `/agentctl task` from a **composer** origin only (FR-25) |
+| `task/<scope>` | `{ id, goal, worktree, allow: [classes], editRoots: [paths], forbid: [classes], executors: [{argv, check: bool}], needsUser: [argv], tools: [names], acceptance: [text], policyVersion, result, confirmedAt }` | `/agentctl task` from a **composer** origin only (FR-25) |
 | `binding/<worktreeKey>` | `taskId` | same |
-| `session/<sessionId>` | `{ taskId, surface, interactive, startedAt, runtime, phase, interventions: {reason → {since, notifiedAt, severity}}, ops: {tool_use_id → Operation}, evidence: {checkKey → Evidence}, decisions: [PolicyDecision ≤ 50], health }` | hooks of this session only |
-| `checkpoint/<taskId>/<sessionId>` | last hand-over markdown, `savedAt`, and the state digest it was built from | this session's `/agentctl handoff`, stop, session end |
+| `session/<sessionId>` | `{ taskId: <scope> or null, surface, interactive, startedAt, state, decisions: [PolicyDecision ≤ 50], evidence: {checkKey → Evidence}, notices: {reason → {at, severity, active}}, health }`; `state` is the reducer's `{ phase, runtime, interventions: {reason → {since, detail, severity}}, result, ops: {tool_use_id → Operation}, background, lastEventAt }` | hooks of this session only |
+| `checkpoint/<scope>/<sessionId>` | `{ savedAt, taskId, markdown }` — the last hand-over | this session's `/agentctl handoff` and `/agentctl stop`; nothing is saved automatically at session end |
 
+- `<scope>` is `<worktreeKey>:<taskId>` (`taskScope` in `lib/store.js`): task ids are chosen at the prompt and not unique across worktrees, so the same id in two worktrees names two separate tasks and hand-overs. A binding whose record is missing resolves to a task that refuses everything but reads in the worktree. A record or checkpoint written before scoping (`task/<taskId>`, `checkpoint/<taskId>/…`) is read only when that legacy record names the current worktree.
 - `Operation`: `{ requested (sanitized), startedAt, endedAt?, outcome: 'refused'|'error'|'ok'|'backgrounded'|'unresolved', backgroundId? }`, capped at 200 per session, oldest resolved first.
 - `Evidence`: `{ checkKey, requested, outcome, before: Fingerprint, after?: Fingerprint, coverage, at }`; freshness is computed on read against the current fingerprint (FR-5).
-- Writes are **serialized per session** through one promise chain in `register.js`. Every key a hook writes carries the session id (`session/*`, `checkpoint/<taskId>/<sessionId>`), so no two sessions write one record; `task/*` and `binding/*` are written only by a composer command (feasibility § 7, store race). Resume shows the checkpoint with the newest `savedAt` among the task's sessions.
+- Writes are **serialized per session** through one promise chain in `register.js`. Every key a hook writes carries the session id (`session/*`, `checkpoint/<scope>/<sessionId>`), so no two sessions write one record; `task/*` and `binding/*` are written only by a composer command (feasibility § 7, store race). Resume shows the checkpoint with the newest `savedAt` among the scoped task's sessions.
 - Retention: at `session.start`, session records older than 7 days, and all but the 5 newest sessions and checkpoints per task, are deleted; text fields are capped (requested command 500 chars, reasons 300, hand-over 16 KiB); evidence keeps the latest record per check. A failed store write sets `health: store-error`, which the band and `/agentctl` show.
 - Sources stay apart (FR-25): `task/*` is user-confirmed; Claude's claims are never stored as facts; `ops` and `evidence` are tool-observed.
 
@@ -87,7 +90,7 @@ Keeping every decision in pure modules is what makes `claude plugin test` cover 
 | `/agentctl task show` · `task set <json>` · `task clear` | Show, set or clear the task; `set`/`clear` refused unless `e.origin.kind === 'composer'`. `set` validates the input (bounded `id`, array fields, no credential-like policy value), then stores only an allowlisted record with `goal` and `acceptance` redacted |
 | `/agentctl policy` | Effective classes, executors, the policy version, and the disclosed limits (host skips, other mods, text-matching native rules) |
 | `/agentctl events [n]` | Last `n` operations and decisions, sanitized |
-| `/agentctl handoff` | The hand-over markdown from records and the last tree reading — no process, model or network call; also saved to `checkpoint/<taskId>/<sessionId>` |
+| `/agentctl handoff` | The hand-over markdown from records and the last tree reading — no process, model or network call; also saved to `checkpoint/<scope>/<sessionId>` |
 | `/agentctl stop` | § 3.4 stop |
 
 ### 3.4 Core Logic
@@ -133,13 +136,13 @@ Non-Bash: `Read` → pass inside the worktree; `Write`/`Edit`/`NotebookEdit` →
 
 **State** (FR-4): the reducer folds `turn.start`, `turn.complete`, `tool.call` results, `classic.PermissionRequest`, `classic.Stop` (`background_tasks` → "in flight as of T"), `session.measure` and refusals into the four dimensions. "Suspected stall" requires: no turn or tool event for the idle threshold **and** no tool running **and** no background task in flight; it is always labelled unconfirmed.
 
-**Notices** (FR-24): one `$.ui.notice` per intervention reason; repeated only when the reason clears and returns, or its severity rises; cool-down 10 min.
+**Notices** (FR-24): one `$.ui.toast` per intervention reason; repeated only when the reason clears and returns, or its severity rises; cool-down 10 min.
 
 **Stop** (FR-12): `/agentctl stop` saves the hand-over first, then calls `$.turn.abort({ turnId })` for the turn held from `turn.start`; a rejection is reported as "cancellation request failed; turn outcome unconfirmed" with the sanitized reason, and "turn ended" appears only after a `turn.complete` or `turn.abort` for that id is observed; each tracked operation is listed with its observed state; the text never says "all stopped".
 
 **Resume** (FR-13, FR-16): on `session.start` the mod re-binds the task by worktree key, writes the whole newest checkpoint to the transcript with `$.ui.log` (not sent to the model; `-p` receives it as `ui_log`) before any work, marks it in the band, and replays nothing; `/agentctl` returns the stored checkpoint read-only. The mod holds no approvals, so none carries over.
 
-**Sanitize** (NFR-9): before every store write and every reply, strip URL userinfo, query and fragment, `KEY=value` assignments whose key matches `/token|secret|pass|key|auth|cookie/i`, bearer headers, and values of `--token`-style flags; paths outside the worktree are shown relative to `~`.
+**Sanitize** (NFR-9): before every store write and every reply, strip URL userinfo, query and fragment, `KEY=value` assignments whose key matches `/token|secret|pass|key|auth|cookie/i`, bearer headers, and values of `--token`-style flags. Paths are not shortened: a path is shown as given, after these redactions.
 
 ## 4. Risks and Dependencies
 
@@ -180,6 +183,6 @@ Acceptance follows requirements § 8 Signals 1–12; each request ticket names t
 
 ## 7. Open Questions
 
-- [ ] V3: what each surface and permission mode does with `ask` — until answered, needs-user is denied everywhere.
+- [ ] V3: what Desktop, VS Code, mobile, `plan` and `bypassPermissions` do with `ask` — until answered, needs-user is denied there (the interactive terminal under `default`, `acceptEdits` and `auto` is verified, T8).
 - [ ] V5: does `GetTask` accept a Bash `backgroundTaskId`; until answered, background checks stay "completion unobserved" unless a terminal result is seen.
-- [x] Mod repository: its own git repository, `~/Projects/agentctl-mod` (decided at `/create-request`; tickets in [requests/](./requests/)).
+- [x] Mod location: `mods/agentctl/` in this repository (2026-10-04, user decision). T1–T8 were built in a separate local repository first; the agentctl-mod commit IDs the tickets cite are from that history, which was not imported.
