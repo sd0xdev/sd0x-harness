@@ -49,7 +49,10 @@ async function setup($, on, opts = {}) {
   on('command.register', ($, e) => { world.registered.push(e); return { value: undefined } })
   world.logs = []
   on('ui.log', ($, e) => { world.logs.push(e.text); return { value: undefined } })
-  on('fs.exists', ($, e) => ({ value: world.gateExists && e.path.endsWith('scripts/review-state.js') && !e.path.includes('.claude') }))
+  world.files = {}
+  on('env.get', () => ({ value: '/h' }))
+  on('fs.exists', ($, e) => ({ value: e.path in world.files || (world.gateExists && e.path.endsWith('scripts/review-state.js') && !e.path.includes('.claude')) }))
+  on('fs.read', ($, e) => { if (!(e.path in world.files)) throw new Error('ENOENT'); return { value: world.files[e.path] } })
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
   on('prompt.submit', ($, e) => ({ text: e.text }))
@@ -260,7 +263,7 @@ test('Signal 11: one notice per blocking reason; a cleared and re-raised reason 
 test('events and policy commands answer from records', async ($, on) => {
   await setup($, on)
   await $.tool.call({ tool: 'Bash', command: 'python3 x.py' })
-  expect((await $.command.run({ command: 'agentctl', args: 'events 5' })).text).toMatch(/unknown · Bash · python3 x.py/)
+  expect((await $.command.run({ command: 'agentctl', args: 'events 5' })).text).toMatch(/delegated · Bash · python3 x.py · delegated to the host/)
   const p = (await $.command.run({ command: 'agentctl', args: 'policy' })).text
   expect(p).toMatch(/Authorized executors: npm test \(check\)/)
   expect(p).toMatch(/not an isolation boundary/)
@@ -325,15 +328,18 @@ test('regression: descriptive task fields are stored redacted and unknown fields
   expect(stored).not.toMatch(/extra/)
 })
 
-test('regression: reopening logs the whole checkpoint and points at the read-only status', async ($, on) => {
+test('regression: reopening logs the whole checkpoint; bare status only points at it, /agentctl last prints it', async ($, on) => {
   const { world, mem } = await setup($, on)
   const long = Array.from({ length: 60 }, (_, i) => `line ${i}`).join('\n')
   mem['checkpoint/T1/old'] = { savedAt: 1, taskId: 'T1', markdown: long }
   world.logs.length = 0
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/w/repo' })
-  expect(world.logs[0]).toMatch(/\/agentctl shows it again/)
+  expect(world.logs[0]).toMatch(/\/agentctl last shows it again/)
   expect(world.logs).toContain('line 59')
-  expect((await status($))).toMatch(/line 59/)
+  const bare = await status($)
+  expect(bare).not.toMatch(/line 59/)
+  expect(bare).toMatch(/Last hand-over saved .* — \/agentctl last/)
+  expect((await $.command.run({ command: 'agentctl', args: 'last' })).text).toMatch(/line 59/)
 })
 
 test('regression: a credential-bearing task id is refused and nothing is stored', async ($, on) => {
@@ -662,4 +668,150 @@ test('regression: an oversized hand-over keeps all eight headings and the limits
   expect(h).toMatch(/more omitted \(hand-over size cap\)/)
   expect(h).toMatch(/host skips this mod's hook/)
   expect(h).toMatch(/only its own judgement/)
+})
+
+// ── Proposals: Claude drafts, the person accepts (2026-10-04) ──────────────────────────────────────
+const PROPOSAL = '/h/.claude/agentctl/proposals/' + encodeURIComponent('/w/repo') + '.json'
+const draft = (over = {}) => JSON.stringify({ base: 'T1', goal: 'fix the quiz timer', allow: ['edit'], editRoots: ['src'], executors: [{ argv: ['npm', 'test'], check: true }], ...over })
+const turnEnd = async ($, id = 'u1') => { await $.turn.start({ turnId: id }); await $.turn.complete({ turnId: id }) }
+
+test('a proposal is previewed at turn end and bound only by an accept from the composer', async ($, on) => {
+  const { world, mem } = await setup($, on)
+  world.files[PROPOSAL] = draft()
+  await turnEnd($)
+  expect(world.logs.join('\n')).toMatch(/Proposed task [0-9a-f]{24} — fix the quiz timer/)
+  expect(world.logs.join('\n')).toMatch(/Checks and executors: npm test \(check\)/)
+  const shown = (await $.command.run({ command: 'agentctl', args: 'proposal' })).text
+  const digest = shown.match(/Proposed task ([0-9a-f]{24})/)[1]
+  expect((await $.command.run({ command: 'agentctl', args: 'accept' })).text).toMatch(/only from your own prompt/)
+  expect(mem[KEY]).toBe('T1')
+  const r = (await $.command.run({ command: 'agentctl', args: `accept ${digest.slice(0, 8)}`, origin: { kind: 'composer' } })).text
+  expect(r).toMatch(/Task T\d+ bound to this worktree/)
+  await settle()
+  const bound = mem['task/' + encodeURIComponent('/w/repo') + ':' + mem[KEY]]
+  expect(bound).toEqual(expect.objectContaining({ goal: 'fix the quiz timer', editRoots: ['src'], worktree: '/w/repo', policyVersion: 2 }))
+  expect((await $.command.run({ command: 'agentctl', args: 'proposal' })).text).toMatch(/No proposal is waiting/)
+  // The same file is not offered again once handled.
+  world.logs.length = 0
+  await turnEnd($, 'u2')
+  expect(world.logs.join('\n')).not.toMatch(/Proposed task/)
+})
+
+test('a file swapped after the preview never changes what accept binds; a new preview needs its own digest', async ($, on) => {
+  const { world, mem } = await setup($, on)
+  world.files[PROPOSAL] = draft()
+  await turnEnd($)
+  const first = (await $.command.run({ command: 'agentctl', args: 'proposal' })).text.match(/Proposed task ([0-9a-f]{24})/)[1]
+  // Swapped without a new preview: accept binds the retained object, not the file.
+  world.files[PROPOSAL] = draft({ editRoots: ['.'], goal: 'everything' })
+  await $.command.run({ command: 'agentctl', args: 'accept', origin: { kind: 'composer' } })
+  await settle()
+  expect(mem['task/' + encodeURIComponent('/w/repo') + ':' + mem[KEY]].editRoots).toEqual(['src'])
+  // A later change is previewed again, against the task now bound, with a different digest.
+  world.files[PROPOSAL] = draft({ base: mem[KEY], editRoots: ['.'] })
+  await turnEnd($, 'u2')
+  const second = (await $.command.run({ command: 'agentctl', args: 'proposal' })).text.match(/Proposed task ([0-9a-f]{24})/)[1]
+  expect(second).not.toBe(first)
+  expect((await $.command.run({ command: 'agentctl', args: `accept ${first.slice(0, 8)}`, origin: { kind: 'composer' } })).text).toMatch(/does not match/)
+})
+
+test('a stale proposal is refused at read and at accept; another worktree and built-in overrides are refused', async ($, on) => {
+  const { world, mem } = await setup($, on)
+  world.files[PROPOSAL] = draft({ base: 'T0' })
+  await turnEnd($)
+  expect(world.logs.join('\n')).toMatch(/proposal not shown — stale/)
+  world.files[PROPOSAL] = draft({ worktree: '/elsewhere' })
+  await turnEnd($, 'u2')
+  expect(world.logs.join('\n')).toMatch(/names another worktree/)
+  world.files[PROPOSAL] = draft({ executors: [{ argv: ['git', 'push'] }] })
+  await turnEnd($, 'u3')
+  expect(world.logs.join('\n')).toMatch(/overlaps forbidden class \(remote-git-write\)/)
+  world.files[PROPOSAL] = draft()
+  await turnEnd($, 'u4')
+  await $.command.run({ command: 'agentctl', args: 'task clear', origin: { kind: 'composer' } })
+  const r = (await $.command.run({ command: 'agentctl', args: 'accept', origin: { kind: 'composer' } })).text
+  expect(r).toMatch(/stale/)
+  expect(mem[KEY]).toBeUndefined()
+})
+
+test('discard drops the waiting proposal and leaves the bound task; the band names a waiting proposal', async ($, on) => {
+  const { world, mem } = await setup($, on)
+  world.files[PROPOSAL] = draft()
+  await turnEnd($)
+  expect(await status($)).toMatch(/Proposal [0-9a-f]{8} waiting/)
+  expect((await $.command.run({ command: 'agentctl', args: 'discard' })).text).toMatch(/Proposal discarded/)
+  expect(mem[KEY]).toBe('T1')
+  expect((await $.command.run({ command: 'agentctl', args: 'accept', origin: { kind: 'composer' } })).text).toMatch(/no proposal is waiting/)
+})
+
+test('no HOME or no proposal file is no proposal, never an error', async ($, on) => {
+  const { world } = await setup($, on)
+  await turnEnd($)
+  expect(world.logs.join('\n')).not.toMatch(/proposal/)
+})
+
+test('regression: a task set from the prompt cannot re-point the worktree', async ($, on) => {
+  const { mem } = await setup($, on)
+  const r = (await $.command.run({ command: 'agentctl', args: 'task set {"goal":"x","worktree":"/elsewhere"}', origin: { kind: 'composer' } })).text
+  expect(r).toMatch(/names another worktree/)
+  expect(mem[KEY]).toBe('T1')
+})
+
+test('regression: evidence from another task is never shown as this task\'s', async ($, on) => {
+  const { mem } = await setup($, on)
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'c1' })
+  await settle()
+  expect(await status($)).toMatch(/npm test: no error reported/)
+  await $.command.run({ command: 'agentctl', args: 'task set {"goal":"other","executors":[{"argv":["npm","test"],"check":true}]}', origin: { kind: 'composer' } })
+  expect(await status($)).toMatch(/Evidence: no declared check observed/)
+  expect(Object.keys(mem['session/S1'].evidence).length).toBe(1)
+})
+
+test('regression: the hand-over says when the tree was last read', async ($, on) => {
+  await setup($, on)
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'c1' })
+  await settle()
+  expect((await $.command.run({ command: 'agentctl', args: 'handoff' })).text).toMatch(/read as of \d{4}-\d\d-\d\dT/)
+})
+
+test('regression: a same-id task set after the preview makes the proposal stale', async ($, on) => {
+  const { world, mem } = await setup($, on)
+  world.files[PROPOSAL] = draft()
+  await turnEnd($)
+  await $.command.run({ command: 'agentctl', args: 'task set {"id":"T1","goal":"changed","forbid":["npm test"]}', origin: { kind: 'composer' } })
+  const r = (await $.command.run({ command: 'agentctl', args: 'accept', origin: { kind: 'composer' } })).text
+  expect(r).toMatch(/stale/)
+  expect(mem[KEY]).toBe('T1')
+})
+
+test('regression: re-setting a task id raises its policy version, so the earlier evidence is not shown', async ($, on) => {
+  const { mem } = await setup($, on, { task: null })
+  const scoped = 'task/' + encodeURIComponent('/w/repo') + ':T1'
+  await $.command.run({ command: 'agentctl', args: 'task set {"id":"T1","goal":"a","executors":[{"argv":["npm","test"],"check":true}]}', origin: { kind: 'composer' } })
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'c1' })
+  await settle()
+  expect(await status($)).toMatch(/npm test: no error reported/)
+  await $.command.run({ command: 'agentctl', args: 'task set {"id":"T1","goal":"b","executors":[{"argv":["npm","test"],"check":true}]}', origin: { kind: 'composer' } })
+  await settle()
+  expect(mem[scoped].policyVersion).toBe(2)
+  expect(await status($)).toMatch(/Evidence: no declared check observed/)
+})
+
+test('regression: a partial reading on either side of a check is never verified', async ($, on) => {
+  const { world } = await setup($, on)
+  // An assume-unchanged entry: the value is unchanged but the reading is partial.
+  world.git.flags = 'h a.js\0'
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'c1' })
+  await settle()
+  const h = (await $.command.run({ command: 'agentctl', args: 'handoff' })).text
+  expect(h.split('## 5.')[0]).not.toMatch(/npm test — no error reported/)
+  expect(h).toMatch(/npm test — partial coverage/)
+})
+
+test('regression: a malformed proposal is rejected and the session still starts', async ($, on) => {
+  const { world } = await setup($, on, { start: false })
+  world.files[PROPOSAL] = JSON.stringify({ base: 'T1', goal: 'x', executors: [null] })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/w/repo' })
+  expect(world.registered.some((r) => r.name === 'agentctl')).toBe(true)
+  expect(world.logs.join('\n')).toMatch(/proposal not shown — each executor needs a non-empty argv array/)
 })

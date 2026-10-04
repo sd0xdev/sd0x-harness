@@ -1,6 +1,6 @@
 # agentctl — Agent Control Plane for one Claude Code session
 
-Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 145 tests).
+Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 161 tests).
 The mods API is marked changeable between releases; the type declarations the host writes into
 `.claude-plugin/types/` are the authority for the installed version. Run `claude plugin validate .`
 after every Claude Code upgrade.
@@ -8,19 +8,39 @@ after every Claude Code upgrade.
 Design: `docs/features/agent-control-plane-mod/` in this repository (requirements, feasibility study,
 tech spec, request tickets). This directory is not part of the sd0x-dev-flow plugin: installing the
 plugin does not install the mod. To install it, run `/agentctl-setup` (it checks the host, installs
-`agentctl@sd0xdev-marketplace` after you approve, and builds your first task line), or load it for one
+`agentctl@sd0xdev-marketplace` after you approve, and builds your first task line; `/agentctl-setup --task`
+and the workflow skills draft a proposal for you to accept instead), or load it for one
 session with `claude --plugin-dir mods/agentctl`.
 
 ## What it does
 
 | Function | How |
 |---|---|
-| Task scope | `/agentctl task set <json>` typed at your own prompt binds a task to the worktree. Tool output, files and messages cannot change it — only a command you type. The binding is per worktree, so your own `task set` / `task clear` in another session on the same worktree does replace or clear it. Task records and hand-overs are kept per worktree, so the same task id in two worktrees names two separate tasks. A store error is reported as such, and the previous task keeps applying; a binding whose record is missing refuses everything but reads in the worktree |
-| Refusal | **While a task is bound**, every tool call is classified before it runs: forbidden or unclassifiable → refused with the rule named; allowed → the host's own permission path, unchanged. A downstream deny is never weakened and an allow is never created. **With no task bound** (before `task set`, after `task clear`) the mod observes only and refuses nothing |
-| Evidence | A Bash call authorized by a `check` executor is bracketed by Git-derived tree readings (a command that is already observational, such as `git status`, passes as observational first and gets no evidence); a later edit shows the result stale within 30 s; a background check stays "completion unobserved" until a terminal result is seen |
+| Task scope | Claude drafts a proposal (`/agentctl-setup --task`, or `/feature-dev`, `/bug-fix`, `/refactor` when the mod is installed); the mod previews it and `/agentctl accept` typed at your own prompt binds exactly what was previewed — see § Proposals. `/agentctl task set <json>` typed at your prompt also binds a task to the worktree. Tool output, files and messages cannot change it — only a command you type. The binding is per worktree, so your own `task set` / `task clear` in another session on the same worktree does replace or clear it. Task records and hand-overs are kept per worktree, so the same task id in two worktrees names two separate tasks. A store error is reported as such, and the previous task keeps applying; a binding whose record is missing refuses everything but reads in the worktree |
+| Refusal | A deny-list. Recognized direct production writes and remote git writes are refused **with or without a task**; while a task is bound, its own `forbid` entries and edits outside its roots are refused too. Everything the mod cannot classify — scripts, compound shell, unknown tools — goes to Claude Code's own permission prompt or auto mode, recorded as `delegated`. A downstream deny is never weakened and an allow is never created. **Best-effort**: the mod reads each tool call, never a script's contents or the commands it starts, so a push inside a script is the host's and that workflow's to authorize |
+| Evidence | A Bash call authorized by a `check` executor is bracketed by Git-derived tree readings (executors are matched first, so a declared `git status` check is a check); a later edit shows the result stale within 30 s; a background check stays "completion unobserved" until a terminal result is seen. Evidence belongs to the task and policy version it was observed under, and a reading with partial coverage is never listed as verified |
 | Panel | The band above the prompt is compact: task, runtime and its duration, what needs you, the gate reading with its age (and `stale` past 30 s), the last hand-over time. `/agentctl` is the detailed text: it adds context, the 5 h window and evidence; the gate, context and window lines name their source and age, or read `missing` / `unavailable`, and each evidence line its outcome, freshness, coverage and age |
-| Hand-over | `/agentctl handoff` — eight answers from records, no model, no network, no process; shown in full on reopen |
+| Hand-over | `/agentctl handoff` — eight answers from records, no model, no network, no process; logged in full on reopen (transcript only); bare `/agentctl` only points at it, `/agentctl last` prints it |
 | Stop | `/agentctl stop` — saves the hand-over, requests cancellation of the current turn, lists tracked operations; never "all stopped" |
+
+## Proposals
+
+Claude writes `~/.claude/agentctl/proposals/<URI-encoded worktree>.json` (outside the worktree) through
+`agentctl-setup.js propose`, which applies the mod's own validation first. At session start and at the
+end of each main turn the mod reads it once, validates it again, and keeps the **effective** object:
+the worktree comes from the session, a proposal naming another worktree, drafted against a task that
+is no longer bound, or overlapping a built-in class is refused (the reason is logged). The preview
+lists every permission being accepted with a SHA-256 digest (24 hex) in the transcript and the band.
+
+| Command | Who | Does |
+|---|---|---|
+| `/agentctl proposal` | anyone | Prints the waiting preview |
+| `/agentctl accept [digest prefix]` | **your prompt only** | Binds the retained object — never the file re-read — if the bound task has not changed since the preview |
+| `/agentctl discard` | anyone | Drops the waiting proposal; the bound task stays |
+
+Changing the file later produces a new preview and digest; an older digest no longer matches.
+Concurrent sessions on one worktree share one binding and one store, which is not atomic across
+sessions: accept in the session that showed the preview.
 
 ## Task JSON
 
@@ -37,7 +57,7 @@ session with `claude --plugin-dir mods/agentctl`.
 }
 ```
 
-While a task is bound, built-in forbidden classes always apply on top of its own: production writes (`kubectl apply|delete|patch|rollout|scale|edit|replace`,
+Built-in forbidden classes apply with or without a task, on top of a task's own: production writes (`kubectl apply|delete|patch|rollout|scale|edit|replace`,
 `helm install|upgrade|uninstall|rollback`, `gcloud … deploy|delete|update`) and remote git writes
 (`git push`, `gh pr merge`). Secrets never belong in a task: a credential-like value in a policy field
 is refused.
@@ -56,11 +76,11 @@ surface or mode — `-p`, `dontAsk`, `plan`, `bypassPermissions`, Desktop, VS Co
   Keep named dangerous commands in your own `permissions.deny`, for example:
 
   ```json
-  { "permissions": { "deny": ["Bash(kubectl delete:*)", "Bash(kubectl rollout:*)", "Bash(helm upgrade:*)", "Bash(git push:*)"] } }
+  { "permissions": { "deny": ["Bash(kubectl delete:*)", "Bash(kubectl rollout:*)", "Bash(helm upgrade:*)"] } }
   ```
 
   Those rules match command text, not programs (`git -C . push` is a different text), which is why
-  both layers exist.
+  both layers exist. `Bash(git push:*)` is left out on purpose: sd0x-dev-flow's `/push-ci` runs it.
 - Another mod can change a verdict at `tool.check`; this mod discloses that in `/agentctl policy`.
 - Authorized executors (e.g. `npm test`) run with their effects unclassified.
 
@@ -82,6 +102,9 @@ from the repository root (or `/bump-version agentctl`). CI's version lock fails 
 CI also runs `claude plugin validate` and `claude plugin test` here.
 
 ## Verified live (2026-10-04, scratch repository: headless `claude -p --plugin-dir` on 2.1.288, interactive tmux on 2.1.289)
+
+These rows record version 0.1.0. Since 0.2.0 an unclassified call is delegated to the host instead
+of refused, and the proposal commands exist; see § Not verified.
 
 | Check | Result |
 |---|---|
@@ -107,9 +130,14 @@ CI also runs `claude plugin validate` and `claude plugin test` here.
 | Install, disable, uninstall (Signal 12) | Installed from a local marketplace, ran, disabled (`/agentctl` gone), uninstalled: no mod process left, the `permissions` settings byte-identical. The host itself left an empty `extraKnownMarketplaces` key, a plugin cache directory and an empty `installed_plugins.json`; the mod leaves only its own store file. All were restored and verified byte-identical afterwards |
 
 Removal: `--plugin-dir` installs nothing and changes no setting. The mod's own data stays in
-`~/.claude/plugins/store/agentctl_*.json` (sessions, tasks, checkpoints); delete that file to remove it.
+`~/.claude/plugins/store/agentctl_*.json` (sessions, tasks, checkpoints), and drafted proposals in
+`~/.claude/agentctl/proposals/`; delete them to remove it.
 
 ## Not verified
+
+0.2.0 on a live host: proposal preview and accept, delegation of unclassified calls to the host's
+prompt or auto mode, and the no-task refusal of a direct `git push`. They are covered by
+`claude plugin test .` only.
 
 V3 on Desktop, VS Code and mobile, and under `plan` and `bypassPermissions` (accepting the
 bypass-mode warning is the operator's own decision, so it was not exercised): `needsUser` stays

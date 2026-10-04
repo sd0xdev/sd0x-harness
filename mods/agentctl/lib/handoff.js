@@ -30,6 +30,8 @@ function assemble(head, sections, cap) {
 }
 
 export function handoff({ task, state, evidence, fingerprint, decisions, now, sessionId }) {
+  // When the last tree reading was taken: the hand-over starts no process, so it never re-reads.
+  const seenAt = typeof fingerprint?.at === 'number' ? ` as of ${new Date(fingerprint.at).toISOString()}` : ''
   const head = [
     `# Hand-over — ${task ? s(task.goal, 120) : 'no task bound'}`,
     '',
@@ -49,15 +51,19 @@ export function handoff({ task, state, evidence, fingerprint, decisions, now, se
   const ops = Object.entries(state.ops ?? {})
   const edits = ops.filter(([, o]) => ['Write', 'Edit', 'NotebookEdit', 'MultiEdit'].includes(o.tool) && o.outcome === 'ok')
   sec.push({ heading: '## 3. What changed', items: [], fixed: [
-    fingerprint ? `- Tree: HEAD ${s(fingerprint.head, 60)}, ${fingerprint.changedCount ?? '?'} changed or untracked path(s) (${fingerprint.coverage})` : '- Tree: not read for this hand-over',
+    fingerprint ? `- Tree: HEAD ${s(fingerprint.head, 60)}, ${fingerprint.changedCount ?? '?'} changed or untracked path(s) (${fingerprint.coverage})${seenAt ? `, read${seenAt}` : ''}` : '- Tree: not read for this hand-over',
     `- Edits observed this session: ${edits.length}`,
   ] })
   const ev = Object.values(evidence ?? {})
-  const current = (e) => fingerprint && e.after && e.before && e.before.value === e.after.value && e.after.value === fingerprint.value && e.outcome === 'ok'
-  const verified = ev.filter(current).map((e) => `- ${s(e.requested)} — no error reported, tree unchanged since (${e.coverage})`)
-  sec.push({ heading: '## 4. Verified (execution evidence on the current tree)', items: verified, fixed: verified.length ? [] : ['- Nothing.'] })
+  const matches = (e) => fingerprint && e.after && e.before && e.before.value === e.after.value && e.after.value === fingerprint.value && e.outcome === 'ok'
+  // Partial coverage is never "verified": what a reading did not cover may have changed — the
+  // before, the after and the last reading must each be complete.
+  const partial = (e) => [e.coverage, e.before?.coverage, e.after?.coverage, fingerprint?.coverage].includes('partial')
+  const current = (e) => matches(e) && !partial(e)
+  const verified = ev.filter(current).map((e) => `- ${s(e.requested)} — no error reported, matches the last tree reading${seenAt} (${e.coverage})`)
+  sec.push({ heading: '## 4. Verified (execution evidence on the last tree reading)', items: verified, fixed: verified.length ? [] : ['- Nothing.'] })
   const notVerified = ev.filter((e) => !current(e)).map((e) => {
-    const why = e.outcome === 'backgrounded' ? 'started, completion unobserved' : e.outcome !== 'ok' ? `outcome ${e.outcome}` : !e.after || !e.before ? 'evidence unavailable' : e.before.value !== e.after.value ? 'tree changed during the run' : 'stale — the tree changed since'
+    const why = e.outcome === 'backgrounded' ? 'started, completion unobserved' : e.outcome !== 'ok' ? `outcome ${e.outcome}` : !e.after || !e.before ? 'evidence unavailable' : e.before.value !== e.after.value ? 'tree changed during the run' : matches(e) ? 'partial coverage — part of the tree was not read' : 'stale — the tree changed since'
     return `- ${s(e.requested)} — ${why}`
   })
   sec.push({ heading: '## 5. Not verified', items: notVerified, fixed: ['- Anything Claude stated as done, passing or fixed without an evidence record above is only its own judgement.'] })

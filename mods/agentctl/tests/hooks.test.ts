@@ -46,10 +46,27 @@ test('Signal 5: an observational read reaches core unchanged', async ($, on) => 
   expect(JSON.stringify(r)).toMatch(/ran: git log --oneline -n 5/)
 })
 
-test('an unclassifiable call is refused, not passed for lacking a dangerous word', async ($, on) => {
-  const core = await setup($, on)
+test('an unclassifiable call goes to the host, and the host\'s own deny still holds', async ($, on) => {
+  const core = await setup($, on, { verdict: 'deny' })
   await $.tool.call({ tool: 'Bash', command: 'python3 -c "print(1)"' })
+  expect(core.calls).toBe(1)
+  expect((await $.tool.check({ tool: 'Bash', input: { command: 'python3 -c "print(1)"' } })).decision).toBe('deny')
+})
+
+test('a script that pushes inside is delegated, never classified or approved by the mod', async ($, on) => {
+  const core = await setup($, on, { verdict: 'ask' })
+  await $.tool.call({ tool: 'Bash', command: '/bin/bash -p /tmp/push.sh' })
+  expect(core.calls).toBe(1)
+  // Pass-through keeps the host's verdict: an ask stays an ask, never an allow.
+  expect((await $.tool.check({ tool: 'Bash', input: { command: '/bin/bash -p /tmp/push.sh' } })).decision).toBe('ask')
+})
+
+test('a direct push is refused even with no task bound', async ($, on) => {
+  const core = await setup($, on, { task: null })
+  const r = await $.tool.call({ tool: 'Bash', command: 'git push origin main' })
   expect(core.calls).toBe(0)
+  expect(JSON.stringify(r)).toMatch(/remote-git-write/)
+  expect((await $.tool.check({ tool: 'Bash', input: { command: 'gh pr merge 1' } })).decision).toBe('deny')
 })
 
 test('with no task bound the mod only observes', async ($, on) => {
@@ -119,7 +136,7 @@ test('combine never creates an allow and never upgrades a verdict', () => {
 
 test('regression: a refusal reason at tool.check never carries a secret from the command', async ($, on) => {
   await setup($, on, { verdict: 'allow' })
-  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git --token=demo-secret status' } })
+  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git --token=demo-secret push' } })
   expect(r.decision).toBe('deny')
   expect(r.reason).not.toMatch(/demo-secret/)
 })

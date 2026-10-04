@@ -7,6 +7,7 @@ import { MAX_HASHED_PATHS, TIMEOUT_MS, commands as FP, digest, fold, parseStatus
 import { handoff } from '../lib/handoff.js'
 import { decideNotices, parseTaskNotification } from '../lib/notices.js'
 import { classify, taskRecord, validateTask } from '../lib/policy.js'
+import { acceptedRecord, digestMatches, previewLines, proposalDigest, proposalPath, readProposal } from '../lib/proposal.js'
 import { initialState, reduce } from '../lib/reducer.js'
 import { CAPS, sanitize } from '../lib/sanitize.js'
 import { applyRetention, createWriter, keys, latestCheckpoint, taskScope } from '../lib/store.js'
@@ -57,6 +58,10 @@ async function buildContext($) {
     usageAt: 0,
     fingerprint: null,
     checkpoint: null,
+    // The validated proposal waiting for `/agentctl accept`, frozen until accepted or discarded, and
+    // the digest of the file text it came from (an unchanged file is not read twice).
+    pending: saved?.pending ?? null,
+    proposalSeen: saved?.proposalSeen ?? null,
   }
   await readGate($, c)
   await readUsage($, c)
@@ -104,6 +109,8 @@ function persist(c, taskId) {
     decisions: c.decisions,
     evidence: c.evidence,
     notices: c.notices,
+    pending: c.pending,
+    proposalSeen: c.proposalSeen,
     health: c.writer.health.value,
   })
 }
@@ -145,7 +152,8 @@ async function readFingerprint($, cwd) {
   if (changed.length) results.hash = await runGit($, cwd, FP.hash, changed.slice(0, MAX_HASHED_PATHS).join('\n') + '\n')
   // Nothing answered: there is no reading at all, so the evidence is unavailable, not partial.
   if (Object.values(results).every((r) => r && r.error)) return null
-  return fold(results, changed)
+  // When the reading was taken: every view of it says how old it is.
+  return { ...fold(results, changed), at: await $.clock.now() }
 }
 
 // The current tree, re-read only while there is evidence whose freshness depends on it.
@@ -196,12 +204,29 @@ async function model($, c) {
     gate: c.gate,
     context: c.usage ? contextReading(c.usage, c.usageAt) : null,
     fiveHour: c.usage ? usageReading(c.usage, 'five_hour', c.usageAt) : null,
-    evidence: c.evidence,
+    // Evidence belongs to the task (and policy version) it was observed under; another task's checks
+    // are never shown as this one's.
+    evidence: evidenceFor(c.evidence, task),
     fingerprint: c.fingerprint,
+    pending: c.pending,
     decisions: c.decisions,
     sessionId: c.sessionId,
     checkpoint: c.checkpoint,
   }
+}
+
+// Partial if either reading is partial: a value equality says nothing about what was not read.
+function worstCoverage(...readings) {
+  const cs = readings.filter(Boolean).map((r) => r.coverage)
+  return cs.includes('partial') ? 'partial' : cs[0]
+}
+
+function evidenceFor(evidence, task) {
+  const out = {}
+  for (const [k, ev] of Object.entries(evidence ?? {})) {
+    if ((ev.taskId ?? null) === (task?.id ?? null) && (ev.policyVersion ?? null) === (task?.policyVersion ?? null)) out[k] = ev
+  }
+  return out
 }
 
 async function observe($, c, observation, taskId) {
@@ -233,7 +258,7 @@ async function closeBackground($, c, id, status, isError) {
     if (ev.backgroundId && ev.backgroundId === id && ev.outcome === 'backgrounded') {
       ev.outcome = status === 'completed' ? (isError ? 'error' : 'ok') : status === 'failed' ? 'error' : 'cancelled'
       ev.after = await readFingerprint($, c.cwd)
-      ev.coverage = ev.after?.coverage
+      ev.coverage = worstCoverage(ev.before, ev.after)
       ev.note = 'after-reading taken when the terminal result was observed, not at completion'
     }
   }
@@ -256,18 +281,28 @@ async function taskCommand($, c, e, rest) {
     if (!(await c.writer.delete(keys.binding(worktreeKey(c.cwd))))) {
       return 'agentctl: the task could not be cleared (store error); the previous task still applies.'
     }
-    return 'Task cleared for this worktree; the mod now observes only.'
+    return 'Task cleared for this worktree; only the built-in classes are refused now.'
   }
   let input
   try { input = JSON.parse(more.join(' ')) } catch { return 'agentctl: the task must be JSON.' }
   if (!input || typeof input !== 'object' || Array.isArray(input)) return 'agentctl: the task must be a JSON object.'
-  const raw = { worktree: c.cwd, ...input }
+  // The worktree is this session's; a task naming another one is refused, never re-pointed.
+  if (input.worktree !== undefined && input.worktree !== c.cwd) return 'agentctl: task rejected —\n- the task names another worktree'
+  const raw = { ...input, worktree: c.cwd }
   const v = validateTask(raw)
   if (!v.ok) return `agentctl: task rejected —\n- ${v.errors.map((x) => sanitize(x, 200)).join('\n- ')}`
+  // The policy version only rises: re-setting an id that already has a record continues from it, so
+  // evidence and proposals tied to the earlier policy never read as this one's.
+  const id = raw.id ?? `T${now}`
+  const bound = await boundTask($, c)
+  const prior = bound && bound.id === id && !bound.recordMissing ? bound : await $.store.get(keys.task(scopeOf(c, id)))
   // Only allowlisted fields are stored; descriptive text is redacted (NFR-9).
-  const task = taskRecord(raw, { id: `T${now}`, now, cwd: c.cwd })
-  // The record first, the binding only once the record is saved. Re-setting the bound id is complete
-  // once its record is saved — that record IS the policy in force — so no binding write can fail after it.
+  return bindTask($, c, taskRecord({ ...raw, policyVersion: prior ? (prior.policyVersion ?? 1) : 0 }, { id, now, cwd: c.cwd }))
+}
+
+// The record first, the binding only once the record is saved. Re-setting the bound id is complete
+// once its record is saved — that record IS the policy in force — so no binding write can fail after it.
+async function bindTask($, c, task) {
   const bindingKey = keys.binding(worktreeKey(c.cwd))
   const current = await $.store.get(bindingKey)
   if (!(await c.writer.set(keys.task(scopeOf(c, task.id)), task))) {
@@ -277,7 +312,64 @@ async function taskCommand($, c, e, rest) {
     return 'agentctl: the task was saved but could not be bound (store error); the previous task, if any, still applies.'
   }
   persist(c, task.id)
+  $.ui.invalidate('ui.render')
   return `Task ${task.id} bound to this worktree.\n${policyText(task)}`
+}
+
+// ── Proposals ───────────────────────────────────────────────────────────────────────────────────
+// Read at session start and at each main turn's end. A failure to read is no proposal, never an
+// error: the file is optional and the mod works without it.
+async function checkProposal($, c) {
+  let text
+  try {
+    const home = await $.env.get('HOME')
+    if (!home) return
+    const path = proposalPath(home, worktreeKey(c.cwd))
+    if (!(await $.fs.exists(path))) return
+    text = await $.fs.read(path)
+  } catch {
+    return
+  }
+  if (typeof text !== 'string') return
+  const seen = digest(text)
+  if (seen === c.proposalSeen) return
+  c.proposalSeen = seen
+  const bound = await boundTask($, c)
+  // A malformed submission is a rejection, never a failed hook.
+  let r
+  try { r = readProposal(text, { cwd: c.cwd, boundId: bound?.id ?? null }) } catch { r = { ok: false, errors: ['the proposal could not be validated'] } }
+  if (!r.ok) {
+    $.ui.log(`agentctl: proposal not shown — ${r.errors.join('; ')}`)
+    persist(c, bound?.id)
+    return
+  }
+  c.pending = { effective: r.effective, digest: await proposalDigest(r.effective), baseRev: revisionOf(bound), at: await $.clock.now() }
+  for (const line of previewLines(c.pending)) $.ui.log(line)
+  persist(c, bound?.id)
+  $.ui.invalidate('ui.render')
+}
+
+// The bound task's exact revision: a same-id `task set` after the preview makes the proposal stale.
+function revisionOf(task) {
+  return task ? `${task.id}@${task.policyVersion ?? 1}@${task.confirmedAt ?? 0}` : null
+}
+
+async function acceptCommand($, c, e, given) {
+  // Scope comes only from the person at the prompt (FR-25).
+  if (e.origin?.kind !== 'composer') return 'agentctl refused: a proposal can be accepted only from your own prompt.'
+  const p = c.pending
+  if (!p) return 'agentctl: no proposal is waiting. Ask Claude to draft one (/agentctl-setup --task), then accept it here.'
+  if (!digestMatches(given, p.digest)) return `agentctl refused: ${sanitize(given, 30)} does not match the waiting proposal ${p.digest.slice(0, 8)}. Check /agentctl proposal.`
+  const bound = await boundTask($, c)
+  if ((bound?.id ?? null) !== p.effective.base || revisionOf(bound) !== p.baseRev) {
+    c.pending = null
+    persist(c, bound?.id)
+    return 'agentctl refused: the bound task changed since this proposal was drafted (stale); it was discarded. Ask for a new draft.'
+  }
+  const now = await $.clock.now()
+  const text = await bindTask($, c, acceptedRecord(p.effective, { now, baseTask: bound }))
+  if (text.startsWith('Task ')) { c.pending = null; persist(c, `T${now}`) }
+  return text
 }
 
 async function stopCommand($, c) {
@@ -330,12 +422,13 @@ export function register(on) {
     if (c.checkpoint) {
       // Shown before any work: a transcript notice (not sent to the model; `-p` receives it as
       // ui_log) and the band. Nothing is replayed, and the mod holds no approvals to carry over.
-      $.ui.log(`agentctl: last hand-over for task ${task.id}, saved ${new Date(c.checkpoint.savedAt).toISOString()} — /agentctl shows it again`)
+      $.ui.log(`agentctl: last hand-over for task ${task.id}, saved ${new Date(c.checkpoint.savedAt).toISOString()} — /agentctl last shows it again`)
       // The whole checkpoint (already bounded by the hand-over cap), never a silent preview.
       for (const line of String(c.checkpoint.markdown).split('\n')) $.ui.log(line)
     }
+    await checkProposal($, c)
     // `immediate`: /agentctl stop must run while the turn it cancels is still in flight.
-    await $.command.register({ name: 'agentctl', description: 'Agent Control Plane: status, task, policy, events, handoff, stop', argumentHint: '[task|policy|events|handoff|stop]', immediate: true })
+    await $.command.register({ name: 'agentctl', description: 'Agent Control Plane: status, proposal, accept, task, policy, events, handoff, stop', argumentHint: '[proposal|accept|discard|task|policy|events|handoff|last|stop]', immediate: true })
     $.ui.invalidate('ui.render')
     return next(e)
   })
@@ -355,6 +448,7 @@ export function register(on) {
     await observe($, c, { type: 'turn.complete', turnId: e.turnId, at: await $.clock.now() }, (await boundTask($, c))?.id)
     await readGate($, c)
     await refreshTree($, c)
+    await checkProposal($, c)
     return next(e)
   })
 
@@ -398,13 +492,18 @@ export function register(on) {
     const c = await context($)
     const task = await boundTask($, c)
     const v = classify(task, callOf(e))
-    if (v.outcome === 'deny' || v.outcome === 'unknown') {
+    if (v.outcome === 'deny') {
       const at = await $.clock.now()
       const requested = sanitize(e.command ?? e.file_path ?? e.tool, CAPS.requested)
       const rule = sanitize(v.rule, CAPS.reason)
       recordDecision(c, { at, tool: e.tool, requested, outcome: v.outcome, rule })
       await observe($, c, { type: 'refused', id: e.tool_use_id ?? `refused-${at}`, tool: e.tool, requested, rule, at }, task?.id)
       return { deny: `agentctl refused (${rule}). The task's scope is shown by /agentctl policy.` }
+    }
+    // Delegated: the host's permission flow (or auto mode) decides; the mod only records that it did
+    // not classify the call, so the events list can show it.
+    if (v.delegated && task) {
+      recordDecision(c, { at: await $.clock.now(), tool: e.tool, requested: sanitize(e.command ?? e.file_path ?? e.tool, CAPS.requested), outcome: 'delegated', rule: sanitize(v.rule, CAPS.reason) })
     }
     // Every allowed call is observed; Bash is observed (with its evidence) by the hook beneath.
     if (e.tool === 'Bash') return next(e)
@@ -442,7 +541,7 @@ export function register(on) {
       c.fingerprint = after ?? c.fingerprint
       // An opaque key: executor arguments never become a stored identifier in plaintext.
       const key = 'check-' + digest(v.executor.argv.join('\u0000'))
-      c.evidence = { ...c.evidence, [key]: { checkKey: key, requested, outcome, before, after, coverage: after?.coverage ?? before?.coverage, at: endAt, backgroundId } }
+      c.evidence = { ...c.evidence, [key]: { checkKey: key, taskId: task?.id ?? null, policyVersion: task?.policyVersion ?? null, requested, outcome, before, after, coverage: worstCoverage(before, after), at: endAt, backgroundId } }
       persist(c, task?.id)
     }
     return r
@@ -473,7 +572,7 @@ export function register(on) {
     const v = classify(task, callOf(e))
     // Rule text can quote the command; it is sanitized before it becomes a reason anyone reads.
     const safe = { ...v, rule: sanitize(v.rule, CAPS.reason) }
-    if (v.outcome === 'deny' || v.outcome === 'unknown') return combine(safe, null, false)
+    if (v.outcome === 'deny') return combine(safe, null, false)
     const down = await next(e)
     const out = combine(safe, down, surfaceVerified(c))
     if (v.outcome === 'needs-user') {
@@ -489,17 +588,32 @@ export function register(on) {
     const c = await context($)
     const args = String(e.args ?? '').trim().split(/\s+/).filter(Boolean)
     const [sub, ...rest] = args
+    // Bare status stays short (its text reaches Claude): the hand-over is one pointer line, and the
+    // whole of it only on `/agentctl last`.
     if (!sub) {
       const m = await model($, c)
-      const resume = c.checkpoint ? `\nLast hand-over (${new Date(c.checkpoint.savedAt).toISOString()}):\n${c.checkpoint.markdown}` : ''
-      return { text: statusText(m) + resume }
+      const extra = [
+        ...(c.pending ? [`Proposal ${c.pending.digest.slice(0, 8)} waiting — /agentctl proposal, then /agentctl accept`] : []),
+        ...(c.checkpoint ? [`Last hand-over saved ${new Date(c.checkpoint.savedAt).toISOString()} — /agentctl last`] : []),
+      ]
+      return { text: [statusText(m), ...extra].join('\n') }
+    }
+    if (sub === 'last') return { text: c.checkpoint ? `Last hand-over (${new Date(c.checkpoint.savedAt).toISOString()}):\n${c.checkpoint.markdown}` : 'No hand-over saved for the bound task.' }
+    if (sub === 'proposal') return { text: c.pending ? previewLines(c.pending).join('\n') : 'No proposal is waiting.' }
+    if (sub === 'accept') return { text: await acceptCommand($, c, e, rest[0]) }
+    if (sub === 'discard') {
+      const had = Boolean(c.pending)
+      c.pending = null
+      persist(c, (await boundTask($, c))?.id)
+      $.ui.invalidate('ui.render')
+      return { text: had ? 'Proposal discarded; the bound task is unchanged.' : 'No proposal was waiting.' }
     }
     if (sub === 'task') return { text: await taskCommand($, c, e, rest) }
     if (sub === 'policy') return { text: policyText(await boundTask($, c)) }
     if (sub === 'events') return { text: eventsText(c.decisions, Math.min(50, Math.max(1, Number(rest[0]) || 10)), await $.clock.now()) }
     if (sub === 'handoff') return { text: (await saveHandoff($, c)).text }
     if (sub === 'stop') return { text: await stopCommand($, c) }
-    return { text: 'Usage: /agentctl [task show|set <json>|clear] [policy] [events [n]] [handoff] [stop]' }
+    return { text: 'Usage: /agentctl [proposal] [accept [digest]] [discard] [task show|set <json>|clear] [policy] [events [n]] [handoff] [last] [stop]' }
   })
 
   // The band above the prompt. Other mods' band output is kept beside ours.

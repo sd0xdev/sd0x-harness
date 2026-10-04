@@ -1,6 +1,10 @@
 // Task-scoped classifier (requirements FR-7, FR-8, FR-25; tech spec § 3.4). Pure: no `$`, no I/O.
-// Outcomes: pass (to the host's own permission path), deny (by rule), needs-user, unknown.
-// Order matters and deny wins: forbidden classes are matched before any adapter or executor.
+// Outcomes: pass (to the host's own permission path), deny (by rule), needs-user. A deny-list
+// (2026-10-04, user decision, intent INV-004): what the mod recognizes as forbidden is refused; what
+// it cannot classify is delegated to the host — its permission prompt or auto mode — with
+// `delegated: true`. Order matters and deny wins: forbidden classes are matched first.
+// Best-effort by construction: the classifier reads the tool input, never a script's contents or a
+// command's descendants, so a push or production write inside a script is not seen.
 
 import { checkAdapter } from './adapters.js'
 import { sanitize as redactLike } from './sanitize.js'
@@ -142,9 +146,22 @@ function inside(path, root) {
 
 // ── Classification ──────────────────────────────────────────────────────────────────────────────
 // call: { tool, command?, file_path?, notebook_path? }  task: the bound task, or null.
+const delegated = (rule) => ({ outcome: 'pass', rule: `delegated to the host: ${rule}`, delegated: true })
+
 export function classify(task, call) {
-  if (!task) return { outcome: 'pass', rule: 'no task bound — observe only' }
   const tool = call?.tool
+  // No task bound: the built-in classes still apply to recognizable Bash commands; nothing else is
+  // judged here.
+  if (!task) {
+    if (tool !== 'Bash') return { outcome: 'pass', rule: 'no task bound' }
+    const t = tokenize(call.command)
+    if (!t.ok) return delegated(`unclassifiable: ${t.why}`)
+    for (const seg of t.segments) {
+      const hit = matchForbidden(seg, HARD_FORBIDDEN)
+      if (hit) return { outcome: 'deny', rule: hit.rule }
+    }
+    return { outcome: 'pass', rule: 'no task bound' }
+  }
   // A binding whose record is missing: only the Read tool inside the worktree, whose path is checked,
   // passes. Bash is refused outright — an observational command's paths are not verified here.
   if (task.recordMissing) {
@@ -156,7 +173,7 @@ export function classify(task, call) {
 
 function classifyBash(task, command) {
   const t = tokenize(command)
-  if (!t.ok) return { outcome: 'unknown', rule: `unclassifiable: ${t.why}` }
+  if (!t.ok) return delegated(`unclassifiable: ${t.why}`)
   const classes = forbiddenClasses(task)
   for (const seg of t.segments) {
     const hit = matchForbidden(seg, classes)
@@ -168,21 +185,23 @@ function classifyBash(task, command) {
       for (const n of task.needsUser ?? []) if (startsWith(argv, n)) return { outcome: 'needs-user', rule: `needs-user: ${n.join(' ')}` }
     }
   }
-  let allAdapters = true
-  for (const seg of t.segments) {
-    const { env, argv } = splitEnv(seg)
-    if (!checkAdapter(argv, env).ok) { allAdapters = false; break }
-  }
-  if (allAdapters) return { outcome: 'pass', rule: 'observational adapter' }
+  // Executors before adapters: a declared check that is also observational (`git status`) must still
+  // reach the evidence bracket.
   if (t.segments.length === 1) {
     const { env, argv } = splitEnv(t.segments[0])
     if (Object.keys(env).length === 0) {
       for (const e of task.executors ?? []) if (startsWith(argv, e.argv)) return { outcome: 'pass', rule: `authorized executor: ${e.argv.join(' ')}`, executor: e }
     }
   }
+  let allAdapters = true
+  for (const seg of t.segments) {
+    const { env, argv } = splitEnv(seg)
+    if (!checkAdapter(argv, env).ok) { allAdapters = false; break }
+  }
+  if (allAdapters) return { outcome: 'pass', rule: 'observational adapter' }
   const first = splitEnv(t.segments[0]).argv
   const why = checkAdapter(first, splitEnv(t.segments[0]).env).why
-  return { outcome: 'unknown', rule: `unclassified: ${why}` }
+  return delegated(`unclassified: ${why}`)
 }
 
 function classifyTool(task, call) {
@@ -200,7 +219,7 @@ function classifyTool(task, call) {
   }
   if (INTERNAL_TOOLS.has(tool)) return { outcome: 'pass', rule: `host-internal tool: ${tool}` }
   if ((task.tools ?? []).includes(tool)) return { outcome: 'pass', rule: `tool named by the task: ${tool}` }
-  return { outcome: 'unknown', rule: `tool not classified: ${tool}` }
+  return delegated(`tool not classified: ${tool}`)
 }
 
 // ── Task validation (at `/agentctl task set`) ──────────────────────────────────────────────────────
@@ -217,18 +236,18 @@ export function validateTask(task) {
     if (task[k] !== undefined && !Array.isArray(task[k])) errors.push(`${k} must be an array`)
   }
   if (errors.length) return { ok: false, errors }
-  for (const e of task.executors ?? []) if (!Array.isArray(e.argv) || e.argv.length === 0 || !e.argv.every((x) => typeof x === 'string')) errors.push('each executor needs a non-empty argv array')
+  for (const e of task.executors ?? []) if (!e || typeof e !== 'object' || !Array.isArray(e.argv) || e.argv.length === 0 || !e.argv.every((x) => typeof x === 'string')) errors.push('each executor needs a non-empty argv array')
   for (const n of task.needsUser ?? []) if (!Array.isArray(n) || n.length === 0) errors.push('each needsUser entry must be a non-empty argv array')
   // A credential in a policy value would be stored and shown verbatim; such a task is refused.
   const secretLike = (argv) => argv.join(' ') !== redactLike(argv.join(' '))
-  for (const e of task.executors ?? []) if (Array.isArray(e.argv) && secretLike(e.argv)) errors.push('an executor carries a credential-like value; keep secrets out of the task')
+  for (const e of task.executors ?? []) if (Array.isArray(e?.argv) && secretLike(e.argv)) errors.push('an executor carries a credential-like value; keep secrets out of the task')
   for (const n of task.needsUser ?? []) if (Array.isArray(n) && secretLike(n)) errors.push('a needsUser entry carries a credential-like value; keep secrets out of the task')
   for (const f of task.forbid ?? []) if (secretLike(toWords(f))) errors.push('a forbid entry carries a credential-like value')
   for (const k of ['allow', 'editRoots', 'tools']) for (const x of task[k] ?? []) if (secretLike([String(x)])) errors.push(`a ${k} entry carries a credential-like value`)
   if (typeof task.worktree === 'string' && secretLike([task.worktree])) errors.push('the worktree carries a credential-like value')
   const classes = forbiddenClasses(task)
   const overlap = (argv, label) => { const hit = matchForbidden(argv, classes); if (hit) errors.push(`${label} ${argv.join(' ')} overlaps forbidden class (${hit.rule})`) }
-  for (const e of task.executors ?? []) if (Array.isArray(e.argv)) overlap(e.argv, 'executor')
+  for (const e of task.executors ?? []) if (Array.isArray(e?.argv)) overlap(e.argv, 'executor')
   for (const n of task.needsUser ?? []) if (Array.isArray(n)) overlap(n, 'needsUser')
   return { ok: errors.length === 0, errors }
 }

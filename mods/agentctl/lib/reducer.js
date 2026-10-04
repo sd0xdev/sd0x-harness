@@ -55,7 +55,9 @@ export function reduce(state, o) {
   switch (o.type) {
     case 'turn.start':
       s = { ...s, runtime: { value: 'model-active', since: o.at, turnId: o.turnId, tool: null } }
-      return clearIntervention(clearIntervention(s, 'input'), 'suspected-stall')
+      // A refusal is attention for the turn it happened in; the next turn means it was seen. Its
+      // record stays in the operations and in /agentctl events.
+      return clearIntervention(clearIntervention(clearIntervention(s, 'input'), 'suspected-stall'), 'policy-denied')
     case 'turn.complete':
       s = { ...s, runtime: { value: 'idle', since: o.at, turnId: null, tool: null } }
       return o.awaitsInput ? setIntervention(s, 'input', o.at, o.detail ?? 'turn ended with a question', 'info') : s

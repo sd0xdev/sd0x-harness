@@ -45,6 +45,7 @@ function evidenceLines(evidence, currentFingerprint, now) {
       : ev.outcome === 'refused' ? 'refused'
       : !ev.after || !ev.before ? 'evidence unavailable'
       : ev.before.value !== ev.after.value ? 'tree changed during the run — unbound'
+      : fresh && [ev.coverage, ev.before.coverage, ev.after.coverage, currentFingerprint.coverage].includes('partial') ? 'matches, but a reading was partial'
       : fresh ? 'current'
       : 'stale (tree changed since)'
     const age = Math.max(0, Math.round((now - ev.at) / 1000))
@@ -103,7 +104,8 @@ export function bandText(m) {
     gate = `${m.gate.value} (${age}s${stale ? ', stale' : ''})`
   }
   const resume = m.checkpoint ? ` · last hand-over ${new Date(m.checkpoint.savedAt).toISOString()}` : ''
-  return `${head} · ${rt} · ${attention} · ${gate}${resume}${m.health === 'ok' ? '' : ` · ${m.health}`}`
+  const proposal = m.pending ? ` · proposal ${m.pending.digest.slice(0, 8)} waiting — /agentctl accept` : ''
+  return `${head} · ${rt} · ${attention} · ${gate}${proposal}${resume}${m.health === 'ok' ? '' : ` · ${m.health}`}`
 }
 
 export const LIMITS = [
@@ -114,7 +116,7 @@ export const LIMITS = [
 ]
 
 export function policyText(task) {
-  if (!task) return ['No task bound: the mod observes only.', ...LIMITS].join('\n')
+  if (!task) return ['No task bound: the built-in production-write and remote-git-write classes are still refused; everything else goes to the host\'s own permission flow.', ...LIMITS].join('\n')
   const one = (x) => (Array.isArray(x) ? x.join(' ') : Array.isArray(x?.argv) ? x.argv.join(' ') + (x.check ? ' (check)' : '') : String(x))
   const fmt = (xs) => (xs?.length ? xs.map((x) => sanitize(one(x), 200)).join('; ') : 'none')
   return [
@@ -126,7 +128,8 @@ export function policyText(task) {
     `Authorized executors: ${fmt(task.executors)}`,
     `Needs a person: ${fmt(task.needsUser)}`,
     `Other tools allowed: ${fmt(task.tools)}`,
-    'Everything else is refused as unclassified.',
+    'Everything else goes to the host\'s own permission flow (or auto mode): the mod does not classify it.',
+    'Best-effort: the mod reads each tool call, never a script\'s contents or the commands it starts.',
     ...LIMITS,
   ].join('\n')
 }

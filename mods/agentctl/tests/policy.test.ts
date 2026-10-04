@@ -13,9 +13,26 @@ const task = {
   tools: ['mcp__docs__search'],
 }
 const bash = (command) => classify(task, { tool: 'Bash', command })
+// The deny-list reading of an outcome: a call the mod cannot classify passes to the host, marked.
+const kind = (r) => (r.delegated ? 'delegated' : r.outcome)
 
-test('no bound task: the mod only observes', () => {
+test('no bound task: the built-in classes still refuse; everything else goes to the host', () => {
   expect(classify(null, { tool: 'Bash', command: 'rm -rf /' }).outcome).toBe('pass')
+  expect(classify(null, { tool: 'Bash', command: 'git push origin feat/x' })).toEqual({ outcome: 'deny', rule: 'remote-git-write' })
+  expect(classify(null, { tool: 'Bash', command: 'gh pr merge 28 --squash' })).toEqual({ outcome: 'deny', rule: 'remote-git-write' })
+  expect(classify(null, { tool: 'Bash', command: 'kubectl --context prod delete pod x' }).outcome).toBe('deny')
+  expect(classify(null, { tool: 'Edit', file_path: '/anywhere' }).outcome).toBe('pass')
+})
+
+test('scripts and compound fences are delegated to the host, never classified or approved by the mod', () => {
+  // Best-effort by construction: a push inside a script or a fence is not seen (disclosed limit).
+  for (const c of ['/bin/bash -p /tmp/push.sh', 'bash scripts/run-skill.sh push-ci x', 'X=1; git push origin main', 'cd . && git push']) {
+    const r = classify(null, { tool: 'Bash', command: c })
+    expect([c, r.outcome]).toEqual([c, 'pass'])
+    expect(r.rule).not.toMatch(/approved|authorized/)
+  }
+  expect(kind(bash('/bin/bash -p /tmp/push.sh'))).toBe('delegated')
+  expect(kind(bash('X=1; git push origin main'))).toBe('delegated')
 })
 
 test('observational adapters pass', () => {
@@ -50,27 +67,33 @@ test('needs-user entries yield needs-user', () => {
   expect(bash('npm publish --dry-run')).toEqual({ outcome: 'needs-user', rule: 'needs-user: npm publish' })
 })
 
-test('write forms and program-running options of adapter commands are refused', () => {
+test('write forms and program-running options of adapter commands are not observational: delegated', () => {
   for (const c of ['git branch -D topic', 'git branch new-name', 'git diff --output=x.patch', 'git diff HEAD', 'rg --no-config --pre=./x foo', 'rg foo src', 'git -c core.pager=evil log', 'git checkout main', 'git commit -m x', 'ls --color=always', 'grep --include=*.js foo']) {
-    expect(bash(c).outcome).not.toBe('pass')
+    expect([c, kind(bash(c))]).toEqual([c, 'delegated'])
   }
 })
 
-test('shell syntax beyond words, quotes and pipes is unknown', () => {
+test('shell syntax beyond words, quotes and pipes is delegated to the host', () => {
   for (const c of ['echo $(id)', 'echo `id`', 'cat a > b', 'cat < a', 'ls; rm x', 'ls && rm x', 'ls || true', 'sleep 1 &', 'sh -c "ls"', 'bash -c ls', 'echo "$HOME"', "cat 'a", 'ls\nrm x', 'ls *.js', 'cat ~/.ssh/id_rsa', '']) {
-    expect(bash(c).outcome).toBe('unknown')
+    expect([c, kind(bash(c))]).toEqual([c, 'delegated'])
   }
 })
 
 test('inline environment assignments are not classified as adapters or executors', () => {
-  expect(bash('GIT_EXTERNAL_DIFF=evil git diff --no-ext-diff --no-textconv').outcome).toBe('unknown')
-  expect(bash('CI=1 npm test').outcome).toBe('unknown')
+  expect(kind(bash('GIT_EXTERNAL_DIFF=evil git diff --no-ext-diff --no-textconv'))).toBe('delegated')
+  expect(kind(bash('CI=1 npm test'))).toBe('delegated')
+  expect(bash('CI=1 npm test').executor).toBeUndefined()
   expect(bash('X=1 kubectl delete pod x').outcome).toBe('deny')
 })
 
-test('anything else is unknown', () => {
-  expect(bash('python3 script.py').outcome).toBe('unknown')
-  expect(bash('npm run build').outcome).toBe('unknown')
+test('anything else is delegated to the host', () => {
+  expect(kind(bash('python3 script.py'))).toBe('delegated')
+  expect(kind(bash('npm run build'))).toBe('delegated')
+})
+
+test('executors are matched before adapters, so a declared observational check is still a check', () => {
+  const t = { ...task, executors: [{ argv: ['git', 'status'], check: true }] }
+  expect(classify(t, { tool: 'Bash', command: 'git status' }).executor).toEqual({ argv: ['git', 'status'], check: true })
 })
 
 test('non-Bash rules: Read inside the worktree only', () => {
@@ -88,10 +111,10 @@ test('non-Bash rules: edits only when allowed and inside an allowed root', () =>
   expect(classify(task, { tool: 'Edit', file_path: '/w/repo/src/../../x' }).outcome).toBe('deny')
 })
 
-test('non-Bash rules: MCP and other tools are unknown unless the task names them', () => {
-  expect(classify(task, { tool: 'mcp__docs__search' }).outcome).toBe('pass')
-  expect(classify(task, { tool: 'mcp__prod__write' }).outcome).toBe('unknown')
-  expect(classify(task, { tool: 'WebFetch' }).outcome).toBe('unknown')
+test('non-Bash rules: MCP and other tools are delegated unless the task names them', () => {
+  expect(kind(classify(task, { tool: 'mcp__docs__search' }))).toBe('pass')
+  expect(kind(classify(task, { tool: 'mcp__prod__write' }))).toBe('delegated')
+  expect(kind(classify(task, { tool: 'WebFetch' }))).toBe('delegated')
 })
 
 test('tokenize keeps quoted words and splits pipelines', () => {
@@ -146,15 +169,15 @@ test('outcome table: each row is one call and its exact outcome', () => {
     [{ tool: 'Bash', command: 'npm publish' }, 'needs-user'],
     [{ tool: 'Bash', command: 'kubectl delete pod x' }, 'deny'],
     [{ tool: 'Bash', command: 'terraform apply' }, 'deny'],
-    [{ tool: 'Bash', command: 'python3 x.py' }, 'unknown'],
-    [{ tool: 'Bash', command: 'echo $(id)' }, 'unknown'],
+    [{ tool: 'Bash', command: 'python3 x.py' }, 'delegated'],
+    [{ tool: 'Bash', command: 'echo $(id)' }, 'delegated'],
     [{ tool: 'Read', file_path: '/w/repo/a' }, 'pass'],
     [{ tool: 'Read', file_path: '/etc/hosts' }, 'deny'],
     [{ tool: 'Edit', file_path: '/w/repo/src/a.ts' }, 'pass'],
     [{ tool: 'Edit', file_path: '/w/repo/deploy/x' }, 'deny'],
     [{ tool: 'mcp__docs__search' }, 'pass'],
-    [{ tool: 'mcp__other__x' }, 'unknown'],
+    [{ tool: 'mcp__other__x' }, 'delegated'],
     [{ tool: 'AskUserQuestion' }, 'pass'],
   ]
-  for (const [call, outcome] of table) expect([call, classify(task, call).outcome]).toEqual([call, outcome])
+  for (const [call, outcome] of table) expect([call, kind(classify(task, call))]).toEqual([call, outcome])
 })

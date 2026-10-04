@@ -18,6 +18,10 @@ function copy() {
   cpSync(MOD, dir, { recursive: true, filter: (src) => !src.includes(join('.claude-plugin', 'types')) });
   return dir;
 }
+// Versions relative to the one committed, so a release never breaks these cases.
+const CUR = JSON.parse(readFileSync(join(MOD, 'release.json'), 'utf8')).version;
+const bump = (v, i = 2) => v.split('.').map((x, j) => (j === i ? Number(x) + 1 : j > i ? 0 : Number(x))).join('.');
+const esc = (v) => v.replace(/\./g, '\\.');
 function setVersion(dir, v) {
   const p = join(dir, '.claude-plugin', 'plugin.json');
   writeFileSync(p, JSON.stringify({ ...JSON.parse(readFileSync(p, 'utf8')), version: v }, null, 2) + '\n');
@@ -52,19 +56,19 @@ test('a bump without update fails, and update then records it', () => {
   const d = copy();
   try {
     writeFileSync(join(d, 'lib', 'view.js'), readFileSync(join(d, 'lib', 'view.js'), 'utf8') + '\n// changed\n');
-    setVersion(d, '0.1.1');
-    assert.match(lock.check(d).message, /is at 0\.1\.1 but release\.json records 0\.1\.0/);
+    setVersion(d, bump(CUR));
+    assert.match(lock.check(d).message, new RegExp(`is at ${esc(bump(CUR))} but release\\.json records ${esc(CUR)}`));
     assert.equal(lock.update(d).written, true);
     assert.equal(lock.check(d).ok, true);
-    assert.equal(JSON.parse(readFileSync(join(d, 'release.json'), 'utf8')).version, '0.1.1');
+    assert.equal(JSON.parse(readFileSync(join(d, 'release.json'), 'utf8')).version, bump(CUR));
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
 test('update refuses a version that is not newer, and a missing lock says how to create it', () => {
   const d = copy();
   try {
-    setVersion(d, '0.0.9');
-    assert.match(lock.update(d).message, /not newer than the recorded 0\.1\.0/);
+    setVersion(d, '0.0.1');
+    assert.match(lock.update(d).message, new RegExp(`not newer than the recorded ${esc(CUR)}`));
     rmSync(join(d, 'release.json'));
     assert.match(lock.check(d).message, /release\.json is missing/);
     assert.equal(existsSync(join(d, 'release.json')), false);
@@ -115,8 +119,8 @@ test('regression: a hand-rewritten digest with an unchanged version fails agains
     assert.equal(lock.check(d).ok, true, 'the lock alone only proves itself');
     const r = lock.check(d, { base });
     assert.equal(r.ok, false);
-    assert.match(r.message, /changed since origin\/main but its version 0\.1\.0 is not newer than 0\.1\.0/);
-    setVersion(d, '0.1.1');
+    assert.match(r.message, new RegExp(`changed since origin/main but its version ${esc(CUR)} is not newer than ${esc(CUR)}`));
+    setVersion(d, bump(CUR));
     lock.update(d);
     assert.equal(lock.check(d, { base }).ok, true, 'a real bump against the same base passes');
   } finally { rmSync(d, { recursive: true, force: true }); }
