@@ -34,7 +34,7 @@ test('SKILL.md says the plugin never installs the mod and the task line is the u
   const b = body();
   assert.match(b, /\*\*never\*\* installed by installing sd0x-dev-flow/);
   assert.match(b, /Send this line yourself/);
-  assert.match(b, /Sending `\/agentctl task set` on the user's behalf/);
+  assert.match(b, /Sending `\/agentctl task set` or `\/agentctl accept` on the user's behalf/);
   assert.match(b, /not\*\* a security boundary/);
 });
 
@@ -294,4 +294,103 @@ test('AC7: uninstall asks first, then names the mod\'s data file', () => {
   assert.ok(ask > 0);
   assert.ok(sec.indexOf('run it after approval') > ask);
   assert.match(sec, /~\/\.claude\/plugins\/store\/agentctl_\*\.json/);
+});
+
+// ── Proposals (Claude drafts, the person accepts) ─────────────────────────────
+
+test('propose writes a private proposal outside the worktree that the mod reads to the same digest', async () => {
+  const home = tmp();
+  const cwd = tmp();
+  try {
+    const r = await setup.propose({ goal: 'fix the timer', edit: 'src', check: 'npm test', acceptance: 'timer test passes\nno new lint', base: 'none' }, { cwd, home });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.ok(r.path.startsWith(join(home, '.claude', 'agentctl', 'proposals')), 'under the home, never the worktree');
+    assert.ok(!r.path.startsWith(cwd));
+    assert.equal(require('node:fs').statSync(r.path).mode & 0o777, 0o600);
+    assert.match(r.digest, /^[0-9a-f]{24}$/);
+    assert.match(r.preview.join('\n'), /Checks and executors: npm test \(check\)/);
+    assert.match(r.preview.join('\n'), /\/agentctl accept [0-9a-f]{8}/);
+    const { readProposal, proposalDigest } = await import(join(ROOT, 'mods/agentctl/lib/proposal.js'));
+    const read = readProposal(readFileSync(r.path, 'utf8'), { cwd: resolve(cwd), boundId: null });
+    assert.equal(read.ok, true);
+    assert.equal(await proposalDigest(read.effective), r.digest, 'the helper and the mod name the same digest');
+    assert.deepEqual(read.effective.acceptance, ['timer test passes', 'no new lint']);
+  } finally { rmSync(home, { recursive: true, force: true }); rmSync(cwd, { recursive: true, force: true }); }
+});
+
+test('propose refuses what the mod refuses and writes nothing', async () => {
+  const home = tmp();
+  try {
+    const r = await setup.propose({ goal: 'ship', check: 'git push' }, { cwd: tmp(), home });
+    assert.equal(r.ok, false);
+    assert.match(r.errors.join(' '), /remote-git-write|would refuse/);
+    assert.equal(existsSync(join(home, '.claude', 'agentctl')), false);
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+test('regression: under the deny-list a check must match as an executor, not merely pass to the host', async () => {
+  // An inline assignment is delegated (it passes) but never matches an executor, so no evidence.
+  const r = await setup.taskLine({ goal: 'x', check: 'CI=1 npm test' });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(' '), /CI=1 npm test/);
+});
+
+test('status reports configuration only, in one line', () => {
+  const d = tmp();
+  try {
+    const on = setup.status({ claude: fakeClaude(d, { list: '[{"pluginId":"agentctl@m","enabled":true}]' }) });
+    assert.equal(on.state, 'installed/enabled');
+    assert.match(on.line, /not proof it runs in this session/);
+    assert.equal(setup.status({ claude: fakeClaude(d, { list: '[]' }) }).state, 'not installed');
+    assert.equal(setup.status({ claude: join(d, 'missing') }).state, 'unknown');
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+test('the workflow reference keeps agentctl beside the gates, never as one', () => {
+  const ref = readFileSync(join(ROOT, 'skills/agentctl-setup/references/workflow-integration.md'), 'utf8');
+  assert.match(ref, /never as the reason a gate passed/);
+  assert.match(ref, /Never claim the mod is running/);
+  assert.match(ref, /never a script's contents/);
+  assert.match(ref, /node \.claude\/scripts\/precommit-runner\.js/);
+  assert.match(body(), /SETUP propose --input <path>/);
+});
+
+test('feature-dev, bug-fix and refactor offer agentctl only when installed, and never as a gate', () => {
+  for (const name of ['feature-dev', 'bug-fix', 'refactor']) {
+    const s = readFileSync(join(ROOT, `skills/${name}/SKILL.md`), 'utf8');
+    const sec = s.slice(s.indexOf('## agentctl (optional)'), s.indexOf('\n## ', s.indexOf('## agentctl (optional)') + 5));
+    assert.match(sec, /agentctl-setup\.js" status/, name);
+    assert.match(sec, /Only when `state` is `installed\/enabled`/, name);
+    assert.match(sec, /never a gate/, name);
+  }
+});
+
+test('regression: without an explicit base the helper names no digest, since the mod fills the base in', async () => {
+  const home = tmp();
+  const cwd = tmp();
+  try {
+    const r = await setup.propose({ goal: 'fix the timer', check: 'npm test' }, { cwd, home });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.digest, null);
+    assert.doesNotMatch(r.preview.join('\n'), /\/agentctl accept [0-9a-f]/);
+    assert.match(r.preview.join('\n'), /the mod's preview names it and its digest/);
+    // The mod, reading it with T1 bound, previews a base of T1 — a digest the helper could not know.
+    const { readProposal } = await import(join(ROOT, 'mods/agentctl/lib/proposal.js'));
+    assert.equal(readProposal(readFileSync(r.path, 'utf8'), { cwd: resolve(cwd), boundId: 'T1' }).effective.base, 'T1');
+  } finally { rmSync(home, { recursive: true, force: true }); rmSync(cwd, { recursive: true, force: true }); }
+});
+
+test('regression: propose --stdin takes the answers literally when a bound task refuses the Write', () => {
+  const home = tmp();
+  const cwd = tmp();
+  try {
+    const answers = JSON.stringify({ goal: 'fix $(id) `x` $HOME', check: 'npm test', base: 'none' });
+    const r = spawnSync('/bin/sh', ['-c', `node "${join(ROOT, 'skills/agentctl-setup/scripts/agentctl-setup.js')}" propose --stdin <<'AGENTCTL_ANSWERS_1a2b3c4d'\n${answers}\nAGENTCTL_ANSWERS_1a2b3c4d\n`], { cwd, env: { ...process.env, HOME: home }, encoding: 'utf8' });
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.ok, true, r.stdout + r.stderr);
+    assert.equal(JSON.parse(readFileSync(out.path, 'utf8')).goal, 'fix $(id) `x` $HOME');
+    const bad = spawnSync('node', [join(ROOT, 'skills/agentctl-setup/scripts/agentctl-setup.js'), 'propose', '--stdin'], { input: '[1]', encoding: 'utf8', env: { ...process.env, HOME: home } });
+    assert.match(bad.stdout, /must hold a JSON object/);
+    assert.match(readFileSync(join(ROOT, 'skills/agentctl-setup/references/workflow-integration.md'), 'utf8'), /never clear or widen the task/);
+  } finally { rmSync(home, { recursive: true, force: true }); rmSync(cwd, { recursive: true, force: true }); }
 });

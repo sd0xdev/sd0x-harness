@@ -48,6 +48,15 @@ Phase 0: Target Detection → Phase 2: Incremental Refactor Loop → Phase 3: Re
 
 ---
 
+## agentctl (optional)
+
+At the start, run `node "${CLAUDE_PLUGIN_ROOT}/skills/agentctl-setup/scripts/agentctl-setup.js" status`
+once. Only when `state` is `installed/enabled`, offer to draft a task proposal from the ticket per
+`@skills/agentctl-setup/references/workflow-integration.md` — the user accepts it with
+`/agentctl accept`; any other state, say nothing about agentctl and continue. It is never a gate:
+every review and precommit obligation in this skill is unchanged, and its evidence is context
+beside a verdict, never the verdict.
+
 ## Phase 0: Target Detection & Planning
 
 ### `--mode reference-stability` Branch (checked first)

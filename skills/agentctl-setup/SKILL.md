@@ -23,6 +23,7 @@ Hand a task to Claude and leave; when you come back, three questions:
 | Question | What the mod does |
 |---|---|
 | Did it stay in scope? | You declare the task once (what may be edited, which test command may run). A call outside it — `git push`, `kubectl rollout`, an edit outside the allowed directories — is refused **before it runs**, with the rule named. Only a line you type changes the scope |
+| Did Claude ask for more than it needs? | Claude drafts the scope from the ticket; the mod previews it and binds it only when **you** type `/agentctl accept`. Recognized direct `git push`, `gh pr merge` and production writes are refused even with no task; anything the mod cannot classify goes to Claude Code's own permission prompt or auto mode |
 | Is "tests pass" true? | A test run is recorded with a Git-derived fingerprint of the tree; a later change to a tracked or untracked file reads **stale** within 30 s, not "passed" (ignored files, submodule contents and the environment are outside it) |
 | Where is it, do I need to step in? | A one-line band above the prompt; `/agentctl` for detail; `/agentctl handoff` writes a hand-over from records with no model call |
 
@@ -35,7 +36,7 @@ is the opt-in.
 | Invocation | Does |
 |---|---|
 | `/agentctl-setup` | Steps 1 → 5, in order |
-| `/agentctl-setup --task` | Step 4 only, then stop |
+| `/agentctl-setup --task` | Step 4b (a proposal) only, then stop |
 | `/agentctl-setup --status` | Step 2's `doctor` report only — no install, enable or task question — then stop |
 | `/agentctl-setup --uninstall` | Step 6 only, then stop |
 
@@ -105,6 +106,18 @@ and say:
 
 Do not send the line yourself, and do not paraphrase it: the user copies it as printed.
 
+### 4b. Proposal instead of a typed line (`--task`, and the workflow skills)
+
+When the mod is installed, Claude drafts the scope and the user only accepts it. Follow
+`references/workflow-integration.md` § Drafting a proposal: the
+same `alloc` + Write answers file, then `SETUP propose --input <path>`, which validates with the
+mod's own rules and writes one private file under `~/.claude/agentctl/proposals/`. While a task is
+bound, the Write to the answers file is refused by agentctl; use the reference's `--stdin` form. Show `preview`,
+then say the mod shows its own preview, with the digest, at the end of this turn and that **they**
+type `/agentctl accept <first 8 of that digest>` (or `/agentctl discard`); `digest` is `null` unless a
+`base` was given. Accept binds exactly the previewed
+scope; a later change to the file needs a new preview.
+
 ### 5. Second layer (optional)
 
 The mod refuses only while it runs. Offer native `permissions.deny` rules as a second layer:
@@ -117,7 +130,8 @@ plus where to write: **this project, personal** (`.claude/settings.local.json`) 
 ### 6. Uninstall (`--uninstall`)
 
 AskUserQuestion naming `claude plugin uninstall agentctl@sd0xdev-marketplace`; run it after approval.
-Then say the mod's own data stays in `~/.claude/plugins/store/agentctl_*.json` until deleted, and that
+Then say the mod's own data stays in `~/.claude/plugins/store/agentctl_*.json`, and drafted proposals in
+`~/.claude/agentctl/proposals/`, until deleted, and that
 deny rules added in step 5 stay in the settings file they were written to.
 
 ## Prohibited
@@ -125,7 +139,7 @@ deny rules added in step 5 stay in the settings file they were written to.
 - Putting any free-text answer on a command line — answers go through `alloc` + Write + `--input`
 
 - Installing, uninstalling or writing settings without that step's AskUserQuestion approval
-- Sending `/agentctl task set` on the user's behalf, or editing the printed line
+- Sending `/agentctl task set` or `/agentctl accept` on the user's behalf, or editing the printed line
 - Describing the mod as a security boundary, a gate, or an approval
 - Offering `Bash(git push:*)` as a deny rule
 
@@ -135,7 +149,7 @@ deny rules added in step 5 stay in the settings file they were written to.
 - [ ] Default mode: the user saw what the mod does before any install question
 - [ ] `doctor` ran (default and `--status`), and every `problems` entry was reported
 - [ ] Install, deny-rule writes and uninstall each had their own approval
-- [ ] The task line came from `task-line --input` with `ok: true`, and the user was told to send it themselves
+- [ ] The task line came from `task-line --input` (or the proposal from `propose --input`) with `ok: true`, and the user was told to send or accept it themselves
 
 ## Examples
 
@@ -147,5 +161,5 @@ Action: explain → doctor (ok, not installed) → approve → claude plugin ins
 
 ```
 Input: /agentctl-setup --task
-Action: four questions → task-line → line printed for the user to send
+Action: draft from the ticket → propose → preview shown → "type /agentctl accept <digest>" yourself
 ```
