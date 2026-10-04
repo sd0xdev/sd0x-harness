@@ -545,6 +545,44 @@ Override 以 **Anchor 优先**解析：用户自有的 override 文件（`auto-l
 
 [完整文档](docs/features/deep-research/)
 
+## 可选：Agent Control Plane（`agentctl`）
+
+把任务交给 Claude 然后走开；回来时，有三个问题 — `agentctl` 在同一个 Claude Code session 内回答它们。它是独立、opt-in 的 plugin（`mods/agentctl/`）：**安装 sd0x-dev-flow 绝不会安装它**。运行 `/agentctl-setup` 即可安装并创建你的第一个 task。
+
+| 问题 | 它做了什么 |
+|---|---|
+| 有没有待在范围内？ | 你只需声明一次 task（`/agentctl task set`）。范围之外的调用 — `git push`、`kubectl rollout`、在允许目录之外的编辑 — 会**在执行前被拒绝**，并指出是哪条规则。只有你亲自输入的那一行才能改变范围 |
+| “测试通过”是真的吗？ | 测试运行会连同当时 tree 的 Git 指纹一起记录；之后 tracked 或 untracked 文件一有变更，30 秒内就会显示为**过期（stale）**，而不是“通过”。被 ignore 的文件、submodule 内容与环境变量不在指纹范围内 |
+| 它进行到哪了，我要介入吗？ | prompt 上方有一行 band，`/agentctl` 查看详情，`/agentctl handoff` 根据记录生成 hand-over，不调用任何模型 |
+
+![Claude Code session 中的 agentctl：git push 在执行前被拒绝、编辑之后测试通过变为过期、以及 prompt 上方的 band](docs/assets/agentctl-preview.svg)
+
+```mermaid
+flowchart LR
+    U([You]) -- "/agentctl task set" --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C([Claude]) -- tool call --> P{"tool.call<br/>classify"}
+    S --> P
+    P -- forbidden or unclassified --> R["refused, rule named"]
+    P -- allowed --> E1["Git fingerprint<br/>before a check"]
+    E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
+    H -- runs if permitted --> E2["Git fingerprint<br/>after"]
+    E2 --> S
+    S --> B["band · /agentctl · handoff"]
+    G["review-state.js"] -. read only .-> B
+    B --> U
+```
+
+| 成本 | 时机 | 大小 |
+|---|---|---|
+| `/agentctl-setup` 列表项 | 每个 session（仅名称 + 描述） | ≈ 60 tokens |
+| `/agentctl-setup` 正文 | 只在你或 Claude 调用它时；该轮使用 **Sonnet**（`model: sonnet`） | ≈ 1.8k tokens |
+| 一次拒绝 | 每次被拒绝的调用，以 tool result 形式 | ≈ 25 tokens |
+| `/agentctl …` 回复 | 只在你运行它们时 — Claude 会读取命令输出 | 一般 ≈ 200–400 tokens；hand-over 上限为 16,384 个字符（UTF-16 code units），token 数依语言而定 |
+| mod 本身 | 从不调用模型；band 与重新打开时的 hand-over 都不会发送给 Claude | 0 |
+
+它是控制与显示工具，**不是安全边界** — production 仍由你的凭证保护。设计与测试：[docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
+[mods/agentctl/README.md](mods/agentctl/README.md)。
+
 ## 架构
 
 六个层，每层只负责一件事：

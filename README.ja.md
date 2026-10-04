@@ -545,6 +545,44 @@ flowchart TD
 
 [詳細ドキュメント](docs/features/deep-research/)
 
+## オプション：Agent Control Plane（`agentctl`）
+
+タスクを Claude に任せて席を外し、戻ってきたときに知りたい 3 つの問い — `agentctl` は、それらに 1 つの Claude Code session の中で答えます。これは独立したオプトインの plugin（`mods/agentctl/`）です：**sd0x-dev-flow をインストールしても、これがインストールされることはありません**。`/agentctl-setup` を実行すると、インストールして最初の task を作成できます。
+
+| 問い | 何をするか |
+|---|---|
+| スコープ内に収まったか？ | task は一度だけ宣言します（`/agentctl task set`）。スコープ外の呼び出し — `git push`、`kubectl rollout`、許可されたディレクトリ外の編集 — は、**実行前に拒否**され、どのルールかが示されます。スコープを変えられるのは、あなたが入力した行だけです |
+| 「テスト通過」は本当か？ | テスト実行は、実行時の tree の Git フィンガープリントとともに記録されます。その後 tracked または untracked のファイルが変わると、30 秒以内に「通過」ではなく**古い（stale）**と表示されます。ignore されたファイル、submodule の内容、環境変数はフィンガープリントの対象外です |
+| 今どこまで進んだか、介入すべきか？ | prompt の上に 1 行の band、詳細は `/agentctl`、`/agentctl handoff` はモデル呼び出しなしで記録から hand-over を作成します |
+
+![Claude Code session 内の agentctl：実行前に拒否された git push、編集後に古くなったテスト通過、prompt の上の band](docs/assets/agentctl-preview.svg)
+
+```mermaid
+flowchart LR
+    U([You]) -- "/agentctl task set" --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C([Claude]) -- tool call --> P{"tool.call<br/>classify"}
+    S --> P
+    P -- forbidden or unclassified --> R["refused, rule named"]
+    P -- allowed --> E1["Git fingerprint<br/>before a check"]
+    E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
+    H -- runs if permitted --> E2["Git fingerprint<br/>after"]
+    E2 --> S
+    S --> B["band · /agentctl · handoff"]
+    G["review-state.js"] -. read only .-> B
+    B --> U
+```
+
+| コスト | いつ | サイズ |
+|---|---|---|
+| `/agentctl-setup` の一覧表示 | 毎 session（名前 + 説明のみ） | ≈ 60 tokens |
+| `/agentctl-setup` の本文 | あなたか Claude が呼び出したときだけ。そのターンは **Sonnet**（`model: sonnet`）で動作します | ≈ 1.8k tokens |
+| 拒否 | 拒否された呼び出しごとに、tool result として | ≈ 25 tokens |
+| `/agentctl …` の応答 | 実行したときだけ — Claude がコマンドの出力を読みます | 通常 ≈ 200–400 tokens。hand-over の上限は 16,384 文字（UTF-16 code units）で、token 数は言語によって変わります |
+| mod 自体 | モデルを呼び出しません。band と再オープン時の hand-over は Claude に送られません | 0 |
+
+これは制御と表示のための仕組みであり、**セキュリティ境界ではありません** — production は引き続きあなたの認証情報で守られます。設計とテスト：[docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
+[mods/agentctl/README.md](mods/agentctl/README.md)。
+
 ## アーキテクチャ
 
 6 つの層があり、それぞれが 1 つの関心事を所有します：

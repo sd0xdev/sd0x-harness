@@ -545,6 +545,44 @@ flowchart TD
 
 [完整文件](docs/features/deep-research/)
 
+## 選用：Agent Control Plane（`agentctl`）
+
+把任務交給 Claude 然後走開；回來時，有三個問題 — `agentctl` 在同一個 Claude Code session 內回答它們。它是獨立、opt-in 的 plugin（`mods/agentctl/`）：**安裝 sd0x-dev-flow 絕不會安裝它**。執行 `/agentctl-setup` 即可安裝並建立你的第一個 task。
+
+| 問題 | 它做了什麼 |
+|---|---|
+| 有沒有待在範圍內？ | 你只需宣告一次 task（`/agentctl task set`）。範圍之外的呼叫 — `git push`、`kubectl rollout`、在允許目錄之外的編輯 — 會**在執行前被拒絕**，並指出是哪條規則。只有你親自輸入的那一行才能改變範圍 |
+| 「測試通過」是真的嗎？ | 測試執行會連同當時 tree 的 Git 指紋一起記錄；之後 tracked 或 untracked 檔案一有變更，30 秒內就會顯示為**過期（stale）**，而不是「通過」。被 ignore 的檔案、submodule 內容與環境變數不在指紋範圍內 |
+| 它進行到哪了，我要介入嗎？ | prompt 上方有一行 band，`/agentctl` 看詳情，`/agentctl handoff` 以紀錄產生 hand-over，不呼叫任何模型 |
+
+![Claude Code session 中的 agentctl：git push 在執行前被拒絕、編輯之後測試通過變成過期、以及 prompt 上方的 band](docs/assets/agentctl-preview.svg)
+
+```mermaid
+flowchart LR
+    U([You]) -- "/agentctl task set" --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C([Claude]) -- tool call --> P{"tool.call<br/>classify"}
+    S --> P
+    P -- forbidden or unclassified --> R["refused, rule named"]
+    P -- allowed --> E1["Git fingerprint<br/>before a check"]
+    E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
+    H -- runs if permitted --> E2["Git fingerprint<br/>after"]
+    E2 --> S
+    S --> B["band · /agentctl · handoff"]
+    G["review-state.js"] -. read only .-> B
+    B --> U
+```
+
+| 成本 | 時機 | 大小 |
+|---|---|---|
+| `/agentctl-setup` 清單 | 每個 session（僅名稱 + 描述） | ≈ 60 tokens |
+| `/agentctl-setup` 內文 | 只在你或 Claude 叫用它時；該回合使用 **Sonnet**（`model: sonnet`） | ≈ 1.8k tokens |
+| 一次拒絕 | 每次被拒絕的呼叫，以 tool result 形式 | ≈ 25 tokens |
+| `/agentctl …` 回覆 | 只在你執行它們時 — Claude 會讀取指令輸出 | 一般 ≈ 200–400 tokens；hand-over 上限為 16,384 個字元（UTF-16 code units），token 數依語言而定 |
+| mod 本身 | 從不呼叫模型；band 與重新開啟時的 hand-over 都不會送給 Claude | 0 |
+
+它是控制與顯示工具，**不是安全邊界** — production 仍由你的憑證保護。設計與測試：[docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
+[mods/agentctl/README.md](mods/agentctl/README.md)。
+
 ## 架構
 
 六個層，每層各自擁有一項關注點：

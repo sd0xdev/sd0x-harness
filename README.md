@@ -571,6 +571,47 @@ Run `/deep-research` to orchestrate 2-3 parallel researcher agents across web so
 
 [Full documentation](docs/features/deep-research/)
 
+## Optional: Agent Control Plane (`agentctl`)
+
+Hand a task to Claude and step away; when you come back, three questions — `agentctl` answers them
+inside one Claude Code session. It is a separate, opt-in plugin (`mods/agentctl/`): **installing
+sd0x-dev-flow never installs it**. Run `/agentctl-setup` to install it and build your first task.
+
+| Question | What it does |
+|---|---|
+| Did it stay in scope? | You declare the task once (`/agentctl task set`). A call outside it — `git push`, `kubectl rollout`, an edit outside the allowed directories — is **refused before it runs**, with the rule named. Only a line you type changes the scope |
+| Is "tests pass" true? | A test run is recorded with a Git-derived fingerprint of the tree; a later change to a tracked or untracked file reads **stale** within 30 s, not "passed". Ignored files, submodule contents and the environment are outside the fingerprint |
+| Where is it, do I step in? | A one-line band above the prompt, `/agentctl` for detail, `/agentctl handoff` for a hand-over built from records with no model call |
+
+![agentctl in a Claude Code session: a git push refused before it runs, a test pass gone stale after an edit, and the band above the prompt](docs/assets/agentctl-preview.svg)
+
+```mermaid
+flowchart LR
+    U([You]) -- "/agentctl task set" --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C([Claude]) -- tool call --> P{"tool.call<br/>classify"}
+    S --> P
+    P -- forbidden or unclassified --> R["refused, rule named"]
+    P -- allowed --> E1["Git fingerprint<br/>before a check"]
+    E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
+    H -- runs if permitted --> E2["Git fingerprint<br/>after"]
+    E2 --> S
+    S --> B["band · /agentctl · handoff"]
+    G["review-state.js"] -. read only .-> B
+    B --> U
+```
+
+| Cost | When | Size |
+|---|---|---|
+| `/agentctl-setup` listing | every session (name + description only) | ≈ 60 tokens |
+| `/agentctl-setup` body | only when you or Claude invoke it; it runs on **Sonnet** (`model: sonnet`) for that turn | ≈ 1.8k tokens |
+| A refusal | per refused call, as the tool result | ≈ 25 tokens |
+| `/agentctl …` replies | only when you run them — Claude reads command output | ≈ 200–400 tokens typical; a hand-over is capped at 16,384 characters (UTF-16 code units); its token count depends on the language |
+| The mod itself | never calls a model; the band and the reopen hand-over are not sent to Claude | 0 |
+
+It is a control and a display, **not a security boundary** — production stays protected by your
+credentials. Design and tests: [docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
+[mods/agentctl/README.md](mods/agentctl/README.md).
+
 ## Architecture
 
 Six layers, each owning one concern:
