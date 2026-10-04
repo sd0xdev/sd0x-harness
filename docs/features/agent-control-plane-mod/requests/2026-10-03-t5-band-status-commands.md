@@ -2,7 +2,7 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md`.
 > **Created**: 2026-10-03
-> **Status**: Candidate Complete
+> **Status**: Completed
 > **Priority**: P2
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) — § 5 task 5
 > **Requirements**: [1-requirements.md](../1-requirements.md) — FR-2, FR-3, FR-17, FR-23
@@ -49,8 +49,8 @@ The user needs one glanceable band and a text form for surfaces that draw nothin
 | ----- | ------ | ---- |
 | Analysis | Done | Tech spec § 3–§ 5 |
 | Development | Done | agentctl-mod `c22cf03` |
-| Testing | Done | `claude plugin test .` 100 pass at `c22cf03`; `claude plugin validate .` passes |
-| Acceptance | Done | band with gate age and stale marker, /agentctl status/policy/events; Codex ✅ Ready. Not yet verified live — see T8 |
+| Testing | Done | `claude plugin test .` 124 pass and `claude plugin validate .` passes on the working tree after the AC-verification fixes (agentctl-mod, 2026-10-04) |
+| Acceptance | Done | band with gate age and stale marker, /agentctl status/policy/events; Codex ✅ Ready. Verified live — see T8. `/codex-review-fast` (thorough): ✅ Ready on every round touching this task, latest on the AC-verification fixes. Related Files deviation: the band is inline in `hooks/register.js` with its formatter in `lib/view.js`; its tests are in `tests/flows.test.ts` and `tests/view.test.ts` (no `ui/band.js` or `tests/ui.test.ts`). `--verify-ac` (2026-10-04): every AC Complete at High, accounted one result per AC |
 
 ## References
 

@@ -2,7 +2,7 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md`.
 > **Created**: 2026-10-03
-> **Status**: Candidate Complete
+> **Status**: Completed
 > **Priority**: P1
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) — § 5 task 3
 > **Requirements**: [1-requirements.md](../1-requirements.md) — FR-7, FR-9, FR-10, NFR-3
@@ -49,8 +49,8 @@ The classifier only protects anything once it is wired ahead of core with a fail
 | ----- | ------ | ---- |
 | Analysis | Done | Tech spec § 3–§ 5 |
 | Development | Done | agentctl-mod `0c6a29b` |
-| Testing | Done | `claude plugin test .` 100 pass at `c22cf03`; `claude plugin validate .` passes |
-| Acceptance | Done | hook tests with core stubs; combine never creates an allow; Codex ✅ Ready. Not yet verified live — see T8 |
+| Testing | Done | `claude plugin test .` 124 pass and `claude plugin validate .` passes on the working tree after the AC-verification fixes (agentctl-mod, 2026-10-04) |
+| Acceptance | Done | hook tests with core stubs; combine never creates an allow; Codex ✅ Ready. Verified live — see T8. `/codex-review-fast` (thorough): ✅ Ready on every round touching this task, latest on the AC-verification fixes. `--verify-ac` (2026-10-04): every AC Complete at High, accounted one result per AC |
 
 ## References
 

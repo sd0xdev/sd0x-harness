@@ -2,7 +2,7 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md`.
 > **Created**: 2026-10-03
-> **Status**: In Progress
+> **Status**: Candidate Complete
 > **Priority**: P2
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) — § 5 task 8
 > **Requirements**: [1-requirements.md](../1-requirements.md) — FR-26, NFR-4, NFR-7
@@ -34,21 +34,21 @@ Stub tests cannot establish surface behaviour, abort semantics or removal; these
 
 ## Acceptance Criteria
 
-- [ ] V3 result recorded per surface and mode; the verified-surface list is updated only from a recorded dialog
-- [ ] V5 and V6 results recorded and reflected in FR-6 / FR-12 behaviour
-- [ ] V7 usage window and V8 fingerprint latency recorded; NFR-4 targets fixed from the measurement
-- [ ] Signal 12: after disable and uninstall no mod process runs and permission settings are byte-identical
+- [x] V3 result recorded per surface and mode; the verified-surface list is updated only from a recorded dialog
+- [x] V5 and V6 results recorded and reflected in FR-6 / FR-12 behaviour
+- [x] V7 usage window and V8 fingerprint latency recorded; NFR-4 targets fixed from the measurement
+- [x] Signal 12: after disable and uninstall no mod process runs and permission settings are byte-identical
 - [x] README states the tested version and the non-isolation boundary
-- [ ] Pass /codex-review-fast
+- [x] Pass /codex-review-fast
 
 ## Progress
 
 | Phase | Status | Note |
 | ----- | ------ | ---- |
 | Analysis | Done | Tech spec § 3–§ 5 |
-| Development | In Progress | README written in agentctl-mod; live results recorded there. A live run found task-less sessions escaping the per-task retention cap — fixed with a regression test |
-| Testing | - | |
-| Acceptance | In Progress | 2026-10-04 live, headless (`claude -p --plugin-dir`, stream-json for multi-turn), scratch repo. Passed: load and model-free `/agentctl`; refusal before execution; host path for allowed reads; non-zero exit as `isError` and a backgrounded check closed from the host's task notification (V5); subagent tool calls refused by the same rule (V4, agents); 5 h window `1%` with reset after a model turn (V7); two concurrent sessions (V9); no leftover process (V10, process half); tree reading ~90 ms / 500 changed paths (V8). Under `-p`, an `ask` was not auto-approved (V3, `-p` only) and stream input waits for the turn, so `immediate` stop could not be exercised (V6). Found and fixed: task-less session retention, `ToolSearch` refused, background completion missed without polling. Still owed, interactive only: V3 on terminal/Desktop/VS Code/mobile, V6, V4 for MCP, V10 display |
+| Development | Done | README written in agentctl-mod; live results recorded there. A live run found task-less sessions escaping the per-task retention cap — fixed with a regression test |
+| Testing | Done | `claude plugin test .` 124 pass and `claude plugin validate .` passes on the working tree after the AC-verification fixes (agentctl-mod, 2026-10-04) |
+| Acceptance | Done | 2026-10-04, live in a scratch repository — headless (`claude -p --plugin-dir`, stream-json) on 2.1.288 and interactive in tmux on 2.1.289. Passed: load and model-free `/agentctl`; refusal before execution; host path for allowed calls; non-zero exit as `isError`; background completion from the host's notification (V5); subagent and MCP tool calls through the same policy (V4); 5 h window after a model turn (V7); ~90 ms tree reading (V8, within NFR-4); concurrent sessions (V9); Signal 12 by a real install from a local marketplace, disable and uninstall: no mod process left and the `permissions` settings byte-identical (the host itself left an empty `extraKnownMarketplaces` key and a plugin cache, which were restored); NFR-4 targets fixed in `1-requirements.md` from these measurements; band with CJK at 80 and 50 columns (V10); immediate stop cancelled a running turn and reported the command the host moved to the background (V6); `ask` showed the host's own dialog on the interactive terminal in manual mode and was not auto-approved under `-p` (V3). Found and fixed: task-less retention, `ToolSearch` refused, background completion missed, a concurrent context build on interactive start. Not verified and therefore still refused: `needsUser` on Desktop, VS Code, mobile and non-manual permission modes; SSH. `/codex-review-fast` (thorough): ✅ Ready on the race fix and on the AC-verification fixes `--verify-ac` (2026-10-04): every AC Complete; the V3 AC at Medium because only the `-p` and interactive-terminal (manual mode) surfaces could be exercised here — Desktop, VS Code, mobile and non-manual modes remain unverified, so `needsUser` stays refused there and this ticket stays Candidate Complete until they are run |
 
 ## References
 

@@ -2,7 +2,7 @@
 
 > **Doc class**: Request ticket (date-prefixed non-lifecycle — per `@rules/docs-numbering.md`). Per-task work breakdown unit for progress tracking. **Not** a feature-level requirements doc — for that see `../1-requirements.md`.
 > **Created**: 2026-10-03
-> **Status**: Candidate Complete
+> **Status**: Completed
 > **Priority**: P1
 > **Tech Spec**: [2-tech-spec.md](../2-tech-spec.md) — § 5 task 2
 > **Requirements**: [1-requirements.md](../1-requirements.md) — FR-7, FR-8, FR-25
@@ -51,8 +51,8 @@ Task-scoped refusal needs a pure classifier with deny precedence and per-command
 | ----- | ------ | ---- |
 | Analysis | Done | Tech spec § 3–§ 5 |
 | Development | Done | agentctl-mod `0c6a29b` |
-| Testing | Done | `claude plugin test .` 100 pass at `c22cf03`; `claude plugin validate .` passes |
-| Acceptance | Done | policy and adapter tables incl. evasions and overlaps; Codex ✅ Ready. Host-internal AskUserQuestion, TodoWrite, GetTask pass (they change nothing outside the session) — recorded in the tech spec. Not yet verified live — see T8 |
+| Testing | Done | `claude plugin test .` 124 pass and `claude plugin validate .` passes on the working tree after the AC-verification fixes (agentctl-mod, 2026-10-04) |
+| Acceptance | Done | policy and adapter tables incl. evasions and overlaps; Codex ✅ Ready. Host-internal AskUserQuestion, TodoWrite, GetTask pass (they change nothing outside the session) — recorded in the tech spec. Verified live — see T8. `/codex-review-fast` (thorough): ✅ Ready on every round touching this task, latest on the AC-verification fixes. `--verify-ac` (2026-10-04): every AC Complete at High, accounted one result per AC |
 
 ## References
 
