@@ -17,7 +17,7 @@ session with `claude --plugin-dir mods/agentctl`.
 |---|---|
 | Task scope | `/agentctl task set <json>` typed at your own prompt binds a task to the worktree. Tool output, files and messages cannot change it — only a command you type. The binding is per worktree, so your own `task set` / `task clear` in another session on the same worktree does replace or clear it. Task records and hand-overs are kept per worktree, so the same task id in two worktrees names two separate tasks. A store error is reported as such, and the previous task keeps applying; a binding whose record is missing refuses everything but reads in the worktree |
 | Refusal | **While a task is bound**, every tool call is classified before it runs: forbidden or unclassifiable → refused with the rule named; allowed → the host's own permission path, unchanged. A downstream deny is never weakened and an allow is never created. **With no task bound** (before `task set`, after `task clear`) the mod observes only and refuses nothing |
-| Evidence | A Bash call matching a `check` executor is bracketed by Git-derived tree readings; a later edit shows the result stale within 30 s; a background check stays "completion unobserved" until a terminal result is seen |
+| Evidence | A Bash call authorized by a `check` executor is bracketed by Git-derived tree readings (a command that is already observational, such as `git status`, passes as observational first and gets no evidence); a later edit shows the result stale within 30 s; a background check stays "completion unobserved" until a terminal result is seen |
 | Panel | The band above the prompt is compact: task, runtime and its duration, what needs you, the gate reading with its age (and `stale` past 30 s), the last hand-over time. `/agentctl` is the detailed text: it adds context, the 5 h window and evidence; the gate, context and window lines name their source and age, or read `missing` / `unavailable`, and each evidence line its outcome, freshness, coverage and age |
 | Hand-over | `/agentctl handoff` — eight answers from records, no model, no network, no process; shown in full on reopen |
 | Stop | `/agentctl stop` — saves the hand-over, requests cancellation of the current turn, lists tracked operations; never "all stopped" |
@@ -71,6 +71,15 @@ cd mods/agentctl            # from the repository root
 claude plugin validate .   # hooks and $ calls: no $.model.*, $.http.*, $.tool.register, prompt writes
 claude plugin test .       # every *.test.ts under tests/
 ```
+
+## Release
+
+The mod is versioned on its own and released under `agentctl-v<version>` tags
+(`.github/workflows/release-agentctl.yml`), separate from sd0x-dev-flow's releases. Claude Code caches an
+installed plugin by version, so a change to anything but this README or `tests/` needs a version bump:
+raise `"version"` in `.claude-plugin/plugin.json`, then run `node .github/scripts/agentctl-version.js update`
+from the repository root (or `/bump-version agentctl`). CI's version lock fails until both are done, and
+CI also runs `claude plugin validate` and `claude plugin test` here.
 
 ## Verified live (2026-10-04, scratch repository: headless `claude -p --plugin-dir` on 2.1.288, interactive tmux on 2.1.289)
 

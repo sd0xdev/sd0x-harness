@@ -89,7 +89,7 @@ Keeping every decision in pure modules is what makes `claude plugin test` cover 
 | `/agentctl` | Status text: the band's fields with source and age (FR-2, FR-3, FR-17) |
 | `/agentctl task show` · `task set <json>` · `task clear` | Show, set or clear the task; `set`/`clear` refused unless `e.origin.kind === 'composer'`. `set` validates the input (bounded `id`, array fields, no credential-like policy value), then stores only an allowlisted record with `goal` and `acceptance` redacted |
 | `/agentctl policy` | Effective classes, executors, the policy version, and the disclosed limits (host skips, other mods, text-matching native rules) |
-| `/agentctl events [n]` | Last `n` operations and decisions, sanitized |
+| `/agentctl events [n]` | Last `n` policy decisions (refusals and needs-user outcomes included), sanitized; ordinary tool calls are in the `/agentctl` panel, not here |
 | `/agentctl handoff` | The hand-over markdown from records and the last tree reading — no process, model or network call; also saved to `checkpoint/<scope>/<sessionId>` |
 | `/agentctl stop` | § 3.4 stop |
 
@@ -131,7 +131,7 @@ Non-Bash: `Read` → pass inside the worktree; `Write`/`Edit`/`NotebookEdit` →
 
 "Surface verified" means the interactive terminal under the `default`, `acceptEdits` or `auto` permission mode — the only combinations where a host dialog was recorded (T8). The mode is read from classic hook inputs (`permission_mode` on `classic.UserPromptSubmit`, `classic.PostToolUse`, `classic.PermissionRequest`); an unknown mode, `-p`, `dontAsk`, `plan`, `bypassPermissions` and every other surface keep needs-user refused. The mod never creates an `allow`: `allow` leaves this hook only as an unchanged downstream `allow` on a pass-through call, and no downstream verdict is ever upgraded.
 
-**Evidence** (FR-5, FR-6): the evidence hook runs beneath the policy hook. For a call whose argv matches an executor marked `check`, it reads a fingerprint before `next(e)` and after the result settles; the record is keyed by an opaque `check-<digest>` of the executor argv, through `$.process.run` with `timeoutMs` on each command:
+**Evidence** (FR-5, FR-6): the evidence hook runs beneath the policy hook. For a call classified through the authorized-executor branch with an executor marked `check` (a command that is already an observational adapter, such as `git status`, passes as observational first and gets no evidence), it reads a fingerprint before `next(e)` and after the result settles; the record is keyed by an opaque `check-<digest>` of the executor argv, through `$.process.run` with `timeoutMs` on each command:
 `git --no-optional-locks -c core.fsmonitor=false rev-parse HEAD` · `… ls-files -s -z` · `… status --porcelain=v2 -z --untracked-files=all` · `git hash-object --no-filters --stdin-paths` for changed and untracked paths, at most 500 (`MAX_HASHED_PATHS`; more reads as partial). `assume-unchanged`/`skip-worktree` entries, conflicts, submodules, an unreadable path or a timeout set `coverage: partial`. A read where every git command failed records `evidence unavailable`; it never refuses. While evidence exists, the tree is re-read every 30 s and at each turn end, so a later edit shows the result stale within 30 s; the gate reading is refreshed on the same tick and the band shows its age and a stale marker. A `backgroundTaskId` result records `backgrounded`; only an observed terminal status closes it — a `GetTask` result, or the host's task notification (a `prompt.submit` whose origin is `task-notification`, carrying `<task-id>` and `<status>`; measured on 2.1.288). A prompt of any other origin closes nothing.
 
 **State** (FR-4): the reducer folds `turn.start`, `turn.complete`, `tool.call` results, `classic.PermissionRequest`, `classic.Stop` (`background_tasks` → "in flight as of T"), `session.measure` and refusals into the four dimensions. "Suspected stall" requires: no turn or tool event for the idle threshold **and** no tool running **and** no background task in flight; it is always labelled unconfirmed.
@@ -160,6 +160,13 @@ opt-in, and its deterministic half is `skills/agentctl-setup/scripts/agentctl-se
 The skill asks before each install, enable, settings write and uninstall, and never sends the task
 line: the mod accepts it only from the user's own prompt. `mods/agentctl/package.json` declares the
 ES-module format so `task-line` loads the mod's validator on Node versions without syntax detection.
+
+Release: the mod has its own version (`mods/agentctl/.claude-plugin/plugin.json`) and ships under
+`agentctl-v<version>` tags (`.github/workflows/release-agentctl.yml`); sd0x-dev-flow's release reads only
+`v*` tags. Claude Code caches an installed plugin by version, so `mods/agentctl/release.json` records the
+version with a digest of the mod's runtime files (README and tests excluded) and CI fails when a change
+lands without a bump (`.github/scripts/agentctl-version.js`). CI also runs `claude plugin validate` and
+`claude plugin test` on the mod with a pinned Claude Code, which needs no credentials.
 
 ## 4. Risks and Dependencies
 
