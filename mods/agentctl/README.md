@@ -7,7 +7,9 @@ after every Claude Code upgrade.
 
 Design: `docs/features/agent-control-plane-mod/` in this repository (requirements, feasibility study,
 tech spec, request tickets). This directory is not part of the sd0x-dev-flow plugin: installing the
-plugin does not install the mod. Load it on its own with `claude --plugin-dir mods/agentctl`.
+plugin does not install the mod. To install it, run `/agentctl-setup` (it checks the host, installs
+`agentctl@sd0xdev-marketplace` after you approve, and builds your first task line), or load it for one
+session with `claude --plugin-dir mods/agentctl`.
 
 ## What it does
 
