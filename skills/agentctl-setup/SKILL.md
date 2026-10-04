@@ -2,6 +2,7 @@
 name: agentctl-setup
 description: "Install and set up the optional agentctl mod (task scope, refusal before execution, evidence that goes stale, model-free hand-over) — checks the environment, installs after approval, builds the first task line, optional deny rules, uninstall"
 allowed-tools: Read, Write, AskUserQuestion, Bash(node:*), Bash(claude:*)
+model: sonnet
 ---
 
 # agentctl Setup
@@ -22,7 +23,7 @@ Hand a task to Claude and leave; when you come back, three questions:
 | Question | What the mod does |
 |---|---|
 | Did it stay in scope? | You declare the task once (what may be edited, which test command may run). A call outside it — `git push`, `kubectl rollout`, an edit outside the allowed directories — is refused **before it runs**, with the rule named. Only a line you type changes the scope |
-| Is "tests pass" true? | A test run is recorded with the tree it ran on; edit a file afterwards and it reads **stale**, not "passed" |
+| Is "tests pass" true? | A test run is recorded with a Git-derived fingerprint of the tree; a later change to a tracked or untracked file reads **stale** within 30 s, not "passed" (ignored files, submodule contents and the environment are outside it) |
 | Where is it, do I need to step in? | A one-line band above the prompt; `/agentctl` for detail; `/agentctl handoff` writes a hand-over from records with no model call |
 
 It is **not** a security boundary: production stays protected by credentials. It ships in this

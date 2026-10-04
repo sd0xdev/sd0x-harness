@@ -26,6 +26,8 @@ test('SKILL.md frontmatter names the skill and grants only the tools it uses', (
   const fm = body().match(/^---\n([\s\S]*?)\n---/)[1];
   assert.match(fm, /^name: agentctl-setup$/m);
   assert.match(fm, /^allowed-tools: Read, Write, AskUserQuestion, Bash\(node:\*\), Bash\(claude:\*\)$/m);
+  // A guided, low-reasoning flow: Sonnet for the rest of the turn, the session model again afterwards.
+  assert.match(fm, /^model: sonnet$/m);
 });
 
 test('SKILL.md says the plugin never installs the mod and the task line is the user\'s to send', () => {
