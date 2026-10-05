@@ -181,3 +181,48 @@ test('outcome table: each row is one call and its exact outcome', () => {
   ]
   for (const [call, outcome] of table) expect([call, kind(classify(task, call))]).toEqual([call, outcome])
 })
+
+test('adversarial finding: an absolute or upper-case program path does not hide a built-in class', () => {
+  for (const c of ['/usr/bin/git push', '/usr/bin/gh pr merge 1', '/usr/local/bin/kubectl apply -f x', '/opt/homebrew/bin/helm upgrade a b', 'GIT push', 'sudo /usr/bin/git -C . push']) {
+    expect([c, classify(null, { tool: 'Bash', command: c }).outcome]).toEqual([c, 'deny'])
+    expect([c, bash(c).outcome]).toEqual([c, 'deny'])
+  }
+  // Only the program word is reduced: a path argument that ends in a class word stays a path.
+  expect(kind(bash('git add src/push'))).toBe('delegated')
+  // The same matcher guards declared executors.
+  expect(validateTask({ ...task, executors: [{ argv: ['/usr/bin/git', 'push'] }] }).errors.join(' ')).toMatch(/overlaps forbidden class \(remote-git-write\)/)
+})
+
+test('adversarial finding: edit roots outside the worktree are refused, and a stored one grants nothing', () => {
+  for (const r of ['../other', '/etc', 'src/../../x']) {
+    expect(validateTask({ ...task, editRoots: [r] }).errors.join(' ')).toMatch(/outside the worktree/)
+  }
+  expect(validateTask({ ...task, editRoots: ['src/../tests'] }).ok).toBe(true)
+  const stored = { ...task, editRoots: ['../other'] }
+  expect(classify(stored, { tool: 'Write', file_path: '/w/other/f' })).toEqual({ outcome: 'deny', rule: 'edit outside the allowed roots' })
+})
+
+test('adversarial finding: with no task, an unclassified command is marked delegated, an adapter is not', () => {
+  expect(kind(classify(null, { tool: 'Bash', command: 'bash push.sh' }))).toBe('delegated')
+  expect(kind(classify(null, { tool: 'Bash', command: 'git status' }))).toBe('pass')
+})
+
+test('review finding: a task forbid written as a path matches both spellings, and blocks an overlapping executor', () => {
+  const t = { ...task, forbid: ['/usr/bin/git commit'] }
+  for (const c of ['/usr/bin/git commit -m x', 'git commit -m x', '/opt/git/bin/git commit']) {
+    expect([c, classify(t, { tool: 'Bash', command: c })]).toEqual([c, { outcome: 'deny', rule: 'task-forbid: /usr/bin/git commit' }])
+  }
+  expect(validateTask({ ...t, executors: [{ argv: ['/usr/bin/git', 'commit'] }] }).errors.join(' ')).toMatch(/overlaps forbidden class/)
+  const plain = { ...task, forbid: ['git commit'] }
+  expect(classify(plain, { tool: 'Bash', command: '/usr/bin/git commit -m x' }).outcome).toBe('deny')
+})
+
+test('review finding: an argument path whose basename names a program is never reduced', () => {
+  const t = { ...task, forbid: ['python /tmp/terraform', '/usr/bin/terraform apply', 'rm /tmp/git'] }
+  expect(classify(t, { tool: 'Bash', command: 'python /tmp/terraform' }).outcome).toBe('deny')
+  expect(classify(t, { tool: 'Bash', command: 'rm /tmp/git' }).outcome).toBe('deny')
+  expect(classify(t, { tool: 'Bash', command: '/usr/bin/terraform apply -auto-approve' }).outcome).toBe('deny')
+  expect(validateTask({ ...t, executors: [{ argv: ['python', '/tmp/terraform'] }] }).errors.join(' ')).toMatch(/overlaps forbidden class/)
+  // And an argument named like a program does not start a match on its own.
+  expect(classify(null, { tool: 'Bash', command: 'cat /tmp/git push.txt' }).outcome).not.toBe('deny')
+})

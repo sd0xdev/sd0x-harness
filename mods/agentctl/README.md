@@ -1,6 +1,6 @@
 # agentctl — Agent Control Plane for one Claude Code session
 
-Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 163 tests); 0.2.x re-verified live on 2.1.289 (§ Verified live, 0.2.x).
+Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 170 tests); 0.2.x re-verified live on 2.1.289 (§ Verified live, 0.2.x).
 The mods API is marked changeable between releases; the type declarations the host writes into
 `.claude-plugin/types/` are the authority for the installed version. Run `claude plugin validate .`
 after every Claude Code upgrade.
@@ -146,6 +146,7 @@ Removal: `--plugin-dir` installs nothing and changes no setting. The mod's own d
 | `/agentctl handoff`, reopen, `/agentctl`, `/agentctl last` | Hand-over states when the tree was read and lists the stale check under Not verified; on reopen the transcript shows it, bare `/agentctl` prints one pointer line, `/agentctl last` the whole of it |
 | Found live and fixed in 0.2.1 | An accepted proposal file was read again by the next session as a stale draft (now remembered per worktree); the built-in refusal said "the task's scope", and Claude then proposed widening the task (now: "a built-in class no task can lift"); transcript lines read `agentctl: agentctl:` |
 | Cost of the two `-p` probes | 2–3 turns each, ≈ $0.06 each on Haiku; the mod's own replies, previews and band call no model |
+| Independent adversarial test (Codex, 2026-10-05), fixed in 0.2.2 | An absolute or upper-case program path (`/usr/bin/git push`, `GIT push`) slipped past the built-in classes; an edit root such as `../other` authorized writes outside the worktree; the proposal cap counted characters, not UTF-8 bytes; with no task bound, delegated calls were not recorded in `/agentctl events`. Digest agreement, prototype keys, other-worktree refusal, evidence partitioning and partial coverage held |
 
 ## Not verified
 

@@ -22,7 +22,8 @@ export function proposalPath(home, worktreeKey) {
 // the binding changed after the preview.
 export function readProposal(text, { cwd, boundId }) {
   if (typeof text !== 'string' || text.length === 0) return { ok: false, errors: ['the proposal file is empty'] }
-  if (text.length > MAX_PROPOSAL_BYTES) return { ok: false, errors: [`the proposal is over ${MAX_PROPOSAL_BYTES} bytes`] }
+  // Bytes, not UTF-16 code units: a non-ASCII draft is up to three times longer on disk.
+  if (new TextEncoder().encode(text).length > MAX_PROPOSAL_BYTES) return { ok: false, errors: [`the proposal is over ${MAX_PROPOSAL_BYTES} bytes`] }
   let input
   try { input = JSON.parse(text) } catch { return { ok: false, errors: ['the proposal is not JSON'] } }
   if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, errors: ['the proposal must be a JSON object'] }

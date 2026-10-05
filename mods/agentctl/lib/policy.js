@@ -33,6 +33,7 @@ export const HARD_FORBIDDEN = [
 ]
 
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit', 'MultiEdit'])
+const NO_TASK = Object.freeze({ forbid: [], executors: [], needsUser: [] })
 // Host-internal tools that change nothing outside the session: asking the user, the todo list,
 // reading a background task's status. Refusing them would only break supervision itself.
 // ToolSearch only loads tool schemas; every tool it loads is still classified when it is called.
@@ -98,10 +99,17 @@ function words(argv) {
   return argv.filter((a) => !a.startsWith('-'))
 }
 
-function isSubsequence(needle, hay) {
+const fold = (x) => String(x).toLowerCase()
+const program = (x) => { const f = fold(x); return f.includes('/') ? f.slice(f.lastIndexOf('/') + 1) : f }
+
+function matchesClass(needle, hay) {
+  if (needle.length === 0) return true
   let j = 0
-  for (const w of hay) if (w === needle[j] && ++j === needle.length) return true
-  return needle.length === 0
+  for (const x of hay) {
+    const hit = j === 0 ? program(x) === program(needle[0]) : fold(x) === fold(needle[j])
+    if (hit && ++j === needle.length) return true
+  }
+  return false
 }
 
 function toWords(cls) {
@@ -115,9 +123,15 @@ export function forbiddenClasses(task) {
 
 function matchForbidden(argvFull, classes) {
   // Match on every word, including those after an env prefix or a wrapper (`sudo`, `env`), so a
-  // wrapper never hides a forbidden class.
+  // wrapper never hides a forbidden class. Case-folded (a case-insensitive filesystem runs `GIT`),
+  // and a path whose last segment names a class's program is that program (`/usr/bin/git`, found
+  // by an adversarial test): only the program word is reduced, so `git add src/push` stays a path.
+  // Per class, not by rewriting the command: only the class's program word is compared by program
+  // name (so `/usr/bin/git commit` and `git commit` meet, whichever is written where); every later
+  // class word is compared with the command's own words, case-folded, so an argument path such as
+  // `/tmp/git` is never reduced (both found in review).
   const w = words(argvFull)
-  for (const c of classes) if (isSubsequence(c.words, w)) return c
+  for (const c of classes) if (matchesClass(c.words, w)) return c
   return null
 }
 
@@ -150,17 +164,12 @@ const delegated = (rule) => ({ outcome: 'pass', rule: `delegated to the host: ${
 
 export function classify(task, call) {
   const tool = call?.tool
-  // No task bound: the built-in classes still apply to recognizable Bash commands; nothing else is
-  // judged here.
+  // No task bound: Bash goes through the same classifier with an empty scope, so the built-in
+  // classes refuse, observational adapters pass, and everything else is marked delegated — and is
+  // therefore recorded, task or not (found by an adversarial test). Other tools are not judged.
   if (!task) {
     if (tool !== 'Bash') return { outcome: 'pass', rule: 'no task bound' }
-    const t = tokenize(call.command)
-    if (!t.ok) return delegated(`unclassifiable: ${t.why}`)
-    for (const seg of t.segments) {
-      const hit = matchForbidden(seg, HARD_FORBIDDEN)
-      if (hit) return { outcome: 'deny', rule: hit.rule }
-    }
-    return { outcome: 'pass', rule: 'no task bound' }
+    return classifyBash(NO_TASK, call.command)
   }
   // A binding whose record is missing: only the Read tool inside the worktree, whose path is checked,
   // passes. Bash is refused outright — an observational command's paths are not verified here.
@@ -214,7 +223,8 @@ function classifyTool(task, call) {
   if (EDIT_TOOLS.has(tool)) {
     if (!(task.allow ?? []).includes('edit')) return { outcome: 'deny', rule: 'edits not allowed by this task' }
     const p = normalizePath(call.file_path ?? call.notebook_path, worktree)
-    const roots = (task.editRoots ?? ['.']).map((r) => normalizePath(r, worktree)).filter(Boolean)
+    // A root outside the worktree grants nothing, even on a record stored before validation refused it.
+    const roots = (task.editRoots ?? ['.']).map((r) => normalizePath(r, worktree)).filter((r) => r && worktree && inside(r, worktree))
     return p && roots.some((r) => inside(p, r)) ? { outcome: 'pass', rule: 'edit inside an allowed root' } : { outcome: 'deny', rule: 'edit outside the allowed roots' }
   }
   if (INTERNAL_TOOLS.has(tool)) return { outcome: 'pass', rule: `host-internal tool: ${tool}` }
@@ -244,6 +254,13 @@ export function validateTask(task) {
   for (const n of task.needsUser ?? []) if (Array.isArray(n) && secretLike(n)) errors.push('a needsUser entry carries a credential-like value; keep secrets out of the task')
   for (const f of task.forbid ?? []) if (secretLike(toWords(f))) errors.push('a forbid entry carries a credential-like value')
   for (const k of ['allow', 'editRoots', 'tools']) for (const x of task[k] ?? []) if (secretLike([String(x)])) errors.push(`a ${k} entry carries a credential-like value`)
+  // Edit roots stay inside the worktree: `../other` or an absolute path elsewhere would let the task
+  // authorize writes the worktree does not own (found by an adversarial test).
+  const wt = typeof task.worktree === 'string' ? normalizePath(task.worktree, '/') : null
+  for (const r of task.editRoots ?? []) {
+    const n = wt ? normalizePath(String(r), wt) : null
+    if (!n || !inside(n, wt)) errors.push(`edit root ${String(r).slice(0, 80)} is outside the worktree`)
+  }
   if (typeof task.worktree === 'string' && secretLike([task.worktree])) errors.push('the worktree carries a credential-like value')
   const classes = forbiddenClasses(task)
   const overlap = (argv, label) => { const hit = matchForbidden(argv, classes); if (hit) errors.push(`${label} ${argv.join(' ')} overlaps forbidden class (${hit.rule})`) }

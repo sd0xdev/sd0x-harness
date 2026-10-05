@@ -518,7 +518,7 @@ export function register(on) {
     }
     // Delegated: the host's permission flow (or auto mode) decides; the mod only records that it did
     // not classify the call, so the events list can show it.
-    if (v.delegated && task) {
+    if (v.delegated) {
       recordDecision(c, { at: await $.clock.now(), tool: e.tool, requested: sanitize(e.command ?? e.file_path ?? e.tool, CAPS.requested), outcome: 'delegated', rule: sanitize(v.rule, CAPS.reason) })
     }
     // Every allowed call is observed; Bash is observed (with its evidence) by the hook beneath.

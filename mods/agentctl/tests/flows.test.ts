@@ -842,3 +842,16 @@ test('live finding: a built-in refusal says no task can lift it, and transcript 
   expect(t).toMatch(/task's scope is shown by \/agentctl policy/)
   expect(world.logs.join('\n')).not.toMatch(/^agentctl:/m)
 })
+
+test('adversarial finding: a delegated call with no task bound is still listed by /agentctl events', async ($, on) => {
+  await setup($, on, { task: null })
+  await $.tool.call({ tool: 'Bash', command: 'bash push.sh' })
+  expect((await $.command.run({ command: 'agentctl', args: 'events 5' })).text).toMatch(/delegated · Bash · bash push.sh/)
+})
+
+test('adversarial finding: the proposal cap counts UTF-8 bytes, not characters', async ($, on) => {
+  const { world } = await setup($, on)
+  world.files[PROPOSAL] = draft({ acceptance: Array(60).fill('界'.repeat(100)) })
+  await turnEnd($)
+  expect(world.logs.join('\n')).toMatch(/proposal not shown — the proposal is over 16384 bytes/)
+})
