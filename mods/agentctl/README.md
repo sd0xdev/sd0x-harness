@@ -1,6 +1,6 @@
 # agentctl — Agent Control Plane for one Claude Code session
 
-Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 161 tests).
+Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 163 tests); 0.2.x re-verified live on 2.1.289 (§ Verified live, 0.2.x).
 The mods API is marked changeable between releases; the type declarations the host writes into
 `.claude-plugin/types/` are the authority for the installed version. Run `claude plugin validate .`
 after every Claude Code upgrade.
@@ -104,7 +104,7 @@ CI also runs `claude plugin validate` and `claude plugin test` here.
 ## Verified live (2026-10-04, scratch repository: headless `claude -p --plugin-dir` on 2.1.288, interactive tmux on 2.1.289)
 
 These rows record version 0.1.0. Since 0.2.0 an unclassified call is delegated to the host instead
-of refused, and the proposal commands exist; see § Not verified.
+of refused, and the proposal commands exist; the 0.2.x rows follow the table.
 
 | Check | Result |
 |---|---|
@@ -133,11 +133,21 @@ Removal: `--plugin-dir` installs nothing and changes no setting. The mod's own d
 `~/.claude/plugins/store/agentctl_*.json` (sessions, tasks, checkpoints), and drafted proposals in
 `~/.claude/agentctl/proposals/`; delete them to remove it.
 
-## Not verified
+## Verified live, 0.2.x (2026-10-05, scratch clone with a scratch bare remote, 2.1.289, Haiku)
 
-0.2.0 on a live host: proposal preview and accept, delegation of unclassified calls to the host's
-prompt or auto mode, and the no-task refusal of a direct `git push`. They are covered by
-`claude plugin test .` only.
+| Check | Result |
+|---|---|
+| Direct `git push` with no task bound (`-p`) | Refused `remote-git-write` before running; the remote stayed empty |
+| Unclassified `python3 -c …` and a script that pushes (`/bin/bash -p push.sh`, `-p`) | Both passed to the host and ran; the script's push reached git (rejected by the scratch remote itself, not by the mod) — the disclosed script blindness |
+| Proposal written by `agentctl-setup.js propose`, interactive start | The preview was logged at session start with the helper's digest, and the band named the waiting proposal |
+| `/agentctl accept <digest>` typed at the prompt | Bound the previewed scope as a new task; without a `base` the helper printed no digest, the mod filled the bound task in and its own digest was accepted |
+| A declared check, an unclassified call, an edit outside the roots, a direct push (bound task) | Check recorded as `current` evidence; `python3` delegated and listed as such by `/agentctl events`; the edit refused `edit outside the allowed roots`; the push refused `remote-git-write` |
+| An untracked file added from outside | The check read `stale (tree changed since)` within 32 s |
+| `/agentctl handoff`, reopen, `/agentctl`, `/agentctl last` | Hand-over states when the tree was read and lists the stale check under Not verified; on reopen the transcript shows it, bare `/agentctl` prints one pointer line, `/agentctl last` the whole of it |
+| Found live and fixed in 0.2.1 | An accepted proposal file was read again by the next session as a stale draft (now remembered per worktree); the built-in refusal said "the task's scope", and Claude then proposed widening the task (now: "a built-in class no task can lift"); transcript lines read `agentctl: agentctl:` |
+| Cost of the two `-p` probes | 2–3 turns each, ≈ $0.06 each on Haiku; the mod's own replies, previews and band call no model |
+
+## Not verified
 
 V3 on Desktop, VS Code and mobile, and under `plan` and `bypassPermissions` (accepting the
 bypass-mode warning is the operator's own decision, so it was not exercised): `needsUser` stays

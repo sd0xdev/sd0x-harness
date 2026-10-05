@@ -61,6 +61,7 @@ delegated and their blindness disclosed.
 | Analysis | Done | `/codex-brainstorm` equilibrium (2026-10-04); push policy decided by the user on the recommendation |
 | Development | Done | Classifier, proposals, evidence partition, bounded status, README |
 | Testing | Done | Mod `claude plugin test .` 161 pass; `npm test` 5130 pass |
+| Live verification | Done | 2026-10-05, scratch clone and scratch remote, 2.1.289: the scenarios in mod README § Verified live, 0.2.x reproduced on a live host — the no-task push refusal, delegation, preview and accept, refusals while bound, staleness and the hand-over; the swap, digest-mismatch, stale-base, other-worktree, built-in-overlap and evidence-partition cases rest on their regression tests. Three defects found and fixed in 0.2.1: an accepted proposal re-read by the next session, a built-in refusal that invited widening the task, a doubled transcript prefix |
 | Acceptance | Done | 2026-10-04: `/codex-review-fast` (thorough, three rounds — five P1s fixed in round 1: helper digest without a base, same-id staleness, same-id evidence reuse, partial readings shown as verified, a malformed proposal aborting session start): ✅ Ready. `/precommit`: ✅ PASS. `/codex-review-doc` (three batches): ✅ Mergeable. Live verification of 0.2.0 on a host is out of scope here and listed under the mod README § Not verified |
 
 ## References
