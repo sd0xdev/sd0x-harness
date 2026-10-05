@@ -304,7 +304,7 @@ test('regression: reopening logs the last hand-over to the transcript before any
   const coreBefore = world.core
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/w/repo' })
   expect(world.core).toBe(coreBefore)
-  expect(world.logs[0]).toMatch(/agentctl: last hand-over for task T1/)
+  expect(world.logs[0]).toMatch(/^last hand-over for task T1/)
   expect(world.logs.join('\n')).toMatch(/## 1\. Goal/)
   const ui = await $.ui.mount({ plugin: 'agentctl', component: 'AbovePrompt', surface: 'terminal', viewport: { columns: 200, rows: 30 }, props: {} })
   expect(await ui.find({ type: 'Text', text: /last hand-over/ })).toBeDefined()
@@ -814,4 +814,31 @@ test('regression: a malformed proposal is rejected and the session still starts'
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/w/repo' })
   expect(world.registered.some((r) => r.name === 'agentctl')).toBe(true)
   expect(world.logs.join('\n')).toMatch(/proposal not shown — each executor needs a non-empty argv array/)
+})
+
+test('live finding: an accepted proposal file is not offered again in a later session', async ($, on) => {
+  const { world } = await setup($, on, { task: null })
+  world.files[PROPOSAL] = draft({ base: null })
+  await turnEnd($)
+  await $.command.run({ command: 'agentctl', args: 'accept', origin: { kind: 'composer' } })
+  await settle()
+  // A new session: same file, now drafted against "no task" while a task is bound.
+  world.logs.length = 0
+  world.sessionId = 'S2'
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/w/repo' })
+  expect(world.logs.join('\n')).not.toMatch(/proposal not shown|Proposed task/)
+  // A changed file is still read.
+  world.files[PROPOSAL] = draft({ base: null, goal: 'another' })
+  await turnEnd($, 'u9')
+  expect(world.logs.join('\n')).toMatch(/proposal not shown — stale/)
+})
+
+test('live finding: a built-in refusal says no task can lift it, and transcript lines carry no doubled prefix', async ($, on) => {
+  const { world } = await setup($, on, { task: { ...TASK, forbid: ['terraform apply'] } })
+  const r = JSON.stringify(await $.tool.call({ tool: 'Bash', command: 'git push origin main' }))
+  expect(r).toMatch(/a built-in class no task can lift/)
+  expect(r).not.toMatch(/task's scope/)
+  const t = JSON.stringify(await $.tool.call({ tool: 'Bash', command: 'terraform apply' }))
+  expect(t).toMatch(/task's scope is shown by \/agentctl policy/)
+  expect(world.logs.join('\n')).not.toMatch(/^agentctl:/m)
 })

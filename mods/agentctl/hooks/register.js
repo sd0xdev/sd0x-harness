@@ -6,7 +6,7 @@
 import { MAX_HASHED_PATHS, TIMEOUT_MS, commands as FP, digest, fold, parseStatus } from '../lib/fingerprint.js'
 import { handoff } from '../lib/handoff.js'
 import { decideNotices, parseTaskNotification } from '../lib/notices.js'
-import { classify, taskRecord, validateTask } from '../lib/policy.js'
+import { HARD_FORBIDDEN, classify, taskRecord, validateTask } from '../lib/policy.js'
 import { acceptedRecord, digestMatches, previewLines, proposalDigest, proposalPath, readProposal } from '../lib/proposal.js'
 import { initialState, reduce } from '../lib/reducer.js'
 import { CAPS, sanitize } from '../lib/sanitize.js'
@@ -15,6 +15,7 @@ import { combine, surfaceVerified } from '../lib/verdict.js'
 import { bandText, contextReading, eventsText, gateReading, policyText, statusText, usageReading } from '../lib/view.js'
 
 const DECISIONS_CAP = 50
+const BUILT_IN_RULES = new Set(HARD_FORBIDDEN.map((h) => h.rule))
 // Evidence freshness must show a later edit within 30 s (requirements Signal 3).
 const TICK_MS = 30 * 1000
 const GATE_STALE_MS = 30 * 1000
@@ -334,16 +335,20 @@ async function checkProposal($, c) {
   const seen = digest(text)
   if (seen === c.proposalSeen) return
   c.proposalSeen = seen
+  // Found live: the file stays after accept, and a new session read it again as a stale draft.
+  const handled = await $.store.get(keys.proposal(worktreeKey(c.cwd)))
+  if (handled && handled.text === seen) return
   const bound = await boundTask($, c)
   // A malformed submission is a rejection, never a failed hook.
   let r
   try { r = readProposal(text, { cwd: c.cwd, boundId: bound?.id ?? null }) } catch { r = { ok: false, errors: ['the proposal could not be validated'] } }
   if (!r.ok) {
-    $.ui.log(`agentctl: proposal not shown — ${r.errors.join('; ')}`)
+    // No `agentctl:` prefix: the host already names the mod on every transcript line (found live).
+    $.ui.log(`proposal not shown — ${r.errors.join('; ')}`)
     persist(c, bound?.id)
     return
   }
-  c.pending = { effective: r.effective, digest: await proposalDigest(r.effective), baseRev: revisionOf(bound), at: await $.clock.now() }
+  c.pending = { effective: r.effective, digest: await proposalDigest(r.effective), baseRev: revisionOf(bound), textDigest: seen, at: await $.clock.now() }
   for (const line of previewLines(c.pending)) $.ui.log(line)
   persist(c, bound?.id)
   $.ui.invalidate('ui.render')
@@ -354,6 +359,12 @@ function revisionOf(task) {
   return task ? `${task.id}@${task.policyVersion ?? 1}@${task.confirmedAt ?? 0}` : null
 }
 
+// The waiting proposal is done with: forget it here and remember its file text for later sessions.
+async function settleProposal($, c, p) {
+  c.pending = null
+  if (p?.textDigest) await c.writer.set(keys.proposal(worktreeKey(c.cwd)), { text: p.textDigest, at: await $.clock.now() })
+}
+
 async function acceptCommand($, c, e, given) {
   // Scope comes only from the person at the prompt (FR-25).
   if (e.origin?.kind !== 'composer') return 'agentctl refused: a proposal can be accepted only from your own prompt.'
@@ -362,13 +373,13 @@ async function acceptCommand($, c, e, given) {
   if (!digestMatches(given, p.digest)) return `agentctl refused: ${sanitize(given, 30)} does not match the waiting proposal ${p.digest.slice(0, 8)}. Check /agentctl proposal.`
   const bound = await boundTask($, c)
   if ((bound?.id ?? null) !== p.effective.base || revisionOf(bound) !== p.baseRev) {
-    c.pending = null
+    await settleProposal($, c, p)
     persist(c, bound?.id)
     return 'agentctl refused: the bound task changed since this proposal was drafted (stale); it was discarded. Ask for a new draft.'
   }
   const now = await $.clock.now()
   const text = await bindTask($, c, acceptedRecord(p.effective, { now, baseTask: bound }))
-  if (text.startsWith('Task ')) { c.pending = null; persist(c, `T${now}`) }
+  if (text.startsWith('Task ')) { await settleProposal($, c, p); persist(c, `T${now}`) }
   return text
 }
 
@@ -422,7 +433,7 @@ export function register(on) {
     if (c.checkpoint) {
       // Shown before any work: a transcript notice (not sent to the model; `-p` receives it as
       // ui_log) and the band. Nothing is replayed, and the mod holds no approvals to carry over.
-      $.ui.log(`agentctl: last hand-over for task ${task.id}, saved ${new Date(c.checkpoint.savedAt).toISOString()} — /agentctl last shows it again`)
+      $.ui.log(`last hand-over for task ${task.id}, saved ${new Date(c.checkpoint.savedAt).toISOString()} — /agentctl last shows it again`)
       // The whole checkpoint (already bounded by the hand-over cap), never a silent preview.
       for (const line of String(c.checkpoint.markdown).split('\n')) $.ui.log(line)
     }
@@ -498,7 +509,12 @@ export function register(on) {
       const rule = sanitize(v.rule, CAPS.reason)
       recordDecision(c, { at, tool: e.tool, requested, outcome: v.outcome, rule })
       await observe($, c, { type: 'refused', id: e.tool_use_id ?? `refused-${at}`, tool: e.tool, requested, rule, at }, task?.id)
-      return { deny: `agentctl refused (${rule}). The task's scope is shown by /agentctl policy.` }
+      // A built-in class is not the task's to lift; saying "the task's scope" sent Claude off to
+      // propose widening a task that cannot widen it (found live).
+      const builtIn = BUILT_IN_RULES.has(v.rule)
+      return { deny: builtIn
+        ? `agentctl refused (${rule}): a built-in class no task can lift. Run it yourself, or through your project's own push or deploy workflow.`
+        : `agentctl refused (${rule}). The task's scope is shown by /agentctl policy.` }
     }
     // Delegated: the host's permission flow (or auto mode) decides; the mod only records that it did
     // not classify the call, so the events list can show it.
@@ -603,7 +619,7 @@ export function register(on) {
     if (sub === 'accept') return { text: await acceptCommand($, c, e, rest[0]) }
     if (sub === 'discard') {
       const had = Boolean(c.pending)
-      c.pending = null
+      await settleProposal($, c, c.pending)
       persist(c, (await boundTask($, c))?.id)
       $.ui.invalidate('ui.render')
       return { text: had ? 'Proposal discarded; the bound task is unchanged.' : 'No proposal was waiting.' }

@@ -17,6 +17,9 @@ export const keys = {
   binding: (worktreeKey) => `binding/${worktreeKey}`,
   session: (sessionId) => `session/${sessionId}`,
   checkpoint: (taskId, sessionId) => `checkpoint/${taskId}/${sessionId}`,
+  // The proposal file text last accepted or discarded in a worktree, as a digest: a later session
+  // does not offer the same file again.
+  proposal: (worktreeKey) => `proposal/${worktreeKey}`,
 }
 
 // One serialized writer per session. A failed write never throws into the hook that asked for it;
