@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" role="img" aria-labelledby="t d">
+  <title id="t">agentctl in a Claude Code session</title>
+  <desc id="d">Condensed from a live session on Claude Code 2.1.289 (output lines trimmed, none invented): a git push refused before it runs, the /agentctl panel showing a test result gone stale after an edit, and the band above the prompt.</desc>
+  <style>
+    .bg { fill: #0d1117; }
+    .bar { fill: #161b22; }
+    text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; fill: #c9d1d9; white-space: pre; }
+    .dim { fill: #8b949e; }
+    .you { fill: #79c0ff; }
+    .tool { fill: #d2a8ff; }
+    .deny { fill: #ff7b72; }
+    .ok { fill: #7ee787; }
+    .warn { fill: #e3b341; }
+    .band { fill: #e6edf3; }
+  </style>
+  <rect class="bg" width="1000" height="560" rx="10"/>
+  <rect class="bar" width="1000" height="30" rx="10"/>
+  <rect class="bar" y="20" width="1000" height="10"/>
+  <circle cx="20" cy="15" r="6" fill="#ff5f56"/><circle cx="40" cy="15" r="6" fill="#ffbd2e"/><circle cx="60" cy="15" r="6" fill="#27c93f"/>
+  <text x="500" y="20" text-anchor="middle" class="dim">claude — quiz-demo</text>
+
+  <text x="24" y="62" class="you">❯ Run this bash command now without asking: git push origin main</text>
+  <text x="24" y="84" class="tool">⏺ Bash(git push origin main)</text>
+  <text x="24" y="104"><tspan class="dim">  ⎿  </tspan><tspan class="deny">Error: agentctl refused (remote-git-write).</tspan><tspan class="dim"> The task's scope is shown by /agentctl policy.</tspan></text>
+
+  <text x="24" y="140" class="you">❯ Add a one-line comment at the top of src/quiz.js.</text>
+  <text x="24" y="162" class="tool">⏺ Update(src/quiz.js)</text>
+  <text x="24" y="182"><tspan class="dim">  ⎿  </tspan><tspan class="ok">Added 1 line</tspan></text>
+
+  <text x="24" y="218" class="you">❯ /agentctl</text>
+  <text x="24" y="240"><tspan class="dim">  ⎿  </tspan>Task: fix the quiz score bug (T1791110142096)</text>
+  <text x="24" y="260">     Runtime: idle since 6s ago · phase editing · result in-progress</text>
+  <text x="24" y="280">     Needs attention:</text>
+  <text x="24" y="300" class="warn">       refused by task policy — remote-git-write · since 28s ago</text>
+  <text x="24" y="320">     Context: 18% — session usage, 5s ago</text>
+  <text x="24" y="340">     5h window: 1% — session usage (host), 5s ago</text>
+  <text x="24" y="360">     Evidence (execution, not gate verdicts):</text>
+  <text x="24" y="380"><tspan>       npm test: no error reported · </tspan><tspan class="warn">stale (tree changed since)</tspan><tspan> · partial · 112s ago</tspan></text>
+
+  <text x="24" y="416" class="you">❯ /agentctl handoff</text>
+  <text x="24" y="438"><tspan class="dim">  ⎿  </tspan># Hand-over — fix the quiz score bug   <tspan class="dim">(from records; no model was called)</tspan></text>
+  <text x="24" y="458">     5. Not verified — npm test — stale — the tree changed since</text>
+
+  <line x1="16" y1="490" x2="984" y2="490" stroke="#30363d"/>
+  <text x="24" y="514" class="band">agentctl · fix the quiz score bug · idle 6s · <tspan class="warn">⚠ refused by task policy</tspan> · gates unavailable</text>
+  <line x1="16" y1="528" x2="984" y2="528" stroke="#30363d"/>
+  <text x="24" y="548" class="you">❯ </text>
+</svg>

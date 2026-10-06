@@ -42,7 +42,8 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           REPO="${{ github.repository }}"
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          # Only this plugin's own tags (v*): the agentctl mod is released under agentctl-v* tags.
+          LAST_TAG=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || echo "")
 
           if [ -z "$LAST_TAG" ]; then
             RANGE="HEAD"

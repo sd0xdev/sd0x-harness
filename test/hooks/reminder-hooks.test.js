@@ -50,7 +50,7 @@ function git(repo, ...args) {
 
 function makeRepo() {
   const repo = tmp('rh-repo-');
-  git(repo, 'init', '-q');
+  git(repo, 'init', '-q', '-b', 'master'); // pinned: a global init.defaultBranch must not change the fixture
   writeFileSync(join(repo, 'a.js'), 'const a = 1;\n');
   writeFileSync(join(repo, 'readme.md'), '# doc\n');
   git(repo, 'add', '-A');

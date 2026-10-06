@@ -44,6 +44,10 @@ skills:
     category: development
     featured: false
     public: true
+  - command: /agentctl-setup
+    category: development
+    featured: false
+    public: true
   - command: /bug-fix
     category: development
     featured: true

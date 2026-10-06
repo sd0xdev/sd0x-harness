@@ -1,0 +1,82 @@
+name: Release agentctl
+
+# The agentctl mod (mods/agentctl) is versioned on its own and released under agentctl-v<version>
+# tags, separate from sd0x-dev-flow's v<version> releases. A run releases only when the version in
+# mods/agentctl/.claude-plugin/plugin.json has no tag yet, and only if the release lock agrees.
+on:
+  push:
+    branches: [main]
+    paths: [mods/agentctl/.claude-plugin/plugin.json]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      # Against the last released lock, so a release never ships a change under a released version.
+      - name: Version lock
+        run: |
+          LAST_TAG=$(git describe --tags --match 'agentctl-v*' --abbrev=0 2>/dev/null || true)
+          if [ -n "$LAST_TAG" ]; then
+            node .github/scripts/agentctl-version.js check --base "$LAST_TAG"
+          else
+            node .github/scripts/agentctl-version.js check
+          fi
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./mods/agentctl/.claude-plugin/plugin.json').version")
+          echo "tag=agentctl-v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if tag already exists
+        id: check
+        run: |
+          if git rev-parse "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate release notes
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          REPO="${{ github.repository }}"
+          LAST_TAG=$(git describe --tags --match 'agentctl-v*' --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then RANGE="HEAD"; else RANGE="${LAST_TAG}..HEAD"; fi
+          {
+            echo "## agentctl ${TAG#agentctl-v}"
+            echo
+            echo "Optional mod for sd0x-dev-flow users. Install it with \`/agentctl-setup\`, or \`claude plugin install agentctl@sd0xdev-marketplace\`."
+            echo
+            echo "### Changes"
+            echo
+            git log "$RANGE" --pretty=format:"- %s (%h)" --no-merges -- mods/agentctl skills/agentctl-setup
+            echo
+            if [ -n "$LAST_TAG" ]; then
+              echo
+              echo "**Full Changelog**: https://github.com/${REPO}/compare/${LAST_TAG}...${TAG}"
+            fi
+          } > release-notes.md
+
+      - name: Create tag and release
+        if: steps.check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          body_path: release-notes.md
+          make_latest: false

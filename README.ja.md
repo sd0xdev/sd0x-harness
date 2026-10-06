@@ -13,7 +13,7 @@ Claude は、テストで固定された閉じた Anchor セットの内側で�
 Claude Code ではフルコントロールプレーン。Codex CLI やその他の互換エージェントにはスキルのみを配布します。
 
 <!-- BEGIN:HERO-COUNT -->
-101 bundled · 101 public skills · 16 agents — 詳細な手順は必要なときに読み込み
+102 bundled · 102 public skills · 16 agents — 詳細な手順は必要なときに読み込み
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -45,8 +45,8 @@ $codex-setup init
 <!-- BEGIN:INSTALL-COVERAGE -->
 | 方法 | 対応ツール | カバー範囲 |
 |------|-----------|-----------|
-| プラグインインストール | Claude Code | フル（101 bundled skills、フック、ルール、auto-loop） |
-| `npx skills add` | Codex CLI、Cursor、Windsurf、Aider | スキルのみ（101 public skills） |
+| プラグインインストール | Claude Code | フル（102 bundled skills、フック、ルール、auto-loop） |
+| `npx skills add` | Codex CLI、Cursor、Windsurf、Aider | スキルのみ（102 public skills） |
 | `$codex-setup init` | Codex CLI | AGENTS.md カーネル + commit-msg フック（pre-push ゲートはオプトイン） |
 <!-- END:INSTALL-COVERAGE -->
 
@@ -153,7 +153,7 @@ sd0x-dev-flow は reference implementation です。以下の各行は、harness
 | 2 | **Digest-bound reminder state** | verdict はモデルが note し（`node scripts/review-state.js note <plane> <pass\|fail>`）、ツリーの digest に束縛される — 編集すると digest が変わるため、そのプレーンのリマインダーが再オープンする。ゲート sentinel（`✅ Ready` / `## Overall: ✅ PASS`）は動作レイヤーのシグナルのまま | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context recovery across compaction** | SessionStart(compact) 後に git ベースライン（ブランチ + 未コミットファイル）と未完了ゲートのリマインダーを再注入 | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
 | 4 | **Lifecycle interceptors** | 5 種類の hook event を 7 本のスクリプトへディスパッチ — 4 本の advisory リマインダーフック、1 本の自動フォーマッタ、2 本のブロックするガード（機密パスの編集、起動方法を誤った Codex dispatch）（SessionStart は追加で `scripts/namespace-hint.sh` を実行）: PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (7 scripts) + [`.claude/settings.json`](.claude/settings.json) |
-| 5 | **Capability-based tool gating** | Skill frontmatter の `allowed-tools` — 例: `/ask` には Edit/Write が無い | 101 個の公開 skill のうち 93 個が `allowed-tools` を宣言 |
+| 5 | **Capability-based tool gating** | Skill frontmatter の `allowed-tools` — 例: `/ask` には Edit/Write が無い | 102 個の公開 skill のうち 94 個が `allowed-tools` を宣言 |
 | 6 | **Defense-in-depth safety** | インストール済みの git レベルのガードはハードなまま — commit-msg-guard は `/codex-setup init` でインストールした環境で有効になり（Claude プラグインと `/project-setup` ではインストールされません）、`/dev/tty` 経由の pre-push-gate はオプトインした場合に有効です。編集時の pre-edit-guard は機密パスへの編集を引き続きブロックし（セキュリティガードであり、ワークフロー強制ではない — `jq` が必要で、jq が無いとガードは作動しない）、Stop hook はリマインドする — 不可逆な操作をゲートする層は牙を残し、レビュー層は設計として advisory になった | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex が Claude の書いたコードをレビュー。リポジトリを自力で調査し、結論を渡されて追認することはない | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | 証拠にもとづくストール規律：finding を 1 つも閉じないレビューラウンドが 3 回続くと — モデルがレビューレポートから数えます — 構造化されたストール分類と 1 回の限定的な調整を起動します。Tier ごとのラウンド予算（デフォルト 6 / 15 / 30、3〜50 でオーバーライド可）は暴走用のバックストップに退き、初回の上限到達でも同じ診断を行い、列挙された human exit を備える | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; 詳細は `skills/codex-code-review/references/loop-diagnostics.md`) |
@@ -333,7 +333,7 @@ flowchart TD
 <!-- BEGIN:WHATS-INCLUDED-COUNT -->
 | カテゴリ | 数 | 例 |
 |----------|-----|-----|
-| スキル | 101 public (101 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
+| スキル | 102 public (102 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | エージェント | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | フック | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
 | ルール | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
@@ -370,12 +370,13 @@ flowchart TD
 
 <!-- BEGIN:FULL-CATALOG -->
 <details>
-<summary>全 101 public skills</summary>
+<summary>全 102 public skills</summary>
 
-### 開発 (35)
+### 開発 (36)
 
 | Skill | Description |
 |-------|-------------|
+| `/agentctl-setup` | オプションの agentctl mod をインストール・設定（タスク範囲、実行前の拒否、古くなる証拠、モデル不要の引き継ぎ）。 |
 | `/ask` | コンテキスト認識型 Q&A。自動的にコンテキスト情報を収集します。 |
 | `/bug-fix` | Bug fix workflow. |
 | `/bump-version` | Bump package and plugin version in sync. |
@@ -543,6 +544,49 @@ flowchart TD
 | スコアリング | 4 シグナル完全性モデル |
 
 [詳細ドキュメント](docs/features/deep-research/)
+
+## オプション：Agent Control Plane（`agentctl`）
+
+タスクを Claude に任せて席を外し、戻ってきたときに知りたい 3 つの問い — `agentctl` は、それらに 1 つの Claude Code session の中で答えます。これは独立したオプトインの plugin（`mods/agentctl/`）です：**sd0x-dev-flow をインストールしても、これがインストールされることはありません**。`/agentctl-setup` を実行するとインストールできます。その後は、`/feature-dev`、`/bug-fix`、`/refactor` が各 task のスコープの下書きを提案し、あなたが承認します。
+
+| 問い | 何をするか |
+|---|---|
+| スコープ内に収まったか？ | Claude が ticket からスコープ（編集パス、チェック、受け入れ条件）の下書きを作り、mod がそれをプレビューして、**あなた**が `/agentctl accept` と入力したときだけ束縛します。直接の `git push`、`gh pr merge`、production への書き込みは、task がなくても**実行前に拒否**されます。承認済みディレクトリ外の編集も同様です。mod が分類できないものは Claude Code 自身の権限プロンプトまたは auto mode に回されます — それが読むのは各 tool call であり、スクリプトの内部で何が実行されるかではありません |
+| 「テスト通過」は本当か？ | テスト実行は、実行時の tree の Git フィンガープリントとともに記録されます。その後 tracked または untracked のファイルが変わると、30 秒以内に「通過」ではなく**古い（stale）**と表示されます。ignore されたファイル、submodule の内容、環境変数はフィンガープリントの対象外です |
+| 今どこまで進んだか、介入すべきか？ | prompt の上に 1 行の band、詳細は `/agentctl`、`/agentctl handoff` はモデル呼び出しなしで記録から hand-over を作成します |
+
+![Claude Code session 内の agentctl：実行前に拒否された git push、編集後に古くなったテスト通過、prompt の上の band](docs/assets/agentctl-preview.svg)
+
+```mermaid
+flowchart LR
+    C([Claude]) -- "drafts a proposal" --> F["proposal file<br/>outside the worktree"]
+    F --> V["preview + digest"]
+    U([You]) -- "/agentctl accept" --> V
+    V --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C -- tool call --> P{"tool.call<br/>classify"}
+    S --> P
+    P -- forbidden --> R["refused, rule named"]
+    P -- unclassified --> H
+    P -- allowed --> E1["Git fingerprint<br/>before a check"]
+    E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
+    H -- runs if permitted --> E2["Git fingerprint<br/>after"]
+    E2 --> S
+    S --> B["band · /agentctl · handoff"]
+    G["review-state.js"] -. read only .-> B
+    B --> U
+```
+
+| コスト | いつ | サイズ |
+|---|---|---|
+| `/agentctl-setup` の一覧表示 | 毎 session（名前 + 説明のみ） | ≈ 60 tokens |
+| `/agentctl-setup` の本文 | あなたか Claude が呼び出したときだけ。そのターンは **Sonnet**（`model: sonnet`）で動作します | ≈ 2.2k tokens |
+| `/feature-dev`、`/bug-fix`、`/refactor` 内 | オプションのセクションと、task ごとに 1 行の `status` | ≈ 180 tokens。起草用リファレンス（≈ 850）と proposal のプレビューは、mod がインストール済みで、あなたが承諾したときだけ |
+| 拒否 | 拒否された呼び出しごとに、tool result として | ≈ 25 tokens |
+| `/agentctl …` の応答 | 実行したときだけ — Claude がコマンドの出力を読みます | 通常 ≈ 200–400 tokens。hand-over の上限は 16,384 文字（UTF-16 code units）で、token 数は言語によって変わります |
+| mod 自体 | モデルを呼び出しません。band、proposal のプレビュー、再オープン時の hand-over は Claude に送られません | 0 |
+
+これは制御と表示のための仕組みであり、**セキュリティ境界ではありません** — production は引き続きあなたの認証情報で守られます。設計とテスト：[docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
+[mods/agentctl/README.md](mods/agentctl/README.md)。
 
 ## アーキテクチャ
 

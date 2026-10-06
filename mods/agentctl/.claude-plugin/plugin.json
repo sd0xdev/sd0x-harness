@@ -1,0 +1,6 @@
+{
+  "name": "agentctl",
+  "version": "0.2.2",
+  "description": "Agent Control Plane for one Claude Code session: task scope, evidence, hand-over. A control and a display, not an isolation boundary.",
+  "author": { "name": "sd0xdev" }
+}

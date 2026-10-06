@@ -13,7 +13,7 @@ Claude has discretion inside a closed, test-pinned anchor set. Since v5 only a s
 Full control plane on Claude Code. Skills-only distribution for Codex CLI and other compatible agents.
 
 <!-- BEGIN:HERO-COUNT -->
-101 bundled · 101 public skills · 16 agents — procedures load on demand
+102 bundled · 102 public skills · 16 agents — procedures load on demand
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -45,8 +45,8 @@ $codex-setup init
 <!-- BEGIN:INSTALL-COVERAGE -->
 | Method | Tools | Coverage |
 |--------|-------|----------|
-| Plugin install | Claude Code | Full (101 bundled skills, hooks, rules, auto-loop) |
-| `npx skills add` | Codex CLI, Cursor, Windsurf, Aider | Skills only (101 public skills) |
+| Plugin install | Claude Code | Full (102 bundled skills, hooks, rules, auto-loop) |
+| `npx skills add` | Codex CLI, Cursor, Windsurf, Aider | Skills only (102 public skills) |
 | `$codex-setup init` | Codex CLI | AGENTS.md kernel + commit-msg hook (pre-push gate opt-in) |
 <!-- END:INSTALL-COVERAGE -->
 
@@ -179,7 +179,7 @@ sd0x-dev-flow is a reference implementation. Each row below maps a canonical har
 | 2 | **Digest-bound reminder state** | Verdicts are noted by the model (`node scripts/review-state.js note <plane> <pass\|fail>`) and bound to the tree digest — an edit re-opens its plane's reminder because the digest changed; gate sentinels (`✅ Ready` / `## Overall: ✅ PASS`) stay behaviour-layer signals | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context recovery across compaction** | Git baseline (branch + uncommitted files) and owed-gate reminders re-injected after SessionStart(compact) | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
 | 4 | **Lifecycle interceptors** | 5 hook event types dispatched to 7 scripts — 4 advisory reminder hooks, an auto-formatter, and two blocking guards (sensitive-path edits; a mis-launched Codex dispatch) (SessionStart additionally runs `scripts/namespace-hint.sh`): PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (7 scripts) + [`.claude/settings.json`](.claude/settings.json) |
-| 5 | **Capability-based tool gating** | Skill frontmatter `allowed-tools` — e.g., `/ask` has no Edit/Write | 93 of 101 public skills declare `allowed-tools` |
+| 5 | **Capability-based tool gating** | Skill frontmatter `allowed-tools` — e.g., `/ask` has no Edit/Write | 94 of 102 public skills declare `allowed-tools` |
 | 6 | **Defense-in-depth safety** | Git-level guards stay hard where they are installed — commit-msg-guard wherever `/codex-setup init` installed it (the Claude plugin plus `/project-setup` does not), pre-push-gate over `/dev/tty` when opted in; edit-time pre-edit-guard still blocks sensitive-path edits (a security guard, not workflow enforcement — it needs `jq`, and without it the guard does not fire); the Stop hook reminds — the layers that gate irreversible actions and secrets kept their teeth, the review layer became advisory by design | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex reviews what Claude wrote, researching the repo independently — never handed a conclusion to confirm | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | Evidence-based stall discipline: three review rounds that close no findings — counted by the model from the review reports — trigger a structured classification plus one bounded adjustment. The per-tier round budget (default 6 / 15 / 30, overridable 3–50) is the runaway backstop and runs the same diagnosis on its first hit, with enumerated human exits | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; details in `skills/codex-code-review/references/loop-diagnostics.md`) |
@@ -359,7 +359,7 @@ Real-world scenarios showing which skills to combine and in what order.
 <!-- BEGIN:WHATS-INCLUDED-COUNT -->
 | Category | Count | Examples |
 |----------|-------|---------|
-| Skills | 101 public (101 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
+| Skills | 102 public (102 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | Agents | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | Hooks | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
 | Rules | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
@@ -396,12 +396,13 @@ To measure your own project — your `CLAUDE.md`, your overrides and the plugin'
 
 <!-- BEGIN:FULL-CATALOG -->
 <details>
-<summary>All 101 public skills</summary>
+<summary>All 102 public skills</summary>
 
-### Development (35)
+### Development (36)
 
 | Skill | Description |
 |-------|-------------|
+| `/agentctl-setup` | Install and set up the optional agentctl mod (task scope, refusal before execution, evidence that goes stale, model-f... |
 | `/ask` | Context-aware Q&A with auto context gathering. |
 | `/bug-fix` | Bug fix workflow. |
 | `/bump-version` | Bump package and plugin version in sync. |
@@ -569,6 +570,53 @@ Run `/deep-research` to orchestrate 2-3 parallel researcher agents across web so
 | Scoring | 4-signal completeness model |
 
 [Full documentation](docs/features/deep-research/)
+
+## Optional: Agent Control Plane (`agentctl`)
+
+Hand a task to Claude and step away; when you come back, three questions — `agentctl` answers them
+inside one Claude Code session. It is a separate, opt-in plugin (`mods/agentctl/`): **installing
+sd0x-dev-flow never installs it**. Run `/agentctl-setup` to install it; after that, `/feature-dev`,
+`/bug-fix` and `/refactor` offer to draft each task's scope for you to accept.
+
+| Question | What it does |
+|---|---|
+| Did it stay in scope? | Claude drafts the scope from the ticket (edit paths, checks, acceptance); the mod previews it and binds it only when **you** type `/agentctl accept`. A direct `git push`, `gh pr merge` or production write is **refused before it runs**, even with no task; so is an edit outside the accepted directories. Anything the mod cannot classify goes to Claude Code's own permission prompt or auto mode — it reads each tool call, not what a script runs inside |
+| Is "tests pass" true? | A test run is recorded with a Git-derived fingerprint of the tree; a later change to a tracked or untracked file reads **stale** within 30 s, not "passed". Ignored files, submodule contents and the environment are outside the fingerprint |
+| Where is it, do I step in? | A one-line band above the prompt, `/agentctl` for detail, `/agentctl handoff` for a hand-over built from records with no model call |
+
+![agentctl in a Claude Code session: a git push refused before it runs, a test pass gone stale after an edit, and the band above the prompt](docs/assets/agentctl-preview.svg)
+
+```mermaid
+flowchart LR
+    C([Claude]) -- "drafts a proposal" --> F["proposal file<br/>outside the worktree"]
+    F --> V["preview + digest"]
+    U([You]) -- "/agentctl accept" --> V
+    V --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C -- tool call --> P{"tool.call<br/>classify"}
+    S --> P
+    P -- forbidden --> R["refused, rule named"]
+    P -- unclassified --> H
+    P -- allowed --> E1["Git fingerprint<br/>before a check"]
+    E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
+    H -- runs if permitted --> E2["Git fingerprint<br/>after"]
+    E2 --> S
+    S --> B["band · /agentctl · handoff"]
+    G["review-state.js"] -. read only .-> B
+    B --> U
+```
+
+| Cost | When | Size |
+|---|---|---|
+| `/agentctl-setup` listing | every session (name + description only) | ≈ 60 tokens |
+| `/agentctl-setup` body | only when you or Claude invoke it; it runs on **Sonnet** (`model: sonnet`) for that turn | ≈ 2.2k tokens |
+| In `/feature-dev`, `/bug-fix`, `/refactor` | the optional section, plus one `status` line per task | ≈ 180 tokens; the drafting reference (≈ 850) and a proposal preview only when the mod is installed and you say yes |
+| A refusal | per refused call, as the tool result | ≈ 25 tokens |
+| `/agentctl …` replies | only when you run them — Claude reads command output | ≈ 200–400 tokens typical; a hand-over is capped at 16,384 characters (UTF-16 code units); its token count depends on the language |
+| The mod itself | never calls a model; the band, the proposal preview and the reopen hand-over are not sent to Claude | 0 |
+
+It is a control and a display, **not a security boundary** — production stays protected by your
+credentials. Design and tests: [docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
+[mods/agentctl/README.md](mods/agentctl/README.md).
 
 ## Architecture
 

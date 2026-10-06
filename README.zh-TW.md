@@ -13,7 +13,7 @@ Claude 在一組封閉、由測試釘死的 anchor 集合內擁有裁量權。�
 在 Claude Code 上提供完整 control plane；對 Codex CLI 與其他相容 agent 則以 skills-only 形式發佈。
 
 <!-- BEGIN:HERO-COUNT -->
-101 bundled · 101 public skills · 16 agents — 詳細程序需要時才載入
+102 bundled · 102 public skills · 16 agents — 詳細程序需要時才載入
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -45,8 +45,8 @@ $codex-setup init
 <!-- BEGIN:INSTALL-COVERAGE -->
 | 方式 | 適用工具 | 涵蓋範圍 |
 |------|---------|---------|
-| Plugin 安裝 | Claude Code | 完整（101 bundled skills、hooks、rules、auto-loop） |
-| `npx skills add` | Codex CLI、Cursor、Windsurf、Aider | 僅 Skills（101 public skills） |
+| Plugin 安裝 | Claude Code | 完整（102 bundled skills、hooks、rules、auto-loop） |
+| `npx skills add` | Codex CLI、Cursor、Windsurf、Aider | 僅 Skills（102 public skills） |
 | `$codex-setup init` | Codex CLI | AGENTS.md kernel + commit-msg hook（pre-push 護欄為 opt-in） |
 <!-- END:INSTALL-COVERAGE -->
 
@@ -153,7 +153,7 @@ sd0x-dev-flow 是一個 reference implementation。下表每一列都將一個�
 | 2 | **Digest-bound reminder state** | Verdict 由模型記錄（`node scripts/review-state.js note <plane> <pass\|fail>`）並綁定 tree digest——一次編輯就會因 digest 改變而重新打開該 plane 的提醒；gate sentinel（`✅ Ready` / `## Overall: ✅ PASS`）仍是行為層的訊號 | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md)（§ Gate Sentinels、§ Enforcement） |
 | 3 | **Context recovery across compaction** | SessionStart(compact) 後重新注入 git baseline（分支 + 未提交檔案）與欠著的 gate 提醒 | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
 | 4 | **Lifecycle interceptors** | 5 種 hook 事件分派到 7 支腳本——4 支建議性提醒 hook、1 支自動格式化、2 支會阻擋的護欄（敏感路徑編輯；啟動方式錯誤的 Codex dispatch）（SessionStart 另外執行 `scripts/namespace-hint.sh`）:PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/)(7 支腳本)+ [`.claude/settings.json`](.claude/settings.json) |
-| 5 | **Capability-based tool gating** | Skill frontmatter 的 `allowed-tools` — 例如 `/ask` 不具備 Edit/Write | 101 個公開 skill 中有 93 個宣告 `allowed-tools` |
+| 5 | **Capability-based tool gating** | Skill frontmatter 的 `allowed-tools` — 例如 `/ask` 不具備 Edit/Write | 102 個公開 skill 中有 94 個宣告 `allowed-tools` |
 | 6 | **Defense-in-depth safety** | 已安裝的 git 層級護欄維持硬性——commit-msg-guard 在 `/codex-setup init` 安裝過的地方生效（Claude plugin 加 `/project-setup` 不會安裝它），走 `/dev/tty` 的 pre-push-gate 則在 opt-in 後生效；編輯期的 pre-edit-guard 仍會阻擋敏感路徑編輯（安全護欄，非工作流強制——需要 `jq`，缺 jq 時護欄不會啟動）；Stop hook 只做提醒——把關不可逆動作的層保留了強制力，review 層則刻意改為建議性 | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex 審查 Claude 寫的東西,自行研究 repo——絕不餵結論要它確認 | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md)(Review Dispatch) |
 | 8 | **Incremental progress tracking** | 證據驅動的卡關紀律：連續三輪 review 都沒關掉任何 finding——由模型從 review 報告中自行計數——就觸發結構化的停滯分類與一次有界調整。每個 tier 的輪次預算（預設 6 / 15 / 30，可覆寫為 3–50）退居 runaway backstop，第一次觸頂跑同一套診斷，並保留列舉的人類出口 | [`rules/auto-loop.md`](rules/auto-loop.md)（§ Stall Detection and Diagnosis；細節見 `skills/codex-code-review/references/loop-diagnostics.md`） |
@@ -333,7 +333,7 @@ flowchart TD
 <!-- BEGIN:WHATS-INCLUDED-COUNT -->
 | 類別 | 數量 | 範例 |
 |------|------|------|
-| Skills | 101 public (101 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
+| Skills | 102 public (102 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | Agents | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | Hooks | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
 | Rules | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
@@ -370,12 +370,13 @@ flowchart TD
 
 <!-- BEGIN:FULL-CATALOG -->
 <details>
-<summary>全部 101 個 public skills</summary>
+<summary>全部 102 個 public skills</summary>
 
-### 開發 (35)
+### 開發 (36)
 
 | Skill | Description |
 |-------|-------------|
+| `/agentctl-setup` | 安裝並設定選用的 agentctl mod（task 範圍、執行前拒絕、會過期的證據、不用模型的交接）。 |
 | `/ask` | 具備上下文感知的 Q&A，自動收集上下文資訊。 |
 | `/bug-fix` | Bug fix workflow. |
 | `/bump-version` | Bump package and plugin version in sync. |
@@ -543,6 +544,49 @@ flowchart TD
 | 評分 | 4 訊號完整度模型 |
 
 [完整文件](docs/features/deep-research/)
+
+## 選用：Agent Control Plane（`agentctl`）
+
+把任務交給 Claude 然後走開；回來時，有三個問題 — `agentctl` 在同一個 Claude Code session 內回答它們。它是獨立、opt-in 的 plugin（`mods/agentctl/`）：**安裝 sd0x-dev-flow 絕不會安裝它**。執行 `/agentctl-setup` 即可安裝；之後，`/feature-dev`、`/bug-fix` 和 `/refactor` 會主動提議為每個 task 起草範圍，供你接受。
+
+| 問題 | 它做了什麼 |
+|---|---|
+| 有沒有待在範圍內？ | Claude 根據 ticket 起草範圍（編輯路徑、檢查、驗收）；mod 先預覽，只有當**你**輸入 `/agentctl accept` 時才會綁定。直接的 `git push`、`gh pr merge` 或 production 寫入會**在執行前被拒絕**，即使沒有任何 task 也一樣；在已接受目錄之外的編輯也是如此。mod 無法分類的呼叫會交給 Claude Code 自己的權限提示或 auto mode — 它讀取的是每一次 tool call，而不是腳本內部執行了什麼 |
+| 「測試通過」是真的嗎？ | 測試執行會連同當時 tree 的 Git 指紋一起記錄；之後 tracked 或 untracked 檔案一有變更，30 秒內就會顯示為**過期（stale）**，而不是「通過」。被 ignore 的檔案、submodule 內容與環境變數不在指紋範圍內 |
+| 它進行到哪了，我要介入嗎？ | prompt 上方有一行 band，`/agentctl` 看詳情，`/agentctl handoff` 以紀錄產生 hand-over，不呼叫任何模型 |
+
+![Claude Code session 中的 agentctl：git push 在執行前被拒絕、編輯之後測試通過變成過期、以及 prompt 上方的 band](docs/assets/agentctl-preview.svg)
+
+```mermaid
+flowchart LR
+    C([Claude]) -- "drafts a proposal" --> F["proposal file<br/>outside the worktree"]
+    F --> V["preview + digest"]
+    U([You]) -- "/agentctl accept" --> V
+    V --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C -- tool call --> P{"tool.call<br/>classify"}
+    S --> P
+    P -- forbidden --> R["refused, rule named"]
+    P -- unclassified --> H
+    P -- allowed --> E1["Git fingerprint<br/>before a check"]
+    E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
+    H -- runs if permitted --> E2["Git fingerprint<br/>after"]
+    E2 --> S
+    S --> B["band · /agentctl · handoff"]
+    G["review-state.js"] -. read only .-> B
+    B --> U
+```
+
+| 成本 | 時機 | 大小 |
+|---|---|---|
+| `/agentctl-setup` 清單 | 每個 session（僅名稱 + 描述） | ≈ 60 tokens |
+| `/agentctl-setup` 內文 | 只在你或 Claude 叫用它時；該回合使用 **Sonnet**（`model: sonnet`） | ≈ 2.2k tokens |
+| 在 `/feature-dev`、`/bug-fix`、`/refactor` 中 | 選用段落，外加每個 task 一行 `status` | ≈ 180 tokens；起草參考（≈ 850）與 proposal 預覽僅在已安裝 mod 且你同意時才會載入 |
+| 一次拒絕 | 每次被拒絕的呼叫，以 tool result 形式 | ≈ 25 tokens |
+| `/agentctl …` 回覆 | 只在你執行它們時 — Claude 會讀取指令輸出 | 一般 ≈ 200–400 tokens；hand-over 上限為 16,384 個字元（UTF-16 code units），token 數依語言而定 |
+| mod 本身 | 從不呼叫模型；band、proposal 預覽與重新開啟時的 hand-over 都不會送給 Claude | 0 |
+
+它是控制與顯示工具，**不是安全邊界** — production 仍由你的憑證保護。設計與測試：[docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
+[mods/agentctl/README.md](mods/agentctl/README.md)。
 
 ## 架構
 

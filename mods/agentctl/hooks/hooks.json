@@ -1,0 +1,4 @@
+{
+  "description": "agentctl hooks module",
+  "modules": ["./register.js"]
+}

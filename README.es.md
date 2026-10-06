@@ -13,7 +13,7 @@ Claude tiene discreción dentro de un conjunto cerrado de anchors fijado por tes
 Control plane completo en Claude Code. Distribución solo de skills para Codex CLI y otros agentes compatibles.
 
 <!-- BEGIN:HERO-COUNT -->
-101 bundled · 101 public skills · 16 agents — los procedimientos se cargan bajo demanda
+102 bundled · 102 public skills · 16 agents — los procedimientos se cargan bajo demanda
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -45,8 +45,8 @@ $codex-setup init
 <!-- BEGIN:INSTALL-COVERAGE -->
 | Método | Herramientas | Cobertura |
 |--------|-------------|-----------|
-| Instalar plugin | Claude Code | Completa (101 bundled skills, hooks, rules, auto-loop) |
-| `npx skills add` | Codex CLI, Cursor, Windsurf, Aider | Solo Skills (101 public skills) |
+| Instalar plugin | Claude Code | Completa (102 bundled skills, hooks, rules, auto-loop) |
+| `npx skills add` | Codex CLI, Cursor, Windsurf, Aider | Solo Skills (102 public skills) |
 | `$codex-setup init` | Codex CLI | Kernel AGENTS.md + hook commit-msg (la puerta pre-push es opt-in) |
 <!-- END:INSTALL-COVERAGE -->
 
@@ -153,7 +153,7 @@ sd0x-dev-flow es una reference implementation. Cada fila de la tabla mapea un su
 | 2 | **Digest-bound reminder state** | Los veredictos los anota el modelo (`node scripts/review-state.js note <plane> <pass\|fail>`) y quedan ligados al digest del árbol — una edición reabre el recordatorio de su plano porque el digest cambió; los sentinels de gate (`✅ Ready` / `## Overall: ✅ PASS`) siguen siendo señales de la capa de comportamiento | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context recovery across compaction** | Línea base de git (rama + archivos sin commit) y recordatorios de gates pendientes re-inyectados tras SessionStart(compact) | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
 | 4 | **Lifecycle interceptors** | 5 tipos de hook event despachados a 7 scripts — cuatro hooks de recordatorio consultivos, un auto-formateador y dos guards bloqueantes (ediciones de rutas sensibles; un Codex dispatch mal lanzado) (SessionStart ejecuta además `scripts/namespace-hint.sh`): PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (7 scripts) + [`.claude/settings.json`](.claude/settings.json) |
-| 5 | **Capability-based tool gating** | Frontmatter de skill `allowed-tools` — p. ej., `/ask` no tiene Edit/Write | 93 de 101 skills públicas declaran `allowed-tools` |
+| 5 | **Capability-based tool gating** | Frontmatter de skill `allowed-tools` — p. ej., `/ask` no tiene Edit/Write | 94 de 102 skills públicas declaran `allowed-tools` |
 | 6 | **Defense-in-depth safety** | Los guards a nivel de git instalados siguen siendo duros — commit-msg-guard allí donde lo instaló `/codex-setup init` (el plugin de Claude con `/project-setup` no lo instala), y pre-push-gate sobre `/dev/tty` cuando se ha optado por él; pre-edit-guard sigue bloqueando las ediciones de rutas sensibles (un guard de seguridad, no enforcement de workflow — requiere `jq`; sin jq, el guard no se activa); el Stop hook recuerda — las capas que custodian acciones irreversibles conservaron sus dientes, la capa de review se volvió consultiva por diseño | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator split** | Codex revisa lo que escribió Claude e investiga el repositorio por su cuenta — nunca recibe una conclusión que confirmar | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **Incremental progress tracking** | Disciplina de estancamiento basada en evidencia: tres rondas de revisión que no cierran ningún hallazgo — contadas por el modelo a partir de los reportes de review — disparan una clasificación estructurada más un ajuste acotado. El presupuesto de rondas por tier (por defecto 6 / 15 / 30, sobrescribible 3–50) queda como red de seguridad ante un bucle desbocado y ejecuta el mismo diagnóstico en su primer hit, con salidas humanas enumeradas | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; detalles en `skills/codex-code-review/references/loop-diagnostics.md`) |
@@ -333,7 +333,7 @@ Escenarios reales que muestran qué habilidades combinar y en qué orden.
 <!-- BEGIN:WHATS-INCLUDED-COUNT -->
 | Categoría | Cantidad | Ejemplos |
 |-----------|----------|----------|
-| Skills | 101 public (101 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
+| Skills | 102 public (102 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | Agents | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | Hooks | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
 | Rules | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
@@ -370,12 +370,13 @@ Para medir tu propio proyecto — tu `CLAUDE.md`, tus overrides y la parte del p
 
 <!-- BEGIN:FULL-CATALOG -->
 <details>
-<summary>Las 101 public skills</summary>
+<summary>Las 102 public skills</summary>
 
-### Desarrollo (35)
+### Desarrollo (36)
 
 | Skill | Descripción |
 |-------|-------------|
+| `/agentctl-setup` | Instala y configura el mod opcional agentctl (alcance de tarea, rechazo antes de ejecutar, evidencia que caduca, traspaso sin modelo). |
 | `/ask` | Q&A con reconocimiento de contexto. Recopila automáticamente información contextual. |
 | `/bug-fix` | Bug fix workflow. |
 | `/bump-version` | Bump package and plugin version in sync. |
@@ -543,6 +544,49 @@ Ejecuta `/deep-research` para orquestar 2-3 agentes de investigación en paralel
 | Scoring | Modelo de completitud de 4 señales |
 
 [Documentación completa](docs/features/deep-research/)
+
+## Opcional: Agent Control Plane (`agentctl`)
+
+Entrega una tarea a Claude y aléjate; cuando vuelves, tres preguntas — `agentctl` las responde dentro de una sola session de Claude Code. Es un plugin aparte y opt-in (`mods/agentctl/`): **instalar sd0x-dev-flow nunca lo instala**. Ejecuta `/agentctl-setup` para instalarlo; después, `/feature-dev`, `/bug-fix` y `/refactor` te ofrecen redactar el alcance de cada task para que lo aceptes.
+
+| Pregunta | Qué hace |
+|---|---|
+| ¿Se mantuvo dentro del alcance? | Claude redacta el alcance a partir del ticket (rutas de edición, checks, aceptación); el mod lo previsualiza y lo vincula solo cuando **tú** escribes `/agentctl accept`. Un `git push`, `gh pr merge` o escritura en production directos son **rechazados antes de ejecutarse**, incluso sin ningún task; también lo es una edición fuera de los directorios aceptados. Lo que el mod no puede clasificar pasa al propio prompt de permisos de Claude Code o al auto mode — que lee cada tool call, no lo que ejecuta un script por dentro |
+| ¿Es cierto que "los tests pasan"? | Una ejecución de tests se registra con una huella Git del árbol; un cambio posterior en un archivo tracked o untracked la muestra como **obsoleta (stale)** en 30 s, no como "pasada". Los archivos ignorados, el contenido de submódulos y el entorno quedan fuera de la huella |
+| ¿Dónde va y tengo que intervenir? | Una band de una línea sobre el prompt, `/agentctl` para el detalle, `/agentctl handoff` para un hand-over construido a partir de registros, sin llamar a ningún modelo |
+
+![agentctl en una session de Claude Code: un git push rechazado antes de ejecutarse, un test pasado que queda obsoleto tras una edición, y la band sobre el prompt](docs/assets/agentctl-preview.svg)
+
+```mermaid
+flowchart LR
+    C([Claude]) -- "drafts a proposal" --> F["proposal file<br/>outside the worktree"]
+    F --> V["preview + digest"]
+    U([You]) -- "/agentctl accept" --> V
+    V --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C -- tool call --> P{"tool.call<br/>classify"}
+    S --> P
+    P -- forbidden --> R["refused, rule named"]
+    P -- unclassified --> H
+    P -- allowed --> E1["Git fingerprint<br/>before a check"]
+    E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
+    H -- runs if permitted --> E2["Git fingerprint<br/>after"]
+    E2 --> S
+    S --> B["band · /agentctl · handoff"]
+    G["review-state.js"] -. read only .-> B
+    B --> U
+```
+
+| Costo | Cuándo | Tamaño |
+|---|---|---|
+| Entrada de `/agentctl-setup` en el listado | en cada session (solo nombre + descripción) | ≈ 60 tokens |
+| Cuerpo de `/agentctl-setup` | solo cuando tú o Claude lo invocan; en ese turno corre en **Sonnet** (`model: sonnet`) | ≈ 2.2k tokens |
+| En `/feature-dev`, `/bug-fix`, `/refactor` | la sección opcional, más una línea `status` por task | ≈ 180 tokens; la referencia de redacción (≈ 850) y una vista previa de la propuesta solo cuando el mod está instalado y dices que sí |
+| Un rechazo | por cada llamada rechazada, como tool result | ≈ 25 tokens |
+| Respuestas de `/agentctl …` | solo cuando las ejecutas — Claude lee la salida del comando | típico ≈ 200–400 tokens; un hand-over tiene un tope de 16.384 caracteres (UTF-16 code units); sus tokens dependen del idioma |
+| El mod en sí | nunca llama a un modelo; la band, la vista previa de la propuesta y el hand-over al reabrir no se envían a Claude | 0 |
+
+Es un control y una visualización, **no un límite de seguridad** — production sigue protegido por tus credenciales. Diseño y tests: [docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
+[mods/agentctl/README.md](mods/agentctl/README.md).
 
 ## Arquitectura
 

@@ -42,7 +42,7 @@ function git(repo, ...args) {
 
 function makeRepo() {
   const repo = tmp('rs-repo-');
-  git(repo, 'init', '-q');
+  git(repo, 'init', '-q', '-b', 'master'); // pinned: a global init.defaultBranch must not change the fixture
   writeFileSync(join(repo, 'a.js'), 'const a = 1;\n');
   writeFileSync(join(repo, 'readme.md'), '# doc\n');
   git(repo, 'add', '-A');
@@ -303,7 +303,7 @@ test('repo-key: two same-named checkouts do not collide; a worktree stays isolat
   for (const parent of [parentA, parentB]) {
     const repo = join(parent, 'proj');
     mkdirSync(repo);
-    git(repo, 'init', '-q');
+    git(repo, 'init', '-q', '-b', 'master'); // pinned: a global init.defaultBranch must not change the fixture
     writeFileSync(join(repo, 'a.js'), 'x\n');
     git(repo, 'add', '-A');
     git(repo, 'commit', '-q', '-m', 'init');

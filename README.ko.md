@@ -13,7 +13,7 @@ Claude는 테스트로 고정된 닫힌 anchor 집합 안에서 재량을 가집
 Claude Code에서는 전체 control plane을 제공합니다. Codex CLI와 기타 호환 에이전트에는 skills-only 배포를 제공합니다.
 
 <!-- BEGIN:HERO-COUNT -->
-101 bundled · 101 public skills · 16 agents — 세부 절차는 필요할 때 로드
+102 bundled · 102 public skills · 16 agents — 세부 절차는 필요할 때 로드
 <!-- END:HERO-COUNT -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![npm](https://img.shields.io/badge/npx-skills%20add-blue)](https://www.npmjs.com/package/skills)
@@ -45,8 +45,8 @@ $codex-setup init
 <!-- BEGIN:INSTALL-COVERAGE -->
 | 방법 | 지원 도구 | 커버리지 |
 |------|----------|---------|
-| 플러그인 설치 | Claude Code | 전체 (101 bundled skills, hooks, rules, auto-loop) |
-| `npx skills add` | Codex CLI, Cursor, Windsurf, Aider | Skills만 (101 public skills) |
+| 플러그인 설치 | Claude Code | 전체 (102 bundled skills, hooks, rules, auto-loop) |
+| `npx skills add` | Codex CLI, Cursor, Windsurf, Aider | Skills만 (102 public skills) |
 | `$codex-setup init` | Codex CLI | AGENTS.md 커널 + commit-msg hook (pre-push 게이트는 opt-in) |
 <!-- END:INSTALL-COVERAGE -->
 
@@ -153,7 +153,7 @@ sd0x-dev-flow는 그 reference implementation입니다. 아래 각 행은 harnes
 | 2 | **Digest 기반 reminder 상태** | Verdict는 모델이 기록하고(`node scripts/review-state.js note <plane> <pass\|fail>`) tree digest에 바인딩됩니다 — 편집하면 digest가 바뀌므로 해당 plane의 reminder가 다시 열립니다; gate sentinel(`✅ Ready` / `## Overall: ✅ PASS`)은 동작 레이어 신호로 유지 | [`scripts/review-state.js`](scripts/review-state.js) + [`rules/auto-loop.md`](rules/auto-loop.md) (§ Gate Sentinels, § Enforcement) |
 | 3 | **Context 압축 후 복구** | SessionStart(compact) 이후 git baseline(브랜치 + 미커밋 파일)과 미완료 gate reminder를 재주입 | [`hooks/post-compact-auto-loop.sh`](hooks/post-compact-auto-loop.sh) |
 | 4 | **Lifecycle interceptor** | 5가지 hook event type을 7개 스크립트로 디스패치 — 4개의 권고형 reminder hook, 1개의 자동 포매터, 2개의 차단형 가드(민감 경로 편집, 잘못 실행된 Codex dispatch)(SessionStart는 추가로 `scripts/namespace-hint.sh`를 실행): PreToolUse / PostToolUse / Stop / SessionStart / UserPromptSubmit | [`hooks/`](hooks/) (7개 스크립트) + [`.claude/settings.json`](.claude/settings.json) |
-| 5 | **Capability 기반 tool gating** | Skill frontmatter의 `allowed-tools` — 예: `/ask`는 Edit/Write 없음 | 공개된 101개 skill 중 93개가 `allowed-tools`를 선언 |
+| 5 | **Capability 기반 tool gating** | Skill frontmatter의 `allowed-tools` — 예: `/ask`는 Edit/Write 없음 | 공개된 102개 skill 중 94개가 `allowed-tools`를 선언 |
 | 6 | **Defense-in-depth 안전장치** | 설치된 git 레벨 가드는 그대로 강제됩니다 — commit-msg-guard는 `/codex-setup init`으로 설치한 곳에서 작동하고(Claude 플러그인과 `/project-setup`으로는 설치되지 않음), `/dev/tty`를 통한 pre-push-gate는 opt-in한 경우에 작동합니다; 편집 시점의 pre-edit-guard는 민감 경로 편집을 여전히 차단하고(보안 가드이며 워크플로 강제가 아님 — `jq`가 필요하며, jq가 없으면 가드가 작동하지 않음), Stop hook은 reminder를 출력합니다 — 되돌릴 수 없는 동작을 막는 레이어는 강제력을 유지하고, 리뷰 레이어는 의도적으로 권고형이 되었습니다 | [`scripts/pre-push-gate.sh`](scripts/pre-push-gate.sh) + [`scripts/commit-msg-guard.sh`](scripts/commit-msg-guard.sh) + [`hooks/stop-guard.sh`](hooks/stop-guard.sh) |
 | 7 | **Generator-evaluator 분리** | Codex가 Claude의 결과물을 리뷰하며 저장소를 직접 조사 — 결론을 건네받아 승인만 하는 일은 없음 | [`rules/codex-invocation.md`](rules/codex-invocation.md) + [`rules/auto-loop.md`](rules/auto-loop.md) (Review Dispatch) |
 | 8 | **점진적 진행 추적** | 증거 기반 정체 규율: finding을 하나도 닫지 못한 리뷰 라운드가 3회 연속되면 — 모델이 리뷰 리포트로부터 직접 셉니다 — 구조화된 정체(stall) 분류와 한 번의 제한된 조정을 트리거합니다. Tier별 라운드 예산 (기본 6 / 15 / 30, 3–50으로 오버라이드 가능) 은 폭주 방지용 백스톱으로 물러나며, 첫 상한 도달 시에도 같은 진단을 수행하고, human exit는 열거되어 있음 | [`rules/auto-loop.md`](rules/auto-loop.md) (§ Stall Detection and Diagnosis; 자세한 내용은 `skills/codex-code-review/references/loop-diagnostics.md`) |
@@ -333,7 +333,7 @@ flowchart TD
 <!-- BEGIN:WHATS-INCLUDED-COUNT -->
 | 카테고리 | 수량 | 예시 |
 |----------|------|------|
-| Skills | 101 public (101 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
+| Skills | 102 public (102 bundled) | `/project-setup`, `/codex-review-fast`, `/verify`, `/smart-commit`, `/deep-research` |
 | Agents | 16 | strict-reviewer, verify-app, coverage-analyst, architecture-designer |
 | Hooks | 7 | pre-edit-guard, pre-bash-codex-launch-guard, auto-format, stop reminder, post-compact-auto-loop, post-skill-auto-loop, user-prompt-review-guard |
 | Rules | 16 | auto-loop, auto-loop-project, codex-invocation, scope-discipline, security, testing, git-workflow, self-improvement, context-management |
@@ -370,12 +370,13 @@ flowchart TD
 
 <!-- BEGIN:FULL-CATALOG -->
 <details>
-<summary>전체 101개 public skills</summary>
+<summary>전체 102개 public skills</summary>
 
-### 개발 (35)
+### 개발 (36)
 
 | Skill | Description |
 |-------|-------------|
+| `/agentctl-setup` | 선택형 agentctl mod 설치 및 설정 (task 범위, 실행 전 거부, 만료되는 증거, 모델 없는 인계). |
 | `/ask` | 컨텍스트 인식 Q&A. 자동으로 컨텍스트 정보를 수집합니다. |
 | `/bug-fix` | Bug fix workflow. |
 | `/bump-version` | Bump package and plugin version in sync. |
@@ -543,6 +544,49 @@ flowchart TD
 | 스코어링 | 4-시그널 완전성 모델 |
 
 [전체 문서](docs/features/deep-research/)
+
+## 선택 사항: Agent Control Plane (`agentctl`)
+
+Claude에게 task를 맡기고 자리를 비웠다가 돌아오면 궁금한 세 가지 질문 — `agentctl`은 하나의 Claude Code session 안에서 이에 답합니다. 별도의 opt-in plugin(`mods/agentctl/`)입니다: **sd0x-dev-flow를 설치해도 이것이 설치되지는 않습니다**. `/agentctl-setup`을 실행하면 설치할 수 있습니다. 그 후에는 `/feature-dev`, `/bug-fix`, `/refactor`가 각 task의 범위 초안을 작성해 주겠다고 제안하며, 사용자는 이를 수락하면 됩니다.
+
+| 질문 | 하는 일 |
+|---|---|
+| 범위를 지켰는가? | Claude가 ticket에서 범위(편집 경로, 검사, 인수 조건)의 초안을 작성하고, mod는 이를 미리 보여 준 뒤 **사용자**가 `/agentctl accept`를 입력할 때만 바인딩합니다. 직접적인 `git push`, `gh pr merge`, production 쓰기는 task가 없어도 **실행 전에 거부**되며, 수락된 디렉터리 밖의 편집도 마찬가지입니다. mod가 분류하지 못하는 호출은 Claude Code 자체의 권한 프롬프트나 auto mode로 넘어갑니다 — 이는 각 tool call을 읽을 뿐, 스크립트 내부에서 무엇이 실행되는지는 읽지 않습니다 |
+| "테스트 통과"는 사실인가? | 테스트 실행은 실행 당시 tree의 Git fingerprint와 함께 기록됩니다. 이후 tracked 또는 untracked 파일이 바뀌면 30초 안에 "통과"가 아니라 **오래됨(stale)**으로 표시됩니다. ignore된 파일, submodule 내용, 환경 변수는 fingerprint 범위 밖입니다 |
+| 지금 어디까지 왔고, 개입해야 하는가? | prompt 위의 한 줄 band, 자세한 내용은 `/agentctl`, `/agentctl handoff`는 모델 호출 없이 기록으로 hand-over를 만듭니다 |
+
+![Claude Code session의 agentctl: 실행 전에 거부된 git push, 편집 후 오래된 테스트 통과, prompt 위의 band](docs/assets/agentctl-preview.svg)
+
+```mermaid
+flowchart LR
+    C([Claude]) -- "drafts a proposal" --> F["proposal file<br/>outside the worktree"]
+    F --> V["preview + digest"]
+    U([You]) -- "/agentctl accept" --> V
+    V --> S[("$.store<br/>task · binding · session<br/>keyed per worktree")]
+    C -- tool call --> P{"tool.call<br/>classify"}
+    S --> P
+    P -- forbidden --> R["refused, rule named"]
+    P -- unclassified --> H
+    P -- allowed --> E1["Git fingerprint<br/>before a check"]
+    E1 --> H["host permission path<br/>tool.check · never weakens a deny"]
+    H -- runs if permitted --> E2["Git fingerprint<br/>after"]
+    E2 --> S
+    S --> B["band · /agentctl · handoff"]
+    G["review-state.js"] -. read only .-> B
+    B --> U
+```
+
+| 비용 | 시점 | 크기 |
+|---|---|---|
+| `/agentctl-setup` 목록 | 매 session (이름 + 설명만) | ≈ 60 tokens |
+| `/agentctl-setup` 본문 | 사용자나 Claude가 호출할 때만; 해당 턴은 **Sonnet**(`model: sonnet`)으로 실행됩니다 | ≈ 2.2k tokens |
+| `/feature-dev`, `/bug-fix`, `/refactor` 안에서 | 선택 섹션과 task마다 `status` 한 줄 | ≈ 180 tokens; 초안 작성 참고 자료(≈ 850)와 proposal 미리보기는 mod가 설치되어 있고 사용자가 수락할 때만 |
+| 거부 | 거부된 호출마다 tool result로 | ≈ 25 tokens |
+| `/agentctl …` 응답 | 실행할 때만 — Claude가 명령 출력을 읽습니다 | 보통 ≈ 200–400 tokens; hand-over는 최대 16,384자(UTF-16 code units)이며 token 수는 언어에 따라 다릅니다 |
+| mod 자체 | 모델을 호출하지 않으며, band, proposal 미리보기, 다시 열 때의 hand-over는 Claude에게 전송되지 않습니다 | 0 |
+
+제어 및 표시 도구이며 **보안 경계가 아닙니다** — production은 여전히 사용자의 자격 증명으로 보호됩니다. 설계와 테스트: [docs/features/agent-control-plane-mod/](docs/features/agent-control-plane-mod/) ·
+[mods/agentctl/README.md](mods/agentctl/README.md).
 
 ## 아키텍처
 
