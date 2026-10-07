@@ -78,6 +78,6 @@ export function previewLines(pending) {
     `  Other tools: ${fmt(e.tools)}`,
     `  Forbidden (task): ${fmt(e.forbid)} · plus the built-in production-write and remote-git-write classes`,
     ...(e.acceptance.length ? [`  Acceptance: ${e.acceptance.map((a) => sanitize(a, 160)).join('; ')}`] : []),
-    `  Accept from your own prompt: /agentctl accept ${pending.digest.slice(0, 8)} · or /agentctl discard`,
+    `  Accept this scope: /agentctl accept ${pending.digest.slice(0, 8)} — it binds the scope only; it does not start any work · or /agentctl discard`,
   ]
 }

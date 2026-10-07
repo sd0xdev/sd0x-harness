@@ -70,23 +70,31 @@ function interventionLines(state, now) {
   })
 }
 
-export function statusText(m) {
+// Compact by default — it reaches Claude — and the diagnostic lines on `/agentctl status --details`.
+// Labels say what they measure (found in a first-run test: "Observation: ok" read as "work passed").
+export function statusText(m, { details = false } = {}) {
   const { now, task, state } = m
   const lines = []
-  lines.push(task ? `Task: ${sanitize(task.goal, 120)} (${task.id})` : 'Task: none bound — observing only')
-  lines.push(`Observation: ${m.health === 'ok' ? 'ok' : m.health}`)
-  lines.push(`Runtime: ${state.runtime.value}${state.runtime.tool ? ` (${state.runtime.tool})` : ''} since ${Math.max(0, Math.round((now - state.runtime.since) / 1000))}s ago · phase ${state.phase.value} · result ${state.result.value}`)
+  lines.push(task ? `Task: ${sanitize(task.goal, 120)} (${task.id})` : 'Task: none bound')
   const iv = interventionLines(state, now)
   lines.push(iv.length ? 'Needs attention:' : 'Needs attention: nothing observed')
   lines.push(...iv)
-  lines.push(field('Gates', m.gate, now))
-  lines.push(field('Context', m.context, now))
-  lines.push(field('5h window', m.fiveHour, now))
+  lines.push(field('Review gates', m.gate, now))
   const ev = evidenceLines(m.evidence, m.fingerprint, now)
-  lines.push(ev.length ? 'Evidence (execution, not gate verdicts):' : 'Evidence: no declared check observed')
+  lines.push(ev.length ? 'Execution evidence (not a review verdict):' : 'Execution evidence: no declared check has run')
   lines.push(...ev)
   const bg = Object.entries(state.background ?? {}).filter(([, b]) => b.status === 'started' || b.status === 'in-flight')
   if (bg.length) lines.push(`Background in flight: ${bg.length} (${bg.map(([id]) => id).join(', ')})`)
+  if (!details) {
+    lines.push('More: /agentctl status --details · /agentctl help')
+    return lines.join('\n')
+  }
+  lines.push(`State storage: ${m.health === 'ok' ? 'healthy' : m.health}`)
+  lines.push(`Runtime: ${state.runtime.value}${state.runtime.tool ? ` (${state.runtime.tool})` : ''} since ${Math.max(0, Math.round((now - state.runtime.since) / 1000))}s ago · phase ${state.phase.value} · result ${state.result.value}`)
+  // A usage reading arrives with Claude's first reply in the session; before that it is absent.
+  const usage = (label, r) => (r ? field(label, r, now) : `${label}: missing (read after Claude's first reply)`)
+  lines.push(usage('Context', m.context))
+  lines.push(usage('5h window', m.fiveHour))
   return lines.join('\n')
 }
 
