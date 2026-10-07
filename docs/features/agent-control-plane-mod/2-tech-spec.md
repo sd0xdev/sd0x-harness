@@ -88,7 +88,9 @@ Keeping every decision in pure modules is what makes `claude plugin test` cover 
 
 | Command | Reply |
 |---|---|
-| `/agentctl` | Status text: the band's fields with source and age (FR-2, FR-3, FR-17); a waiting proposal and the last hand-over as one pointer line each — this reply reaches Claude, so it stays bounded |
+| `/agentctl` | Status that leads with the next step for the current state (§ 3.7), then the band's fields with source and age (FR-2, FR-3, FR-17); `/agentctl status --details` adds the diagnostic detail. This reply reaches Claude, so it stays bounded |
+| `/agentctl <what you are doing>` | The first-run entry (§ 3.7): prepares a drafting request in the person's prompt box; binds nothing |
+| `/agentctl help` · `help advanced` | Three verbs for a first run; the rest on request |
 | `/agentctl last` | The last hand-over in full |
 | `/agentctl proposal` · `accept [digest]` · `discard` | § 3.6; `accept` refused unless `e.origin.kind === 'composer'` |
 | `/agentctl task show` · `task set <json>` · `task clear` | Show, set or clear the task; `set`/`clear` refused unless `e.origin.kind === 'composer'`. `set` validates the input (bounded `id`, array fields, no credential-like policy value, no worktree other than the session's, every edit root inside the worktree), then stores only an allowlisted record with `goal` and `acceptance` redacted |
@@ -186,6 +188,66 @@ Claude drafts, the person accepts (INV-008). The proposal file is an untrusted s
 
 Concurrent sessions share one binding and one non-atomic store; accept in the session that showed the preview (disclosed). The harness gates are unchanged: a `/precommit` run declared as a check is recorded as evidence beside its verdict, never in place of it, and a runner that edits files reads `tree changed during the run` while its verdict stands.
 
+### 3.7 First Run (0.3.0, 2026-10-07)
+
+A first-time user typed `/agentctl 測試一下這個新功能` and got the usage grammar; every 0.2.x path
+assumed the vocabulary. A `/codex-brainstorm` reached equilibrium on this flow (INV-009, FR-19 and
+FR-25 re-decided by the user):
+
+```mermaid
+sequenceDiagram
+    participant P as Person
+    participant M as agentctl
+    participant C as Claude
+    P->>M: /agentctl 測試一下這個新功能 (composer)
+    M->>P: fill the empty prompt box with a drafting request; reply "press Enter"
+    P->>C: Enter (an ordinary model turn)
+    C->>M: node <mod>/bin/propose.mjs --stdin (unbound proposal)
+    M->>P: preview + digest; suggest "/agentctl accept <digest8>"
+    P->>M: Tab + Enter (composer) → bound; "now ask Claude to start"
+```
+
+1. **Parsing.** The first word is a command only if it is a known verb (`status`, `help`, `proposal`,
+   `accept`, `discard`, `task`, `policy`, `events`, `handoff`, `last`, `stop`). Only a command-shaped
+   line — one ASCII word, optionally followed by a digest or a number — whose word is within edit
+   distance 2 of a verb gets a correction (`stauts`, `accepet ab12cd34`), never a model turn; so
+   `test the login flow` stays a goal. Extra arguments to a verb that takes none — `task show|clear`
+   included — and `proposal set …` are rejected with the right route. A sentence after `task` or
+   `task set` is a goal. Anything else is a goal.
+2. **Goal.** Only a composer origin touches the box or sets the language. If `$.prompt.read()` shows
+   an empty box, `$.prompt.fill` with `mode: 'append'` puts the request there — never the default
+   `replace`, since the person may type between the read and the fill — and a read-back tells a clean
+   fill from one that now sits after their text; the reply says which, and that a bound task stays in
+   force until a new scope is accepted. Otherwise — text in the box, no box, a failure, another
+   origin — the reply carries the request to copy. Nothing is submitted (FR-19).
+3. **The request** names the goal (verbatim), the worktree, the bound task (the base), the helper
+   invocation with a shell-quoted path from `$.plugin.root`, and the rules: run the helper's `--help`
+   first, inspect the project, propose the narrowest scope, ask instead of inventing, write a proposal
+   only, then wait. Fixed overhead ≤ 150 tokens, estimated by a proxy (about 4 ASCII characters or 1
+   Han character per token), not a tokenizer; the goal and paths are never truncated.
+4. **The helper** `mods/agentctl/bin/propose.mjs` reads bounded JSON on stdin, validates it with
+   `readProposal`, writes the worktree's proposal file privately and atomically, and changes nothing
+   else; `--help` prints the fields. Under a bound task the call is delegated to the host's permission
+   handling — it may be allowed, asked or denied; a refusal is reported, and the task is never cleared
+   or widened to make room.
+5. **Accept.** The preview always ends with a copyable `/agentctl accept <digest8>` and says accepting
+   binds scope but starts no work. `$.prompt.suggest` offers the same line, best-effort — it shows only
+   in an empty box with no turn running, and its result is not relied on; the copyable line is what
+   always works. It is offered again at each turn's end while the proposal waits, and a
+   `prompt.suggest` hook replaces the host's own next-prompt guess with it meanwhile (found live on
+   2.1.292: the guess "確認" took the box). The success reply says to ask Claude to begin. Digest and
+   revision checks stay the only authority; a stale suggestion cannot bind anything else.
+6. **Status and copy.** Bare `/agentctl` opens with the state's next step: no task → how to start and
+   that built-in refusals still apply; a proposal waiting → its accept line; a task bound → its goal.
+   Labels say what they measure ("state storage", "execution evidence", "review gates"); a missing
+   reading says why ("after Claude's first reply"). Empty states name their cause. Replies carry no
+   `agentctl:` prefix of their own (the host adds one).
+7. **Language.** A limited English / Traditional Chinese copy heuristic: a composer-origin goal with Han
+   characters selects Traditional Chinese for this session; otherwise English. Not locale detection.
+8. **Release gate** (Signal 13): the scripted interactive journey on the release artifact, standalone,
+   including replacing a bound task, and one uncoached first run — or, without one, the README line
+   "first-run UX not yet verified by an uncoached user" plus the owner's recorded walkthrough.
+
 ## 4. Risks and Dependencies
 
 | Risk | Mitigation |
@@ -214,6 +276,7 @@ Dependencies: Claude Code ≥ 2.1.288 with mods enabled (V1 passed: no managed s
 | 9 | `/agentctl-setup` skill, marketplace entry, setup helper | FR-26, NFR-7 | Helper tests pass; a real install from the marketplace loads the mod and its removal restores settings |
 | 10 | Mod 0.2.0: deny-list classifier, proposals and accept, evidence by task and policy version, reading times, bounded status | FR-7, FR-25, INV-004, INV-008 | Direct push refused without a task; scripts and fences delegated; swap, stale and override cases refused; `claude plugin test` passes |
 | 11 | Workflow integration: `status` and `propose`, the shared reference, optional sections in `/feature-dev`, `/bug-fix`, `/refactor` | FR-25, FR-26 | Helper and skill tests pass; the sections never present agentctl as a gate |
+| 12 | First run (0.3.0): goal entry with fill, bundled helper, accept suggestion, next-step status, strict parsing, copy and language | FR-19, FR-23, FR-25, NFR-10, INV-009 | The six reported attempts each end in a valid next step; Signal 13 |
 
 ## 6. Testing Strategy
 
@@ -221,10 +284,10 @@ Dependencies: Claude Code ≥ 2.1.288 with mods enabled (V1 passed: no managed s
 |---|---|---|
 | Unit | `claude plugin test` on pure modules | classifier tables, verdict table, reducer, sanitizer, hand-over text |
 | Hook | `claude plugin test` with `on('tool.call'/'tool.check'/'process.run')` stubs | refusal before core, `.catch` both branches, evidence brackets, `unknown` rendering |
-| Inventory | `claude plugin validate` | Hooks and `$` calls: no `$.model.*`, `$.http.*`, `$.tool.register`, prompt writes (Signal 9) |
-| Live | A scratch repository and a dev-mod load, never production | V3–V10 |
+| Inventory | `claude plugin validate` | Hooks and `$` calls: no `$.model.*`, `$.http.*`, `$.tool.register` or `$.prompt.submit`; `$.prompt.read`, `fill` and `suggest` are the only prompt calls (Signal 9) |
+| Live | A scratch repository and a dev-mod load, never production | V3–V10; Signal 13's interactive first-run walk |
 
-Acceptance follows requirements § 8 Signals 1–12; each request ticket names the signals it closes.
+Acceptance follows requirements § 8 Signals 1–13; each request ticket names the signals it closes.
 
 ## 7. Open Questions
 

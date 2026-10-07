@@ -547,7 +547,7 @@ Override 以 **Anchor 优先**解析：用户自有的 override 文件（`auto-l
 
 ## 可选：Agent Control Plane（`agentctl`）
 
-把任务交给 Claude 然后走开；回来时，有三个问题 — `agentctl` 在同一个 Claude Code session 内回答它们。它是独立、opt-in 的 plugin（`mods/agentctl/`）：**安装 sd0x-dev-flow 绝不会安装它**。运行 `/agentctl-setup` 即可安装；之后，`/feature-dev`、`/bug-fix` 和 `/refactor` 会主动提议为每个 task 起草范围，供你接受。
+把任务交给 Claude 然后走开；回来时，有三个问题 — `agentctl` 在同一个 Claude Code session 内回答它们。它是独立、opt-in 的 plugin（`mods/agentctl/`）：**安装 sd0x-dev-flow 绝不会安装它**。运行 `/agentctl-setup` 安装，然后输入你正在做的事 — `/agentctl 给登录功能加测试` — 并在它放进提示框的请求上按 Enter：Claude 会起草范围，按 Tab + Enter 即可接受。`/feature-dev`、`/bug-fix` 和 `/refactor` 也会为每个 task 提供同样的草稿。
 
 | 问题 | 它做了什么 |
 |---|---|

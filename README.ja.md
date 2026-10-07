@@ -547,7 +547,7 @@ flowchart TD
 
 ## オプション：Agent Control Plane（`agentctl`）
 
-タスクを Claude に任せて席を外し、戻ってきたときに知りたい 3 つの問い — `agentctl` は、それらに 1 つの Claude Code session の中で答えます。これは独立したオプトインの plugin（`mods/agentctl/`）です：**sd0x-dev-flow をインストールしても、これがインストールされることはありません**。`/agentctl-setup` を実行するとインストールできます。その後は、`/feature-dev`、`/bug-fix`、`/refactor` が各 task のスコープの下書きを提案し、あなたが承認します。
+タスクを Claude に任せて席を外し、戻ってきたときに知りたい 3 つの問い — `agentctl` は、それらに 1 つの Claude Code session の中で答えます。これは独立したオプトインの plugin（`mods/agentctl/`）です：**sd0x-dev-flow をインストールしても、これがインストールされることはありません**。`/agentctl-setup` を実行してインストールし、次にやりたいことを入力します — `/agentctl ログインのテストを追加` — プロンプト欄に入ったリクエストで Enter を押すと、Claude がスコープの下書きを作成し、Tab + Enter で承認できます。`/feature-dev`、`/bug-fix`、`/refactor` も各 task について同じ下書きを提案します。
 
 | 問い | 何をするか |
 |---|---|

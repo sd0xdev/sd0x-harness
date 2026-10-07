@@ -50,12 +50,18 @@ async function setup($, on, opts = {}) {
   world.logs = []
   on('ui.log', ($, e) => { world.logs.push(e.text); return { value: undefined } })
   world.files = {}
+  // The person's prompt box (first run, 0.3.0): what is typed, what was filled, suggested or sent.
+  world.box = ''; world.fillOk = true; world.filled = []; world.suggested = []; world.submitted = 0
+  on('prompt.read', () => { if (world.readThrows) throw new Error('no box'); if (world.noBox) return { value: undefined }; return { value: { text: world.box, cursor: world.box.length } } })
+  on('prompt.fill', ($, e) => { if (world.fillThrows) throw new Error('fill failed'); world.filled.push(e.text); if (world.typedMeanwhile) { world.box += world.typedMeanwhile; world.typedMeanwhile = '' } if (world.fillOk) world.box = e.mode === 'append' ? world.box + e.text : e.text; return { isFilled: world.fillOk } })
+  on('prompt.suggest', ($, e) => { if (world.suggestThrows) throw new Error('suggest failed'); world.suggested.push(e.text); return { isShown: !world.suggestHidden } })
   on('env.get', () => ({ value: '/h' }))
   on('fs.exists', ($, e) => ({ value: e.path in world.files || (world.gateExists && e.path.endsWith('scripts/review-state.js') && !e.path.includes('.claude')) }))
   on('fs.read', ($, e) => { if (!(e.path in world.files)) throw new Error('ENOENT'); return { value: world.files[e.path] } })
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
-  on('prompt.submit', ($, e) => ({ text: e.text }))
+  // Counts any prompt sent: the mod itself must never send one (FR-19).
+  on('prompt.submit', ($, e) => { world.submitted++; return { text: e.text } })
   on('classic.UserPromptSubmit', () => ({}))
   on('process.run', ($, e) => {
     const argv = e.argv
@@ -83,22 +89,22 @@ async function setup($, on, opts = {}) {
   return { world, mem, clock }
 }
 
-const status = async ($) => (await $.command.run({ command: 'agentctl', args: '' })).text
+const status = async ($) => (await $.command.run({ command: 'agentctl', args: 'status --details' })).text
 const settle = () => new Promise((r) => setTimeout(r, 0))
 
 test('Signal 2: gate reader missing, non-JSON or failing reads unavailable; nothing else changes', async ($, on) => {
   await setup($, on, { gateExists: false })
-  expect(await status($)).toMatch(/Gates: unavailable \(no review-state.js here\)/)
+  expect(await status($)).toMatch(/Review gates: unavailable \(no review-state.js here\)/)
 })
 
 test('Signal 2: a gate reader returning non-JSON or exiting non-zero reads unavailable', async ($, on) => {
   const { world } = await setup($, on, { gate: { exitCode: 0, stdout: 'not json', stderr: '' } })
   const nj = await status($)
-  expect(nj).toMatch(/Gates: unavailable \(not JSON\)/)
+  expect(nj).toMatch(/Review gates: unavailable \(not JSON\)/)
   expect(nj).toMatch(/Context: 42% — session usage/)
   world.gate = { exitCode: 1, stdout: '', stderr: 'boom' }
   await $.turn.complete({ turnId: 't', answer: '', interrupted: false })
-  expect(await status($)).toMatch(/Gates: unavailable \(check exited 1\)/)
+  expect(await status($)).toMatch(/Review gates: unavailable \(check exited 1\)/)
 })
 
 test('the gate reader only ever runs check, never note (FR-19, Signal 9)', async ($, on) => {
@@ -134,8 +140,8 @@ test('Signal 3: a passing check then an edit shows the check stale within 30 s; 
   await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
   await settle()
   let t = await status($)
-  expect(t).toMatch(/Evidence \(execution, not gate verdicts\):\n  npm test: no error reported · current/)
-  expect(t).toMatch(/Gates: code ✅/)
+  expect(t).toMatch(/Execution evidence \(not a review verdict\):\n  npm test: no error reported · current/)
+  expect(t).toMatch(/Review gates: code ✅/)
   // An edit after the check moves the tree; within 30 s the panel shows the earlier pass as stale.
   world.git.status = '1 .M N... 100644 100644 100644 h1 h1 a.js\0'
   world.git.hash = 'newbytes\n'
@@ -174,7 +180,7 @@ test('a non-check Bash call is recorded as an operation without evidence', async
   await $.tool.call({ tool: 'Bash', command: 'git status', tool_use_id: 'u1' })
   await settle()
   expect(world.runs.filter((a) => a[0] === 'git').length).toBe(0)
-  expect(await status($)).toMatch(/Evidence: no declared check observed/)
+  expect(await status($)).toMatch(/Execution evidence: no declared check has run/)
 })
 
 test('Signal 1: task set from the prompt binds it; reopening shows the last hand-over first', async ($, on) => {
@@ -381,7 +387,7 @@ test('live finding: ToolSearch passes while a task is bound (it only loads schem
 
 test('live finding: without any session.start (a hot reload) the first use reads the gate and starts the tick', async ($, on) => {
   const { world, clock } = await setup($, on, { start: false })
-  expect(await status($)).toMatch(/Gates: code ✅/)
+  expect(await status($)).toMatch(/Review gates: code ✅/)
   const gateReads = () => world.runs.filter((a) => a[0] === 'node').length
   const first = gateReads()
   expect(first).toBe(1)
@@ -409,7 +415,7 @@ test('live finding: session.start and the first band render arriving together bu
   ])
   const ui = await $.ui.mount({ plugin: 'agentctl', component: 'AbovePrompt', surface: 'terminal', viewport: { columns: 140, rows: 30 }, props: {} })
   expect(await ui.find({ type: 'Text', text: /gates missing/ })).toBeUndefined()
-  expect(await status($)).toMatch(/Gates: code ✅/)
+  expect(await status($)).toMatch(/Review gates: code ✅/)
 })
 
 test('the hand-over is capped at CAPS.handoff', async ($, on) => {
@@ -422,7 +428,7 @@ test('the hand-over is capped at CAPS.handoff', async ($, on) => {
 test('T5: a failing gate reader leaves the other fields unchanged', async ($, on) => {
   await setup($, on, { gate: { exitCode: 1, stdout: '', stderr: 'x' } })
   const t = await status($)
-  expect(t).toMatch(/Gates: unavailable \(check exited 1\)/)
+  expect(t).toMatch(/Review gates: unavailable \(check exited 1\)/)
   expect(t).toMatch(/Context: 42% — session usage/)
   expect(t).toMatch(/5h window: 47% \(resets 18:30\)/)
   expect(t).toMatch(/Task: investigate the quiz service/)
@@ -528,18 +534,18 @@ function expectOtherFieldsIntact(t) {
 test('Signal 2: every gate-reader failure leaves Task, Context and the 5 h window intact', async ($, on) => {
   const { world } = await setup($, on, { gateExists: false })
   let t = await status($)
-  expect(t).toMatch(/Gates: unavailable \(no review-state.js here\)/)
+  expect(t).toMatch(/Review gates: unavailable \(no review-state.js here\)/)
   expectOtherFieldsIntact(t)
   world.gateExists = true
   world.gate = { exitCode: 0, stdout: 'not json', stderr: '' }
   await $.turn.complete({ turnId: 't', answer: '', interrupted: false })
   t = await status($)
-  expect(t).toMatch(/Gates: unavailable \(not JSON\)/)
+  expect(t).toMatch(/Review gates: unavailable \(not JSON\)/)
   expectOtherFieldsIntact(t)
   world.gate = { exitCode: 1, stdout: '', stderr: 'boom' }
   await $.turn.complete({ turnId: 't', answer: '', interrupted: false })
   t = await status($)
-  expect(t).toMatch(/Gates: unavailable \(check exited 1\)/)
+  expect(t).toMatch(/Review gates: unavailable \(check exited 1\)/)
   expectOtherFieldsIntact(t)
 })
 
@@ -686,7 +692,7 @@ test('a proposal is previewed at turn end and bound only by an accept from the c
   expect((await $.command.run({ command: 'agentctl', args: 'accept' })).text).toMatch(/only from your own prompt/)
   expect(mem[KEY]).toBe('T1')
   const r = (await $.command.run({ command: 'agentctl', args: `accept ${digest.slice(0, 8)}`, origin: { kind: 'composer' } })).text
-  expect(r).toMatch(/Task T\d+ bound to this worktree/)
+  expect(r).toMatch(/Scope bound\. Next: ask Claude to start the work\./)
   await settle()
   const bound = mem['task/' + encodeURIComponent('/w/repo') + ':' + mem[KEY]]
   expect(bound).toEqual(expect.objectContaining({ goal: 'fix the quiz timer', editRoots: ['src'], worktree: '/w/repo', policyVersion: 2 }))
@@ -738,10 +744,10 @@ test('discard drops the waiting proposal and leaves the bound task; the band nam
   const { world, mem } = await setup($, on)
   world.files[PROPOSAL] = draft()
   await turnEnd($)
-  expect(await status($)).toMatch(/Proposal [0-9a-f]{8} waiting/)
+  expect(await status($)).toMatch(/Next: review \/agentctl proposal, then \/agentctl accept [0-9a-f]{8}/)
   expect((await $.command.run({ command: 'agentctl', args: 'discard' })).text).toMatch(/Proposal discarded/)
   expect(mem[KEY]).toBe('T1')
-  expect((await $.command.run({ command: 'agentctl', args: 'accept', origin: { kind: 'composer' } })).text).toMatch(/no proposal is waiting/)
+  expect((await $.command.run({ command: 'agentctl', args: 'accept', origin: { kind: 'composer' } })).text).toMatch(/No proposal is waiting\. To draft one: \/agentctl <what you are doing>/)
 })
 
 test('no HOME or no proposal file is no proposal, never an error', async ($, on) => {
@@ -763,7 +769,7 @@ test('regression: evidence from another task is never shown as this task\'s', as
   await settle()
   expect(await status($)).toMatch(/npm test: no error reported/)
   await $.command.run({ command: 'agentctl', args: 'task set {"goal":"other","executors":[{"argv":["npm","test"],"check":true}]}', origin: { kind: 'composer' } })
-  expect(await status($)).toMatch(/Evidence: no declared check observed/)
+  expect(await status($)).toMatch(/Execution evidence: no declared check has run/)
   expect(Object.keys(mem['session/S1'].evidence).length).toBe(1)
 })
 
@@ -794,7 +800,7 @@ test('regression: re-setting a task id raises its policy version, so the earlier
   await $.command.run({ command: 'agentctl', args: 'task set {"id":"T1","goal":"b","executors":[{"argv":["npm","test"],"check":true}]}', origin: { kind: 'composer' } })
   await settle()
   expect(mem[scoped].policyVersion).toBe(2)
-  expect(await status($)).toMatch(/Evidence: no declared check observed/)
+  expect(await status($)).toMatch(/Execution evidence: no declared check has run/)
 })
 
 test('regression: a partial reading on either side of a check is never verified', async ($, on) => {
@@ -854,4 +860,215 @@ test('adversarial finding: the proposal cap counts UTF-8 bytes, not characters',
   world.files[PROPOSAL] = draft({ acceptance: Array(60).fill('界'.repeat(100)) })
   await turnEnd($)
   expect(world.logs.join('\n')).toMatch(/proposal not shown — the proposal is over 16384 bytes/)
+})
+
+// ── First run (0.3.0): the user's six attempts on 0.2.2, replayed ───────────────────────────────────
+function promptBox(on, world, { text = '', fill = true } = {}) {
+  world.box = text
+  world.fillOk = fill
+}
+const run = async ($, args, composer = true) => (await $.command.run({ command: 'agentctl', args, ...(composer ? { origin: { kind: 'composer' } } : {}) })).text
+
+test('first run: a sentence after /agentctl fills an empty box with a drafting request and binds nothing', async ($, on) => {
+  const { world, mem } = await setup($, on, { task: null })
+  promptBox(on, world)
+  const r = await run($, '測試一下這個新功能')
+  expect(r).toMatch(/已把請 Claude 起草範圍的請求放進輸入框——按 Enter 送出。目前尚未綁定任何範圍。/)
+  expect(world.filled.length).toBe(1)
+  const req = world.filled[0]
+  expect(req).toMatch(/請為這件事起草 agentctl 任務範圍：「測試一下這個新功能」/)
+  expect(req).toMatch(/\/bin\/propose\.mjs' --worktree '\/w\/repo' --help/)
+  expect(req).toMatch(/base 為 null/)
+  expect(world.submitted).toBe(0)
+  expect(mem[KEY]).toBeUndefined()
+  // The language follows the goal for the rest of the session.
+  expect(await run($, '')).toMatch(/^下一步：描述工作/)
+})
+
+test('first run: text already in the box is never overwritten, and another origin gets no fill', async ($, on) => {
+  const { world } = await setup($, on, { task: null })
+  promptBox(on, world, { text: 'half-typed' })
+  const r = await run($, 'add a login test')
+  expect(world.filled.length).toBe(0)
+  expect(world.box).toBe('half-typed')
+  expect(r).toMatch(/^Send this to Claude to have it draft the scope \(nothing is bound yet\):\n\nDraft an agentctl task scope for: "add a login test"/)
+})
+
+test('review finding: another origin gets the request to copy, with no fill, no send, no binding and no language change', async ($, on) => {
+  const { world, mem } = await setup($, on, { task: null })
+  const r = await run($, '加一個登入測試', false)
+  expect(r).toMatch(/^Send this to Claude to have it draft the scope \(nothing is bound yet\):/)
+  expect(r).toMatch(/--worktree '\/w\/repo' --stdin/)
+  expect(r).toContain('加一個登入測試')
+  expect(world.filled.length).toBe(0)
+  expect(world.submitted).toBe(0)
+  expect(mem[KEY]).toBeUndefined()
+  expect(await run($, 'help')).toMatch(/^agentctl keeps Claude inside a scope you confirm/)
+})
+
+test('review finding: every prompt-box failure keeps the whole request to copy and sends nothing', async ($, on) => {
+  const { world } = await setup($, on, { task: null })
+  for (const fault of ['readThrows', 'fillThrows']) {
+    world.readThrows = world.fillThrows = false
+    world[fault] = true
+    const r = await run($, 'fix the timer')
+    expect([fault, /Send this to Claude[\s\S]*Draft an agentctl task scope for: "fix the timer"[\s\S]*Write the proposal only/.test(r)]).toEqual([fault, true])
+  }
+  world.readThrows = world.fillThrows = false
+  world.noBox = true
+  expect(await run($, 'fix the timer')).toMatch(/Send this to Claude[\s\S]*"fix the timer"/)
+  expect(world.filled.length).toBe(0)
+  expect(world.submitted).toBe(0)
+})
+
+test('first run: a box that cannot be filled falls back to the request to copy', async ($, on) => {
+  const { world } = await setup($, on, { task: null })
+  promptBox(on, world, { fill: false })
+  expect(await run($, 'fix the timer')).toMatch(/Send this to Claude[\s\S]*Draft an agentctl task scope for: "fix the timer"/)
+})
+
+test('first run: the other five attempts each end in a next step, never the usage grammar', async ($, on) => {
+  const { world } = await setup($, on, { task: null })
+  promptBox(on, world)
+  // `/agentctl task <sentence>` and `/agentctl task set <sentence>` are goals.
+  await run($, 'task 測試一下這個新功能')
+  world.box = '' // the person sent the first request
+  await run($, 'task set 測試一下這個新功能')
+  world.box = ''
+  expect(world.filled.length).toBe(2)
+  expect(world.filled[1]).toMatch(/「測試一下這個新功能」/)
+  const bare = await run($, '')
+  expect(bare).toMatch(/^下一步：描述工作——\/agentctl <你要做的事>。內建規則（直接 git push、production 寫入）現在就會擋。/)
+  expect(bare).not.toMatch(/observing only|Observation:|agentctl: agentctl/)
+  expect(await run($, 'proposal set 測試一下這個新功能')).toMatch(/「\/agentctl proposal」不接受這些參數。它只顯示等待中的草稿/)
+  expect(await run($, 'last')).toMatch(/目前沒有綁定任務，所以還沒有交接紀錄/)
+  for (const a of ['', 'help', 'last', 'proposal']) expect(await run($, a)).not.toMatch(/^agentctl:/m)
+})
+
+test('first run: typos are corrected without a model turn, extra arguments are refused', async ($, on) => {
+  const { world } = await setup($, on)
+  promptBox(on, world)
+  expect(await run($, 'accepet ab12cd34')).toMatch(/Did you mean "\/agentctl accept"\?/)
+  expect(await run($, 'stauts')).toMatch(/Did you mean "\/agentctl status"\?/)
+  expect(await run($, 'accept ab12cd34 extra')).toMatch(/"\/agentctl accept" takes no such arguments/)
+  expect(await run($, 'events many')).toMatch(/"\/agentctl events" takes no such arguments/)
+  expect(world.filled.length).toBe(0)
+  // A goal that merely starts with an English word stays a goal.
+  await run($, 'test the login flow')
+  expect(world.filled.length).toBe(1)
+})
+
+test('first run: help teaches three verbs, help advanced the rest', async ($, on) => {
+  await setup($, on)
+  const h = await run($, 'help')
+  expect(h).toMatch(/\/agentctl <what you are doing> — Claude drafts a scope \(binds nothing\)/)
+  expect(h).toMatch(/\/agentctl accept <digest> — you confirm it \(starts no work\)/)
+  expect(h).not.toMatch(/task set/)
+  expect(await run($, 'help advanced')).toMatch(/task show \| set <json> \| clear/)
+})
+
+test('first run: the preview offers the accept line as a suggestion, and accepting says work has not started', async ($, on) => {
+  const { world, mem } = await setup($, on)
+  promptBox(on, world)
+  world.files[PROPOSAL] = draft()
+  await turnEnd($)
+  expect(world.logs.join('\n')).toMatch(/Accept this scope: \/agentctl accept [0-9a-f]{8} — it binds the scope only; it does not start any work/)
+  expect(world.suggested[0]).toMatch(/^\/agentctl accept [0-9a-f]{8}$/)
+  const r = await run($, world.suggested[0].replace('/agentctl ', ''))
+  expect(r).toMatch(/^Scope bound\. Next: ask Claude to start the work\.\nTask T\d+: fix the quiz timer/)
+  expect(mem[KEY]).not.toBe('T1')
+  expect(world.submitted).toBe(0)
+})
+
+test('first run: under a bound task the request names it as the base, and the reply says the task stays in force', async ($, on) => {
+  const { world } = await setup($, on)
+  promptBox(on, world)
+  const r = await run($, 'add a retry to the quiz fetch')
+  expect(world.filled[0]).toMatch(/base "T1"/)
+  expect(r).toMatch(/The current task stays in force until you accept the new scope\./)
+  expect(r).not.toMatch(/Nothing is bound yet/)
+  world.box = ''
+  expect(await run($, '加重試')).toMatch(/接受新範圍之前，目前的任務照舊生效。$/)
+})
+
+test('review finding: a suggestion that cannot show or throws leaves the copyable accept line, and accept still works', async ($, on) => {
+  const { world, mem } = await setup($, on)
+  world.suggestThrows = true
+  world.files[PROPOSAL] = draft()
+  await turnEnd($)
+  const line = world.logs.join('\n').match(/\/agentctl accept ([0-9a-f]{8})/)
+  expect(line).not.toBeNull()
+  world.suggestThrows = false
+  world.suggestHidden = true
+  expect(await run($, 'proposal')).toMatch(/Accept this scope: \/agentctl accept [0-9a-f]{8}/)
+  expect(await run($, `accept ${line[1]}`)).toMatch(/^Scope bound\./)
+  expect(mem[KEY]).not.toBe('T1')
+})
+
+test('review finding: an accept whose save fails keeps the proposal waiting, and the same digest works once the store recovers', async ($, on) => {
+  const { world, mem } = await setup($, on)
+  world.files[PROPOSAL] = draft()
+  await turnEnd($)
+  const d = world.logs.join('\n').match(/\/agentctl accept ([0-9a-f]{8})/)[1]
+  for (const prefix of ['task/', 'binding/']) {
+    world.failSetPrefix = prefix
+    const r = await run($, `accept ${d}`)
+    expect([prefix, /could not be (saved|bound)/.test(r), /Scope bound/.test(r)]).toEqual([prefix, true, false])
+    expect(mem[KEY]).toBe('T1')
+    expect(await run($, 'proposal')).toMatch(new RegExp(`accept ${d}`))
+  }
+  world.failSetPrefix = undefined
+  expect(await run($, `accept ${d}`)).toMatch(/^Scope bound\./)
+})
+
+test('review finding: the copy follows the latest goal, and last distinguishes no task from no hand-over', async ($, on) => {
+  const { world } = await setup($, on)
+  await run($, '幫登入功能加測試')
+  world.box = ''
+  expect(await run($, 'help')).toMatch(/^agentctl 讓 Claude 在你確認的範圍內工作/)
+  expect(await run($, 'last')).toMatch(/這個任務還沒有存過交接/)
+  // Found live: the accept reply's last line stayed English in a Chinese session.
+  world.files[PROPOSAL] = draft()
+  await turnEnd($, 'zh1')
+  const d = world.logs.join('\n').match(/\/agentctl accept ([0-9a-f]{8})/)[1]
+  const acc = await run($, `accept ${d}`)
+  expect(acc).toMatch(/^範圍已綁定。下一步：請 Claude 開始這項工作。/)
+  expect(acc).toMatch(/完整範圍：\/agentctl policy$/)
+  expect(acc).not.toMatch(/shows the whole scope/)
+  await run($, 'add a login test')
+  world.box = ''
+  expect(await run($, 'help')).toMatch(/^agentctl keeps Claude inside a scope you confirm/)
+  expect(await run($, 'last')).toMatch(/This task has no saved hand-over yet/)
+  expect(await run($, '')).toMatch(/^Next: ask Claude to work/)
+})
+
+test('review finding: text typed between the read and the fill survives, and the reply says the box holds both', async ($, on) => {
+  const { world } = await setup($, on, { task: null })
+  world.typedMeanwhile = 'my note '
+  const r = await run($, 'fix the timer')
+  expect(world.box.startsWith('my note ')).toBe(true)
+  expect(world.box).toMatch(/Draft an agentctl task scope for: "fix the timer"/)
+  expect(r).toMatch(/added after text you typed meanwhile/)
+  expect(world.submitted).toBe(0)
+})
+
+test('review finding: task show and task clear refuse stray words before reading or changing anything', async ($, on) => {
+  const { mem } = await setup($, on)
+  expect(await run($, 'task clear extra')).toMatch(/"\/agentctl task clear" takes no such arguments/)
+  expect(mem[KEY]).toBe('T1')
+  expect(await run($, 'task show extra')).toMatch(/"\/agentctl task show" takes no such arguments/)
+  expect(await run($, 'task clear')).toMatch(/Task cleared/)
+})
+
+test('live finding: a proposal still waiting is offered again as a suggestion at the next turn\'s end', async ($, on) => {
+  const { world } = await setup($, on)
+  world.files[PROPOSAL] = draft()
+  await turnEnd($)
+  expect(world.suggested.length).toBe(1)
+  await turnEnd($, 'u2')
+  expect(world.suggested.length).toBe(2)
+  expect(world.suggested[1]).toBe(world.suggested[0])
+  await run($, 'discard')
+  await turnEnd($, 'u3')
+  expect(world.suggested.length).toBe(2)
 })

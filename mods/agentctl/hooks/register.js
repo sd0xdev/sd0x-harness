@@ -8,6 +8,7 @@ import { handoff } from '../lib/handoff.js'
 import { decideNotices, parseTaskNotification } from '../lib/notices.js'
 import { HARD_FORBIDDEN, classify, taskRecord, validateTask } from '../lib/policy.js'
 import { acceptedRecord, digestMatches, previewLines, proposalDigest, proposalPath, readProposal } from '../lib/proposal.js'
+import { copy, draftingRequest, helpText, languageOf, parseCommand, suggestionWhileWaiting } from '../lib/firstrun.js'
 import { initialState, reduce } from '../lib/reducer.js'
 import { CAPS, sanitize } from '../lib/sanitize.js'
 import { applyRetention, createWriter, keys, latestCheckpoint, taskScope } from '../lib/store.js'
@@ -62,6 +63,8 @@ async function buildContext($) {
     // The validated proposal waiting for `/agentctl accept`, frozen until accepted or discarded, and
     // the digest of the file text it came from (an unchanged file is not read twice).
     pending: saved?.pending ?? null,
+    // The copy language for this session: set by the person's own goal text (§ 3.7, a heuristic).
+    lang: saved?.lang ?? 'en',
     proposalSeen: saved?.proposalSeen ?? null,
   }
   await readGate($, c)
@@ -112,6 +115,7 @@ function persist(c, taskId) {
     notices: c.notices,
     pending: c.pending,
     proposalSeen: c.proposalSeen,
+    lang: c.lang,
     health: c.writer.health.value,
   })
 }
@@ -349,9 +353,55 @@ async function checkProposal($, c) {
     return
   }
   c.pending = { effective: r.effective, digest: await proposalDigest(r.effective), baseRev: revisionOf(bound), textDigest: seen, at: await $.clock.now() }
-  for (const line of previewLines(c.pending)) $.ui.log(line)
+  for (const line of preview(c)) $.ui.log(line)
   persist(c, bound?.id)
   $.ui.invalidate('ui.render')
+  await suggestAccept($, c)
+}
+
+// The preview always ends with a copyable accept line in the session's language.
+function preview(c) {
+  const lines = previewLines(c.pending)
+  lines[lines.length - 1] = `  ${copy(c.lang).acceptLine(c.pending.digest.slice(0, 8))}`
+  return lines
+}
+
+// Offer the accept line as the box's dim suggestion (Tab to take). It shows only when the box is
+// empty and no turn runs; the copyable line in the preview is what always works.
+async function suggestAccept($, c) {
+  if (!c.pending) return
+  try { await $.prompt.suggest({ text: `/agentctl accept ${c.pending.digest.slice(0, 8)}` }) } catch { /* optional */ }
+}
+
+// `/agentctl <what you are doing>`: a request for Claude to draft the scope, put in the person's own
+// prompt box when it is empty (FR-19 allows fill, never submit). Nothing is sent or bound here.
+async function goalCommand($, c, e, goal) {
+  // Only the person's own goal fills their box or sets the session's language; any other origin
+  // gets the same request to copy and changes nothing (§ 3.7 item 2).
+  const composer = e.origin?.kind === 'composer'
+  const lang = composer ? languageOf(goal) : c.lang
+  if (composer) c.lang = lang
+  const t = copy(lang)
+  const bound = await boundTask($, c)
+  const request = draftingRequest({ goal, worktree: c.cwd, base: bound && !bound.recordMissing ? bound.id : null, root: $.plugin.root, lang })
+  let filled = false
+  let mixed = false
+  if (composer) {
+    try {
+      const box = await $.prompt.read()
+      // `append`, never the default `replace`: the read and the fill are two steps, and anything the
+      // person types between them must survive (found in review). Read back to tell them apart.
+      if (box && box.text === '' && (await $.prompt.fill({ text: request, mode: 'append' }))?.isFilled === true) {
+        const after = await $.prompt.read()
+        filled = true
+        mixed = Boolean(after && after.text !== request)
+      }
+    } catch { filled = false }
+  }
+  // A bound task keeps applying until a new scope is accepted; say so instead of "nothing is bound" (found live).
+  const keeps = Boolean(bound && !bound.recordMissing)
+  if (filled && mixed) return t.mixed(keeps)
+  return filled ? t.filled(keeps) : `${t.copy(keeps)}\n\n${request}`
 }
 
 // The bound task's exact revision: a same-id `task set` after the preview makes the proposal stale.
@@ -369,7 +419,7 @@ async function acceptCommand($, c, e, given) {
   // Scope comes only from the person at the prompt (FR-25).
   if (e.origin?.kind !== 'composer') return 'agentctl refused: a proposal can be accepted only from your own prompt.'
   const p = c.pending
-  if (!p) return 'agentctl: no proposal is waiting. Ask Claude to draft one (/agentctl-setup --task), then accept it here.'
+  if (!p) return c.lang === 'zh' ? '目前沒有等待中的草稿。要起草：/agentctl <你要做的事>' : 'No proposal is waiting. To draft one: /agentctl <what you are doing>'
   if (!digestMatches(given, p.digest)) return `agentctl refused: ${sanitize(given, 30)} does not match the waiting proposal ${p.digest.slice(0, 8)}. Check /agentctl proposal.`
   const bound = await boundTask($, c)
   if ((bound?.id ?? null) !== p.effective.base || revisionOf(bound) !== p.baseRev) {
@@ -378,9 +428,13 @@ async function acceptCommand($, c, e, given) {
     return 'agentctl refused: the bound task changed since this proposal was drafted (stale); it was discarded. Ask for a new draft.'
   }
   const now = await $.clock.now()
-  const text = await bindTask($, c, acceptedRecord(p.effective, { now, baseTask: bound }))
-  if (text.startsWith('Task ')) { await settleProposal($, c, p); persist(c, `T${now}`) }
-  return text
+  const record = acceptedRecord(p.effective, { now, baseTask: bound })
+  const text = await bindTask($, c, record)
+  if (!text.startsWith('Task ')) return text
+  await settleProposal($, c, p)
+  persist(c, `T${now}`)
+  // Say what accepting did and did not do; the full policy is one command away.
+  return [copy(c.lang).accepted, `Task ${record.id}: ${sanitize(record.goal, 120)}`, copy(c.lang).wholeScope].join('\n')
 }
 
 async function stopCommand($, c) {
@@ -439,7 +493,7 @@ export function register(on) {
     }
     await checkProposal($, c)
     // `immediate`: /agentctl stop must run while the turn it cancels is still in flight.
-    await $.command.register({ name: 'agentctl', description: 'Agent Control Plane: status, proposal, accept, task, policy, events, handoff, stop', argumentHint: '[proposal|accept|discard|task|policy|events|handoff|last|stop]', immediate: true })
+    await $.command.register({ name: 'agentctl', description: 'Agent Control Plane — describe the work and Claude drafts a scope you accept', argumentHint: '<what you are doing> | accept <digest> | help', immediate: true })
     $.ui.invalidate('ui.render')
     return next(e)
   })
@@ -459,7 +513,11 @@ export function register(on) {
     await observe($, c, { type: 'turn.complete', turnId: e.turnId, at: await $.clock.now() }, (await boundTask($, c))?.id)
     await readGate($, c)
     await refreshTree($, c)
+    const had = c.pending?.digest
     await checkProposal($, c)
+    // A proposal still waiting from an earlier turn is offered again at each turn's end (found
+    // live: after an unrelated reply the box was empty, and the accept line was only in scrollback).
+    if (c.pending && c.pending.digest === had) await suggestAccept($, c)
     return next(e)
   })
 
@@ -602,35 +660,66 @@ export function register(on) {
   // Text replies for every surface, answered without a model call.
   on('command.run', { command: 'agentctl' }, async ($, e) => {
     const c = await context($)
-    const args = String(e.args ?? '').trim().split(/\s+/).filter(Boolean)
-    const [sub, ...rest] = args
-    // Bare status stays short (its text reaches Claude): the hand-over is one pointer line, and the
-    // whole of it only on `/agentctl last`.
-    if (!sub) {
+    // Replies carry no `agentctl:` prefix of their own: the host already adds one (found in a
+    // first-run test, where every reply read "agentctl: agentctl:").
+    const reply = (text) => ({ text: String(text).replace(/^agentctl: /gm, '').replace(/^agentctl refused: /gm, 'Refused: ') })
+    const t = copy(c.lang)
+    const p = parseCommand(e.args)
+    if (p.kind === 'goal') return reply(await goalCommand($, c, e, p.text))
+    if (p.kind === 'typo') return reply(t.typo(p.verb))
+    if (p.kind === 'extra') return reply(t.extra(p.verb))
+    const [sub, ...rest] = p.kind === 'status' ? ['status'] : [p.verb, ...p.rest]
+    if (sub === 'status') {
       const m = await model($, c)
-      const extra = [
-        ...(c.pending ? [`Proposal ${c.pending.digest.slice(0, 8)} waiting — /agentctl proposal, then /agentctl accept`] : []),
-        ...(c.checkpoint ? [`Last hand-over saved ${new Date(c.checkpoint.savedAt).toISOString()} — /agentctl last`] : []),
-      ]
-      return { text: [statusText(m), ...extra].join('\n') }
+      const bound = m.task && !m.task.recordMissing
+      const next = c.pending ? t.next.proposal(c.pending.digest.slice(0, 8)) : bound ? t.next.task : t.next.none
+      const extra = c.checkpoint ? [`Last hand-over saved ${new Date(c.checkpoint.savedAt).toISOString()} — /agentctl last`] : []
+      return reply([next, statusText(m, { details: rest[0] === '--details' }), ...extra].join('\n'))
     }
-    if (sub === 'last') return { text: c.checkpoint ? `Last hand-over (${new Date(c.checkpoint.savedAt).toISOString()}):\n${c.checkpoint.markdown}` : 'No hand-over saved for the bound task.' }
-    if (sub === 'proposal') return { text: c.pending ? previewLines(c.pending).join('\n') : 'No proposal is waiting.' }
-    if (sub === 'accept') return { text: await acceptCommand($, c, e, rest[0]) }
+    if (sub === 'help') return reply(helpText(c.lang, rest[0] === 'advanced'))
+    if (sub === 'last') {
+      if (c.checkpoint) return reply(`Last hand-over (${new Date(c.checkpoint.savedAt).toISOString()}):\n${c.checkpoint.markdown}`)
+      return reply((await boundTask($, c)) ? t.noHandover : t.noTaskLast)
+    }
+    if (sub === 'proposal') {
+      if (!c.pending) return reply(c.lang === 'zh' ? '目前沒有等待中的草稿。要起草：/agentctl <你要做的事>' : 'No proposal is waiting. To draft one: /agentctl <what you are doing>')
+      await suggestAccept($, c)
+      return reply(preview(c).join('\n'))
+    }
+    if (sub === 'accept') return reply(await acceptCommand($, c, e, rest[0]))
     if (sub === 'discard') {
       const had = Boolean(c.pending)
       await settleProposal($, c, c.pending)
       persist(c, (await boundTask($, c))?.id)
       $.ui.invalidate('ui.render')
-      return { text: had ? 'Proposal discarded; the bound task is unchanged.' : 'No proposal was waiting.' }
+      return reply(had ? 'Proposal discarded; the bound task is unchanged.' : 'No proposal was waiting.')
     }
-    if (sub === 'task') return { text: await taskCommand($, c, e, rest) }
-    if (sub === 'policy') return { text: policyText(await boundTask($, c)) }
-    if (sub === 'events') return { text: eventsText(c.decisions, Math.min(50, Math.max(1, Number(rest[0]) || 10)), await $.clock.now()) }
-    if (sub === 'handoff') return { text: (await saveHandoff($, c)).text }
-    if (sub === 'stop') return { text: await stopCommand($, c) }
-    return { text: 'Usage: /agentctl [proposal] [accept [digest]] [discard] [task show|set <json>|clear] [policy] [events [n]] [handoff] [last] [stop]' }
+    if (sub === 'task') {
+      // A sentence where a subcommand belongs is a goal, not a usage error (found in a first-run test).
+      const [verb, ...more] = rest
+      if (verb && !['show', 'set', 'clear'].includes(verb)) return reply(await goalCommand($, c, e, rest.join(' ')))
+      if (verb === 'set' && more.length && !more.join(' ').trimStart().startsWith('{')) return reply(await goalCommand($, c, e, more.join(' ')))
+      // `show` and `clear` take nothing: a stray word is refused before any state is read or changed.
+      if ((verb === 'show' || verb === 'clear') && more.length) return reply(t.extra(`task ${verb}`))
+      return reply(await taskCommand($, c, e, rest))
+    }
+    if (sub === 'policy') return reply(policyText(await boundTask($, c)))
+    if (sub === 'events') {
+      if (rest.length && !/^\d+$/.test(rest[0])) return reply(t.extra('events'))
+      return reply(eventsText(c.decisions, Math.min(50, Math.max(1, Number(rest[0]) || 10)), await $.clock.now()))
+    }
+    if (sub === 'handoff') return reply((await saveHandoff($, c)).text)
+    if (sub === 'stop') return reply(await stopCommand($, c))
+    return reply(helpText(c.lang, false))
   })
+
+  // While a proposal waits, the box's dim suggestion is its accept line, not the host's own guess
+  // at the next prompt (found live). The person still takes it with Tab and sends it with Enter.
+  on('prompt.suggest', async ($, e, next) => {
+    const c = await context($)
+    const text = suggestionWhileWaiting(e.origin?.kind, c.pending?.digest)
+    return next(text ? { ...e, text } : e)
+  }).catch(($, e, next) => next(e))
 
   // The band above the prompt. Other mods' band output is kept beside ours.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

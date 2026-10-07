@@ -547,7 +547,7 @@ flowchart TD
 
 ## 선택 사항: Agent Control Plane (`agentctl`)
 
-Claude에게 task를 맡기고 자리를 비웠다가 돌아오면 궁금한 세 가지 질문 — `agentctl`은 하나의 Claude Code session 안에서 이에 답합니다. 별도의 opt-in plugin(`mods/agentctl/`)입니다: **sd0x-dev-flow를 설치해도 이것이 설치되지는 않습니다**. `/agentctl-setup`을 실행하면 설치할 수 있습니다. 그 후에는 `/feature-dev`, `/bug-fix`, `/refactor`가 각 task의 범위 초안을 작성해 주겠다고 제안하며, 사용자는 이를 수락하면 됩니다.
+Claude에게 task를 맡기고 자리를 비웠다가 돌아오면 궁금한 세 가지 질문 — `agentctl`은 하나의 Claude Code session 안에서 이에 답합니다. 별도의 opt-in plugin(`mods/agentctl/`)입니다: **sd0x-dev-flow를 설치해도 이것이 설치되지는 않습니다**. `/agentctl-setup`을 실행해 설치한 다음, 지금 하는 일을 입력합니다 — `/agentctl 로그인 테스트 추가` — 프롬프트 입력창에 채워진 요청에서 Enter를 누르면 Claude가 범위 초안을 작성하고, Tab + Enter로 수락합니다. `/feature-dev`, `/bug-fix`, `/refactor`도 각 task마다 같은 초안을 제안합니다.
 
 | 질문 | 하는 일 |
 |---|---|

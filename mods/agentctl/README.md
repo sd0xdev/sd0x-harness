@@ -1,6 +1,6 @@
 # agentctl — Agent Control Plane for one Claude Code session
 
-Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 170 tests); 0.2.x re-verified live on 2.1.289 (§ Verified live, 0.2.x).
+Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 194 tests); 0.2.x re-verified live on 2.1.289 (§ Verified live, 0.2.x).
 The mods API is marked changeable between releases; the type declarations the host writes into
 `.claude-plugin/types/` are the authority for the installed version. Run `claude plugin validate .`
 after every Claude Code upgrade.
@@ -11,6 +11,30 @@ plugin does not install the mod. To install it, run `/agentctl-setup` (it checks
 `agentctl@sd0xdev-marketplace` after you approve, and builds your first task line; `/agentctl-setup --task`
 and the workflow skills draft a proposal for you to accept instead), or load it for one
 session with `claude --plugin-dir mods/agentctl`.
+
+## First run
+
+Type what you are doing — you do not need any other command:
+
+```text
+/agentctl 測試一下這個新功能
+```
+
+1. The mod puts a request for Claude in your prompt box (it never sends it). Press **Enter**.
+2. Claude reads the project and drafts a scope — what it may edit, which checks count as evidence,
+   what "done" means — and writes it with the helper bundled in the mod (`bin/propose.mjs`). If
+   something is unclear it asks you instead of inventing permissions.
+3. At the end of that reply the mod shows the scope and offers `/agentctl accept <digest>` in the box:
+   **Tab**, then **Enter**. Accepting binds the scope; it starts no work.
+4. Ask Claude to begin. `/agentctl` shows where things stand and what to do next; `/agentctl help` lists
+   the rest.
+
+**First-run UX not yet verified by an uncoached user.** The flow above was walked end to end in a
+scripted interactive session (§ Verified live, 0.3.0); nobody who has not read the design has tried it.
+
+Sending the request is an ordinary Claude turn; the mod itself calls no model. Replies use Traditional
+Chinese when your goal is written in Chinese, English otherwise — a simple heuristic, not locale
+detection.
 
 ## What it does
 
@@ -26,7 +50,8 @@ session with `claude --plugin-dir mods/agentctl`.
 ## Proposals
 
 Claude writes `~/.claude/agentctl/proposals/<URI-encoded worktree>.json` (outside the worktree) through
-`agentctl-setup.js propose`, which applies the mod's own validation first. At session start and at the
+the mod's bundled `bin/propose.mjs` (the `/agentctl <goal>` path) or sd0x-dev-flow's
+`agentctl-setup.js propose` (setup and workflow skills); both apply the mod's own validation first. At session start and at the
 end of each main turn the mod reads it once, validates it again, and keeps the **effective** object:
 the worktree comes from the session, a proposal naming another worktree, drafted against a task that
 is no longer bound, or overlapping a built-in class is refused (the reason is logged). The preview
@@ -88,7 +113,7 @@ surface or mode — `-p`, `dontAsk`, `plan`, `bypassPermissions`, Desktop, VS Co
 
 ```bash
 cd mods/agentctl            # from the repository root
-claude plugin validate .   # hooks and $ calls: no $.model.*, $.http.*, $.tool.register, prompt writes
+claude plugin validate .   # hooks and $ calls: no $.model.*, $.http.*, $.tool.register, $.prompt.submit (fill/suggest/read allowed)
 claude plugin test .       # every *.test.ts under tests/
 ```
 
@@ -147,6 +172,27 @@ Removal: `--plugin-dir` installs nothing and changes no setting. The mod's own d
 | Found live and fixed in 0.2.1 | An accepted proposal file was read again by the next session as a stale draft (now remembered per worktree); the built-in refusal said "the task's scope", and Claude then proposed widening the task (now: "a built-in class no task can lift"); transcript lines read `agentctl: agentctl:` |
 | Cost of the two `-p` probes | 2–3 turns each, ≈ $0.06 each on Haiku; the mod's own replies, previews and band call no model |
 | Independent adversarial test (Codex, 2026-10-05), fixed in 0.2.2 | An absolute or upper-case program path (`/usr/bin/git push`, `GIT push`) slipped past the built-in classes; an edit root such as `../other` authorized writes outside the worktree; the proposal cap counted characters, not UTF-8 bytes; with no task bound, delegated calls were not recorded in `/agentctl events`. Digest agreement, prototype keys, other-worktree refusal, evidence partitioning and partial coverage held |
+
+## Verified live, 0.3.0 (2026-10-07, scratch clone with a scratch remote, interactive tmux, Haiku)
+
+Signal 13, walked on 2.1.289 (steps 1–3) and again from the start on 2.1.292:
+
+| Step | Result |
+|---|---|
+| `/agentctl 幫 …/README 加一行測試說明` | The request filled the empty box in Traditional Chinese with the helper path from `$.plugin.root`; nothing was sent or bound |
+| Enter | Claude ran the helper's `--help`, read the project, found the file missing and **asked** instead of inventing scope; after the answer it wrote the proposal through the helper |
+| Preview | Shown at the turn's end with its digest and "binds the scope only; starts no work"; the band named the waiting proposal |
+| Tab + Enter | Accepted from the suggestion; the reply named the next step |
+| "start the work" | The edit inside the accepted root went to the host's own permission prompt; the declared check was recorded as current evidence |
+| `/agentctl`, `handoff`, reopen, `last` | Status led with the next step; the hand-over listed the check as verified with its reading time; reopening pointed at it, `last` printed it |
+| A second goal with the task bound | The helper delivered under the bound task; the preview said "Replaces: task …"; Tab + Enter replaced it |
+
+Found and fixed during the walk: on 2.1.292 the host's own next-prompt guess ("確認") took the box, so
+Tab + Enter would have sent that word to Claude — the mod now replaces the host's guess with the accept
+line while a proposal waits, and offers it again at each turn's end; the accept reply's last line stayed
+English in a Chinese session; with a task bound, the fill reply said "nothing is bound". Hesitations
+recorded: Claude once tried to read the mod's own files outside the worktree (declined at the host
+prompt); the copy language resets with each new session.
 
 ## Not verified
 
