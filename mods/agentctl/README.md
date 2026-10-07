@@ -1,6 +1,6 @@
 # agentctl — Agent Control Plane for one Claude Code session
 
-Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 194 tests); 0.2.x re-verified live on 2.1.289 (§ Verified live, 0.2.x).
+Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 203 tests); 0.2.x re-verified live on 2.1.289 (§ Verified live, 0.2.x).
 The mods API is marked changeable between releases; the type declarations the host writes into
 `.claude-plugin/types/` are the authority for the installed version. Run `claude plugin validate .`
 after every Claude Code upgrade.
@@ -26,11 +26,10 @@ Type what you are doing — you do not need any other command:
    something is unclear it asks you instead of inventing permissions.
 3. At the end of that reply the mod shows the scope and offers `/agentctl accept <digest>` in the box:
    **Tab**, then **Enter**. Accepting binds the scope; it starts no work.
-4. Ask Claude to begin. `/agentctl` shows where things stand and what to do next; `/agentctl help` lists
-   the rest.
+4. Ask Claude to begin. `/agentctl` shows where things stand and what to do next — run the checks,
+   then `/agentctl handoff` — and `/agentctl help` lists the rest.
 
-**First-run UX not yet verified by an uncoached user.** The flow above was walked end to end in a
-scripted interactive session (§ Verified live, 0.3.0); nobody who has not read the design has tried it.
+A tester who had not read the design walked steps 1–4 and the hand-over unaided (§ Uncoached run).
 
 Sending the request is an ordinary Claude turn; the mod itself calls no model. Replies use Traditional
 Chinese when your goal is written in Chinese, English otherwise — a simple heuristic, not locale
@@ -41,9 +40,9 @@ detection.
 | Function | How |
 |---|---|
 | Task scope | Claude drafts a proposal (`/agentctl-setup --task`, or `/feature-dev`, `/bug-fix`, `/refactor` when the mod is installed); the mod previews it and `/agentctl accept` typed at your own prompt binds exactly what was previewed — see § Proposals. `/agentctl task set <json>` typed at your prompt also binds a task to the worktree. Tool output, files and messages cannot change it — only a command you type. The binding is per worktree, so your own `task set` / `task clear` in another session on the same worktree does replace or clear it. Task records and hand-overs are kept per worktree, so the same task id in two worktrees names two separate tasks. A store error is reported as such, and the previous task keeps applying; a binding whose record is missing refuses everything but reads in the worktree |
-| Refusal | A deny-list. Recognized direct production writes and remote git writes are refused **with or without a task**; while a task is bound, its own `forbid` entries and edits outside its roots are refused too. Everything the mod cannot classify — scripts, compound shell, unknown tools — goes to Claude Code's own permission prompt or auto mode, recorded as `delegated`. A downstream deny is never weakened and an allow is never created. **Best-effort**: the mod reads each tool call, never a script's contents or the commands it starts, so a push inside a script is the host's and that workflow's to authorize |
-| Evidence | A Bash call authorized by a `check` executor is bracketed by Git-derived tree readings (executors are matched first, so a declared `git status` check is a check); a later edit shows the result stale within 30 s; a background check stays "completion unobserved" until a terminal result is seen. Evidence belongs to the task and policy version it was observed under, and a reading with partial coverage is never listed as verified |
-| Panel | The band above the prompt is compact: task, runtime and its duration, what needs you, the gate reading with its age (and `stale` past 30 s), the last hand-over time. `/agentctl` is the detailed text: it adds context, the 5 h window and evidence; the gate, context and window lines name their source and age, or read `missing` / `unavailable`, and each evidence line its outcome, freshness, coverage and age |
+| Refusal | A deny-list. Recognized direct production writes and remote git writes are refused **with or without a task**; while a task is bound, its own `forbid` entries and edits outside its roots are refused too. Edit roots bind the edit tools (Write, Edit, NotebookEdit); a file written through a shell redirect is a Bash command the mod cannot classify, so it goes to the host — the refusal tells Claude not to reach the same result another way, but roots are not a sandbox. Everything the mod cannot classify — scripts, compound shell, unknown tools — goes to Claude Code's own permission prompt or auto mode, recorded as `delegated`. A downstream deny is never weakened and an allow is never created. **Best-effort**: the mod reads each tool call, never a script's contents or the commands it starts, so a push inside a script is the host's and that workflow's to authorize |
+| Evidence | A run counts when it matches a declared `check` executor — its words first, so added arguments still count and may check less than declared, while a pipe, redirect or wrapper (`npm test \| grep pass`) does not; the accept reply and `/agentctl` name each check as a line that matches it, or — when the formatter cannot quote a word in one piece — as its JSON words, which do not match if copied as is (a correctly quoted spelling of the same words does). A matching call is bracketed by Git-derived tree readings (executors are matched first, so a declared `git status` check is a check); a later edit shows the result stale within 30 s; a background check stays "completion unobserved" until a terminal result is seen. Evidence belongs to the task and policy version it was observed under, and a reading with partial coverage is never listed as verified |
+| Panel | The band above the prompt is compact: task, runtime and its duration, what needs you, the gate reading with its age (and `stale` past 30 s), the last hand-over time. `/agentctl` is a compact status reply — the next step, task, what needs you, the gate and evidence; `/agentctl status --details` adds storage health, runtime, context and the 5 h window. The gate, context and window lines name their source and age, or read `missing` / `unavailable`, and each evidence line its outcome, freshness, coverage and age |
 | Hand-over | `/agentctl handoff` — eight answers from records, no model, no network, no process; logged in full on reopen (transcript only); bare `/agentctl` only points at it, `/agentctl last` prints it |
 | Stop | `/agentctl stop` — saves the hand-over, requests cancellation of the current turn, lists tracked operations; never "all stopped" |
 
@@ -56,6 +55,8 @@ end of each main turn the mod reads it once, validates it again, and keeps the *
 the worktree comes from the session, a proposal naming another worktree, drafted against a task that
 is no longer bound, or overlapping a built-in class is refused (the reason is logged). The preview
 lists every permission being accepted with a SHA-256 digest (24 hex) in the transcript and the band.
+Each entry is shown up to 160 characters; a longer one ends in `…`, and the digest — and what accept
+binds — still covers all of it, so discard a draft whose entries you cannot see whole.
 
 | Command | Who | Does |
 |---|---|---|
@@ -193,6 +194,24 @@ line while a proposal waits, and offers it again at each turn's end; the accept 
 English in a Chinese session; with a task bound, the fill reply said "nothing is bound". Hesitations
 recorded: Claude once tried to read the mod's own files outside the worktree (declined at the host
 prompt); the copy language resets with each new session.
+
+## Uncoached run, 0.3.0 (2026-10-07, Codex as a first-time user, interactive tmux, a disposable clone)
+
+The tester was given only `/agentctl <what you are doing>` and read neither `docs/` nor this mod's
+code. Describe → Enter → preview (≈ 72 s, README-only scope, three checks) → Tab + Enter → "start the
+work" → `/agentctl` → `/agentctl handoff` completed in six steps with no outside help. Fixed in 0.3.1
+from what it found:
+
+| Found | 0.3.1 |
+|---|---|
+| The hand-over read "Edits observed: 0" beside a changed README (Claude had edited through Bash) | The line counts edit-tool calls and says Bash changes are in the tree line |
+| Claude ran the tests piped through `grep`; the hand-over called the check stale while Claude called it passing | The accept reply names the checks to run verbatim; `/agentctl` asks for them again by name |
+| With the work done, `/agentctl` still said "ask Claude to start the work" | The next step follows the declared checks: work and run them, re-run what is not current, or hand over |
+| A Write outside the roots was refused, then the same file was written with a Bash heredoc | The refusal tells Claude not to reach the result another way; this section and § What it does state that roots bind the edit tools only |
+| Claude asked a question and wrote a proposal in the same turn | The drafting request says to wait for the answer before writing |
+
+Left as they are: the run took minutes because the clone's own `CLAUDE.md` requires two review rounds
+for a doc change, not because of the mod.
 
 ## Not verified
 

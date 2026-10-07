@@ -8,12 +8,12 @@ import { handoff } from '../lib/handoff.js'
 import { decideNotices, parseTaskNotification } from '../lib/notices.js'
 import { HARD_FORBIDDEN, classify, taskRecord, validateTask } from '../lib/policy.js'
 import { acceptedRecord, digestMatches, previewLines, proposalDigest, proposalPath, readProposal } from '../lib/proposal.js'
-import { copy, draftingRequest, helpText, languageOf, parseCommand, suggestionWhileWaiting } from '../lib/firstrun.js'
+import { checkArgv, copy, draftingRequest, helpText, languageOf, nextForTask, parseCommand, suggestionWhileWaiting } from '../lib/firstrun.js'
 import { initialState, reduce } from '../lib/reducer.js'
 import { CAPS, sanitize } from '../lib/sanitize.js'
 import { applyRetention, createWriter, keys, latestCheckpoint, taskScope } from '../lib/store.js'
 import { combine, surfaceVerified } from '../lib/verdict.js'
-import { bandText, contextReading, eventsText, gateReading, policyText, statusText, usageReading } from '../lib/view.js'
+import { bandText, checkKey, checkProgress, contextReading, eventsText, gateReading, policyText, statusText, usageReading } from '../lib/view.js'
 
 const DECISIONS_CAP = 50
 const BUILT_IN_RULES = new Set(HARD_FORBIDDEN.map((h) => h.rule))
@@ -434,7 +434,12 @@ async function acceptCommand($, c, e, given) {
   await settleProposal($, c, p)
   persist(c, `T${now}`)
   // Say what accepting did and did not do; the full policy is one command away.
-  return [copy(c.lang).accepted, `Task ${record.id}: ${sanitize(record.goal, 120)}`, copy(c.lang).wholeScope].join('\n')
+  // Claude reads this reply: name the checks it must run as written to leave evidence (found in an
+  // uncoached run, where `npm test | grep` passed but never counted). Never shortened: a cut command
+  // would not match its check.
+  const checks = checkArgv(record)
+  return [copy(c.lang).accepted, `Task ${record.id}: ${sanitize(record.goal, 120)}`,
+    ...(checks.length ? [copy(c.lang).runChecks(checks.map((a) => sanitize(a, Infinity)))] : []), copy(c.lang).wholeScope].join('\n')
 }
 
 async function stopCommand($, c) {
@@ -572,7 +577,7 @@ export function register(on) {
       const builtIn = BUILT_IN_RULES.has(v.rule)
       return { deny: builtIn
         ? `agentctl refused (${rule}): a built-in class no task can lift. Run it yourself, or through your project's own push or deploy workflow.`
-        : `agentctl refused (${rule}). The task's scope is shown by /agentctl policy.` }
+        : `agentctl refused (${rule}). Do not reach the same result another way (a shell redirect, a script); if it is needed, ask the person to accept a wider scope. The task's scope is shown by /agentctl policy.` }
     }
     // Delegated: the host's permission flow (or auto mode) decides; the mod only records that it did
     // not classify the call, so the events list can show it.
@@ -614,7 +619,7 @@ export function register(on) {
       const after = outcome === 'backgrounded' ? null : await readFingerprint($, c.cwd)
       c.fingerprint = after ?? c.fingerprint
       // An opaque key: executor arguments never become a stored identifier in plaintext.
-      const key = 'check-' + digest(v.executor.argv.join('\u0000'))
+      const key = checkKey(v.executor.argv)
       c.evidence = { ...c.evidence, [key]: { checkKey: key, taskId: task?.id ?? null, policyVersion: task?.policyVersion ?? null, requested, outcome, before, after, coverage: worstCoverage(before, after), at: endAt, backgroundId } }
       persist(c, task?.id)
     }
@@ -670,9 +675,10 @@ export function register(on) {
     if (p.kind === 'extra') return reply(t.extra(p.verb))
     const [sub, ...rest] = p.kind === 'status' ? ['status'] : [p.verb, ...p.rest]
     if (sub === 'status') {
+      await refreshTree($, c)
       const m = await model($, c)
       const bound = m.task && !m.task.recordMissing
-      const next = c.pending ? t.next.proposal(c.pending.digest.slice(0, 8)) : bound ? t.next.task : t.next.none
+      const next = c.pending ? t.next.proposal(c.pending.digest.slice(0, 8)) : bound ? nextForTask(t, checkProgress(m.task, m.evidence, m.fingerprint)) : t.next.none
       const extra = c.checkpoint ? [`Last hand-over saved ${new Date(c.checkpoint.savedAt).toISOString()} — /agentctl last`] : []
       return reply([next, statusText(m, { details: rest[0] === '--details' }), ...extra].join('\n'))
     }

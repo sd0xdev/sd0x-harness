@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { classify, normalizePath, tokenize, validateTask } from '../lib/policy.js'
+import { classify, normalizePath, renderArgv, tokenize, validateTask } from '../lib/policy.js'
 import { parseTaskNotification } from '../lib/notices.js'
 
 const task = {
@@ -225,4 +225,13 @@ test('review finding: an argument path whose basename names a program is never r
   expect(validateTask({ ...t, executors: [{ argv: ['python', '/tmp/terraform'] }] }).errors.join(' ')).toMatch(/overlaps forbidden class/)
   // And an argument named like a program does not start a match on its own.
   expect(classify(null, { tool: 'Bash', command: 'cat /tmp/git push.txt' }).outcome).not.toBe('deny')
+})
+
+test('renderArgv reads back through tokenize as the same argv, or is null when no quoting can carry a word', () => {
+  const cases = [['npm', 'test'], ['node', '--test', 'tests/a b.test.js'], ['x', "it's"], ['a', '$HOME'], ['a', ''], ['~/x'], ['HEAD~1'], ['a|b'], ['g', '*.js'], ['e', 'a;b'], ['q', 'say "hi"']]
+  for (const argv of cases) expect([argv, tokenize(renderArgv(argv)).segments]).toEqual([argv, [argv]])
+  expect(renderArgv(['npm', 'test'])).toBe('npm test')
+  expect(renderArgv(['a', "it's $x"])).toBeNull()
+  expect(renderArgv(['a', 'it\'s "q"'])).toBeNull()
+  expect(renderArgv([])).toBe('')
 })

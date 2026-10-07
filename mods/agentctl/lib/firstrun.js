@@ -5,6 +5,8 @@
 // `/agentctl` got the usage grammar. A goal now prepares a request for Claude in the person's own
 // prompt box; nothing here sends or binds anything.
 
+import { renderArgv } from './policy.js'
+
 // Verbs and how many words may follow each. `task` and `events` check their own arguments.
 export const VERBS = {
   status: { max: 1, args: ['--details'] },
@@ -82,13 +84,13 @@ export function draftingRequest({ goal, worktree, base, root, lang }) {
   if (lang === 'zh') {
     return [
       `請為這件事起草 agentctl 任務範圍：「${goal}」`,
-      `先跑 ${helper.replace(' --stdin', ' --help')} 看欄位，讀專案後提出最窄範圍（編輯路徑、檢查指令、驗收）；不清楚就問我，別自己加權限。`,
+      `先跑 ${helper.replace(' --stdin', ' --help')} 看欄位，讀專案後提出最窄範圍（編輯路徑、檢查指令、驗收）。有不清楚的地方就問我並等我回答——回答前不要寫 proposal，也別自己加權限。`,
       `用 ${helper} 寫入（base 為 ${baseText}；heredoc 分隔字加引號且不在 JSON 內），只寫 proposal，然後等我確認。`,
     ].join('\n')
   }
   return [
     `Draft an agentctl task scope for: "${goal}"`,
-    `First run ${helper.replace(' --stdin', ' --help')} for the fields. Read the project and propose the narrowest scope (edit paths, check commands, acceptance); if something is unclear, ask me instead of inventing permissions.`,
+    `First run ${helper.replace(' --stdin', ' --help')} for the fields. Read the project and propose the narrowest scope (edit paths, check commands, acceptance). If something is unclear, ask me and wait for my answer — write no proposal before it, and never invent permissions.`,
     `Write it with ${helper} (base ${baseText}; a quoted heredoc delimiter that does not occur in the JSON). Write the proposal only, then wait for me to accept.`,
   ].join('\n')
 }
@@ -102,6 +104,7 @@ const COPY = {
     extra: (v) => `"/agentctl ${v}" takes no such arguments. ${v === 'proposal' ? 'It shows a waiting draft; to make one, describe the work: /agentctl <what you are doing>' : 'See /agentctl help.'}`,
     acceptLine: (d) => `Accept this scope: /agentctl accept ${d} — it binds the scope only; it does not start any work.`,
     accepted: 'Scope bound. Next: ask Claude to start the work.',
+    runChecks: (checks) => `To leave evidence, run each check as written: ${checks.join(' · ')} — a pipe, redirect or wrapper keeps a run from counting, and added arguments may check less than declared.`,
     wholeScope: '/agentctl policy shows the whole scope.',
     noTaskLast: 'No task is bound, so there is no hand-over yet. Start one: /agentctl <what you are doing>',
     noHandover: 'This task has no saved hand-over yet: /agentctl handoff saves one.',
@@ -109,6 +112,9 @@ const COPY = {
       none: 'Next: describe the work — /agentctl <what you are doing>. Built-in refusals (direct git push, production writes) apply even now.',
       proposal: (d) => `Next: review /agentctl proposal, then /agentctl accept ${d}`,
       task: 'Next: ask Claude to work; /agentctl handoff saves where things stand.',
+      taskThenChecks: (checks) => `Next: ask Claude to work, then to run the checks exactly as written: ${checks.join(' · ')}. Once they are current: /agentctl handoff`,
+      rerun: (checks) => `Next: not current on this tree — ask Claude to run exactly as written: ${checks.join(' · ')}. Then: /agentctl handoff`,
+      checksCurrent: 'Next: every declared check is current on this tree — /agentctl handoff saves the hand-over.',
     },
   },
   zh: {
@@ -119,6 +125,7 @@ const COPY = {
     extra: (v) => `「/agentctl ${v}」不接受這些參數。${v === 'proposal' ? '它只顯示等待中的草稿；要起草，請描述工作：/agentctl <你要做的事>' : '見 /agentctl help。'}`,
     acceptLine: (d) => `確認此範圍：/agentctl accept ${d} ——只會綁定範圍，不會開始任何工作。`,
     accepted: '範圍已綁定。下一步：請 Claude 開始這項工作。',
+    runChecks: (checks) => `要留下證據，請照原樣執行每條檢查：${checks.join(' · ')} ——加 pipe、redirect 或外層包裝就不算；多加參數可能只檢查到一部分。`,
     wholeScope: '完整範圍：/agentctl policy',
     noTaskLast: '目前沒有綁定任務，所以還沒有交接紀錄。開始一個：/agentctl <你要做的事>',
     noHandover: '這個任務還沒有存過交接：/agentctl handoff 會存一份。',
@@ -126,12 +133,35 @@ const COPY = {
       none: '下一步：描述工作——/agentctl <你要做的事>。內建規則（直接 git push、production 寫入）現在就會擋。',
       proposal: (d) => `下一步：看 /agentctl proposal，再 /agentctl accept ${d}`,
       task: '下一步：請 Claude 開始工作；/agentctl handoff 會存下目前進度。',
+      taskThenChecks: (checks) => `下一步：請 Claude 開始工作，完成後逐字執行檢查：${checks.join(' · ')}。檢查都是最新的之後：/agentctl handoff`,
+      rerun: (checks) => `下一步：這些檢查在目前的程式碼上不是最新的——請 Claude 逐字執行：${checks.join(' · ')}。之後：/agentctl handoff`,
+      checksCurrent: '下一步：宣告的檢查在目前的程式碼上都是最新的——/agentctl handoff 會存下交接。',
     },
   },
 }
 
 export function copy(lang) {
   return COPY[lang === 'zh' ? 'zh' : 'en']
+}
+
+// A check as a line Claude can run as written: quoted so it reads back as the declared argv, never
+// shortened. An argv no quoting can carry is shown as its JSON array instead, which says to run it as
+// those words.
+export function checkLine(argv) {
+  return renderArgv(argv) ?? `${JSON.stringify(argv)} (as these words)`
+}
+
+// The task's declared checks, as the command lines Claude must run as written.
+export function checkArgv(task) {
+  return (task?.executors ?? []).filter((e) => e.check).map((e) => checkLine(e.argv))
+}
+
+// The next step for a bound task, from where its declared checks stand (`checkProgress` in view.js).
+// Found in an uncoached run: with the work done, "ask Claude to start" was still the next step.
+export function nextForTask(t, progress) {
+  if (!progress.declared) return t.next.task
+  if (!progress.pending.length) return t.next.checksCurrent
+  return progress.ran ? t.next.rerun(progress.pending) : t.next.taskThenChecks(progress.pending)
 }
 
 export function helpText(lang, advanced) {
