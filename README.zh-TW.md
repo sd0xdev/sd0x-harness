@@ -547,7 +547,7 @@ flowchart TD
 
 ## 選用：Agent Control Plane（`agentctl`）
 
-把任務交給 Claude 然後走開；回來時，有三個問題 — `agentctl` 在同一個 Claude Code session 內回答它們。它是獨立、opt-in 的 plugin（`mods/agentctl/`）：**安裝 sd0x-dev-flow 絕不會安裝它**。執行 `/agentctl-setup` 即可安裝；之後，`/feature-dev`、`/bug-fix` 和 `/refactor` 會主動提議為每個 task 起草範圍，供你接受。
+把任務交給 Claude 然後走開；回來時，有三個問題 — `agentctl` 在同一個 Claude Code session 內回答它們。它是獨立、opt-in 的 plugin（`mods/agentctl/`）：**安裝 sd0x-dev-flow 絕不會安裝它**。執行 `/agentctl-setup` 安裝，然後輸入你正在做的事 — `/agentctl 幫登入功能加測試` — 並在它放進提示框的請求上按 Enter：Claude 會起草範圍，按 Tab + Enter 即可接受。`/feature-dev`、`/bug-fix` 和 `/refactor` 也會為每個 task 提供同樣的草稿。
 
 | 問題 | 它做了什麼 |
 |---|---|

@@ -547,7 +547,7 @@ Ejecuta `/deep-research` para orquestar 2-3 agentes de investigación en paralel
 
 ## Opcional: Agent Control Plane (`agentctl`)
 
-Entrega una tarea a Claude y aléjate; cuando vuelves, tres preguntas — `agentctl` las responde dentro de una sola session de Claude Code. Es un plugin aparte y opt-in (`mods/agentctl/`): **instalar sd0x-dev-flow nunca lo instala**. Ejecuta `/agentctl-setup` para instalarlo; después, `/feature-dev`, `/bug-fix` y `/refactor` te ofrecen redactar el alcance de cada task para que lo aceptes.
+Entrega una tarea a Claude y aléjate; cuando vuelves, tres preguntas — `agentctl` las responde dentro de una sola session de Claude Code. Es un plugin aparte y opt-in (`mods/agentctl/`): **instalar sd0x-dev-flow nunca lo instala**. Ejecuta `/agentctl-setup` para instalarlo y luego escribe lo que estás haciendo — `/agentctl añadir una prueba de login` — y pulsa Enter sobre la solicitud que aparece en tu cuadro de prompt: Claude redacta el alcance y Tab + Enter lo acepta. `/feature-dev`, `/bug-fix` y `/refactor` te ofrecen el mismo borrador para cada task.
 
 | Pregunta | Qué hace |
 |---|---|

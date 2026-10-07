@@ -575,8 +575,10 @@ Run `/deep-research` to orchestrate 2-3 parallel researcher agents across web so
 
 Hand a task to Claude and step away; when you come back, three questions — `agentctl` answers them
 inside one Claude Code session. It is a separate, opt-in plugin (`mods/agentctl/`): **installing
-sd0x-dev-flow never installs it**. Run `/agentctl-setup` to install it; after that, `/feature-dev`,
-`/bug-fix` and `/refactor` offer to draft each task's scope for you to accept.
+sd0x-dev-flow never installs it**. Run `/agentctl-setup` to install it, then type what you are doing —
+`/agentctl add a login test` — and press Enter on the request it puts in your prompt box: Claude
+drafts the scope, and Tab + Enter accepts it. `/feature-dev`, `/bug-fix` and `/refactor` offer the
+same draft for each task.
 
 | Question | What it does |
 |---|---|
