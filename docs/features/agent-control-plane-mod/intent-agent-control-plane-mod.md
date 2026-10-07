@@ -42,8 +42,11 @@ sentence. The first version makes one session manageable; managing many is a lat
   call, never a script's contents or the commands it starts, and says so. (Re-decided by the user,
   2026-10-04: a deny-list, so supervision does not refuse every command it cannot parse.)
 - `INV-008`: Scope is drafted by Claude and bound by the person: a proposal binds only through
-  `/agentctl accept` typed at the person's own prompt, and what binds is exactly the object the
-  preview showed (2026-10-04).
+  `/agentctl accept` sent from the person's own prompt — typed, or taken from the mod's suggestion —
+  and what binds is exactly the object the preview showed (2026-10-04; suggestion 2026-10-07).
+- `INV-009`: A first-time user can start without the vocabulary: `/agentctl <what you are doing>`
+  leads to a drafted scope they confirm, and every reply names the next step (2026-10-07, after a
+  first-run test in which the user could not use 0.2.2).
 - `INV-005`: The mod never answers `allow` on a path it did not evaluate: its own errors refuse.
   Where the installed host skips the hook and lets a call continue, that limitation is disclosed in
   the panel and the hand-over, never silent.
@@ -58,5 +61,5 @@ Declare a read-only investigation task, let Claude run tests, edit one source fi
 close and reopen the session. The panel shows the task and the last hand-over before any tool runs;
 the earlier test pass reads as stale; a `kubectl rollout restart` tool call is refused with its rule
 and no Allow control; `/agentctl handoff` under `claude -p` prints the eight answers with no model, network
-or process call; and the mod's source and tests show no approve, verdict-write, prompt-write or
+or process call; and the mod's source and tests show no approve, verdict-write, prompt-submit or
 model call.
