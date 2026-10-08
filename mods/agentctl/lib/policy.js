@@ -83,6 +83,22 @@ export function tokenize(command) {
   return { ok: true, segments }
 }
 
+// The inverse of `tokenize` for one segment: a command line that reads back as exactly this argv, so a
+// check named in a reply can be copied and still match its executor (found in review: joining with
+// spaces split `tests/a b.test.js` in two). A word plain where it can be, else single- or
+// double-quoted; null when no quoting this tokenizer reads can carry the word.
+export function renderArgv(argv) {
+  const out = []
+  for (const w of argv ?? []) {
+    const x = String(w)
+    if (x && /^[^\s'"|;&<>()`$\\{}*?[\]!#]+$/.test(x) && !x.startsWith('~')) out.push(x)
+    else if (!x.includes("'")) out.push(`'${x}'`)
+    else if (!/[$`\\!"]/.test(x)) out.push(`"${x}"`)
+    else return null
+  }
+  return out.join(' ')
+}
+
 // Leading NAME=value words are inline environment assignments, separated from the argv.
 export function splitEnv(argv) {
   const env = {}

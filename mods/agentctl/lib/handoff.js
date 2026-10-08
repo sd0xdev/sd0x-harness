@@ -5,6 +5,7 @@
 
 import { CAPS, sanitize } from './sanitize.js'
 import { HARD_FORBIDDEN } from './policy.js'
+import { evidenceCurrent } from './view.js'
 
 const s = (x, n = 200) => sanitize(x, n)
 
@@ -52,14 +53,15 @@ export function handoff({ task, state, evidence, fingerprint, decisions, now, se
   const edits = ops.filter(([, o]) => ['Write', 'Edit', 'NotebookEdit', 'MultiEdit'].includes(o.tool) && o.outcome === 'ok')
   sec.push({ heading: '## 3. What changed', items: [], fixed: [
     fingerprint ? `- Tree: HEAD ${s(fingerprint.head, 60)}, ${fingerprint.changedCount ?? '?'} changed or untracked path(s) (${fingerprint.coverage})${seenAt ? `, read${seenAt}` : ''}` : '- Tree: not read for this hand-over',
-    `- Edits observed this session: ${edits.length}`,
+    // Only the edit tools are counted here; a file changed through Bash shows in the tree line above
+    // (found in an uncoached run: "Edits observed: 0" beside a changed README read as "nothing changed").
+    `- Edit-tool calls this session: ${edits.length} (changes made through Bash are not counted here; the tree line is the record)`,
   ] })
   const ev = Object.values(evidence ?? {})
   const matches = (e) => fingerprint && e.after && e.before && e.before.value === e.after.value && e.after.value === fingerprint.value && e.outcome === 'ok'
   // Partial coverage is never "verified": what a reading did not cover may have changed — the
-  // before, the after and the last reading must each be complete.
-  const partial = (e) => [e.coverage, e.before?.coverage, e.after?.coverage, fingerprint?.coverage].includes('partial')
-  const current = (e) => matches(e) && !partial(e)
+  // before, the after and the last reading must each be complete. The same rule `/agentctl` uses.
+  const current = (e) => evidenceCurrent(e, fingerprint)
   const verified = ev.filter(current).map((e) => `- ${s(e.requested)} — no error reported, matches the last tree reading${seenAt} (${e.coverage})`)
   sec.push({ heading: '## 4. Verified (execution evidence on the last tree reading)', items: verified, fixed: verified.length ? [] : ['- Nothing.'] })
   const notVerified = ev.filter((e) => !current(e)).map((e) => {

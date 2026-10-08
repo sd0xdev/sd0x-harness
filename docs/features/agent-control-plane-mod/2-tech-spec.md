@@ -54,6 +54,7 @@ Modules (plain ES modules; no Node APIs, no dynamic import — create page § st
 |---|---|---|
 | `hooks/register.js` | Wiring only: registers hooks and commands, calls the modules below | `$` calls |
 | `lib/policy.js` | `classify(task, call) → {outcome, rule}` — pure | None |
+| `lib/firstrun.js` | First-run parsing, drafting request, copy and language, check lines, next step (§ 3.7) | None |
 | `lib/adapters.js` | Per-command argv grammars for observational commands | None |
 | `lib/verdict.js` | `combine(outcome, downstream, surfaceVerified) → decision` (§ 3.4) | None |
 | `lib/fingerprint.js` | Builds `git` argv lists and folds their output into a fingerprint | None; `register.js` runs them |
@@ -81,7 +82,7 @@ Keeping every decision in pure modules is what makes `claude plugin test` cover 
 - `Operation`: `{ requested (sanitized), startedAt, endedAt?, outcome: 'refused'|'error'|'ok'|'backgrounded'|'unresolved', backgroundId? }`, capped at 200 per session, oldest resolved first.
 - `Evidence`: `{ checkKey, taskId, policyVersion, requested, outcome, before: Fingerprint, after?: Fingerprint, coverage, at }`; freshness is computed on read against the current fingerprint (FR-5), and only records of the bound task and policy version are shown. A `Fingerprint` carries the time it was read (`at`), and every view states it.
 - Writes are **serialized per session** through one promise chain in `register.js`. Every key a hook writes carries the session id (`session/*`, `checkpoint/<scope>/<sessionId>`), so no two sessions write one record; `task/*` and `binding/*` are written only by a composer command (feasibility § 7, store race). Resume shows the checkpoint with the newest `savedAt` among the scoped task's sessions.
-- Retention: at `session.start`, session records older than 7 days, and all but the 5 newest sessions and checkpoints per task, are deleted; text fields are capped (requested command 500 chars, reasons 300, hand-over 16 KiB); evidence keeps the latest record per check. A failed store write sets `health: store-error`, which the band and `/agentctl` show.
+- Retention: at `session.start`, session records older than 7 days, and all but the 5 newest sessions and checkpoints per task, are deleted; text fields are capped (requested command 500 chars, reasons 300, hand-over 16 KiB); evidence keeps the latest record per check. A failed store write sets `health: store-error`, which the band and `/agentctl status --details` show.
 - Sources stay apart (FR-25): `task/*` is user-confirmed; Claude's claims are never stored as facts; `ops` and `evidence` are tool-observed.
 
 ### 3.3 Commands (`$.command.register` with `immediate: true`, answered without a model call)
@@ -183,12 +184,12 @@ Claude drafts, the person accepts (INV-008). The proposal file is an untrusted s
 
 1. A workflow skill (`/feature-dev`, `/bug-fix`, `/refactor` when `status` reads `installed/enabled`, or `/agentctl-setup --task`) drafts the scope from the request ticket — `New`/`Modify` Related Files as edit paths, the project's checks found as `/verify` finds them plus the precommit runner as `/precommit` invokes it, the ACs as acceptance — and writes it with `propose` (`skills/agentctl-setup/references/workflow-integration.md`).
 2. At `session.start` and each main turn's end the mod reads the file once (an unchanged text is skipped), refuses a worktree other than the session's, a `base` other than the bound task id (stale), and anything `validateTask` refuses (a check overlapping a built-in class included); the reason is logged. An omitted `base` is the task bound at reading.
-3. The mod keeps the **effective** object (the stored task fields plus `base`), computes a SHA-256 digest (24 hex), and logs a preview listing every permission being accepted; the band names the waiting proposal.
+3. The mod keeps the **effective** object (the stored task fields plus `base`), computes a SHA-256 digest (24 hex), and logs a preview listing every permission being accepted — each entry up to 160 characters, a longer one cut with `…` while the digest and accept still cover all of it; the band names the waiting proposal.
 4. `/agentctl accept [digest prefix ≥ 8]` from a composer origin binds that retained object — never the file re-read — as a new task (`T<now>`, policy version after the replaced one), refusing a digest that does not match and a binding that changed since the preview. `/agentctl discard` drops it.
 
 Concurrent sessions share one binding and one non-atomic store; accept in the session that showed the preview (disclosed). The harness gates are unchanged: a `/precommit` run declared as a check is recorded as evidence beside its verdict, never in place of it, and a runner that edits files reads `tree changed during the run` while its verdict stands.
 
-### 3.7 First Run (0.3.0, 2026-10-07)
+### 3.7 First Run (0.3.0; 0.3.1 after the uncoached run, 2026-10-07)
 
 A first-time user typed `/agentctl 測試一下這個新功能` and got the usage grammar; every 0.2.x path
 assumed the vocabulary. A `/codex-brainstorm` reached equilibrium on this flow (INV-009, FR-19 and
@@ -222,8 +223,8 @@ sequenceDiagram
    origin — the reply carries the request to copy. Nothing is submitted (FR-19).
 3. **The request** names the goal (verbatim), the worktree, the bound task (the base), the helper
    invocation with a shell-quoted path from `$.plugin.root`, and the rules: run the helper's `--help`
-   first, inspect the project, propose the narrowest scope, ask instead of inventing, write a proposal
-   only, then wait. Fixed overhead ≤ 150 tokens, estimated by a proxy (about 4 ASCII characters or 1
+   first, inspect the project, propose the narrowest scope, ask and wait for the answer before writing
+   anything (0.3.1: Claude had asked and written in one turn), write a proposal only, then wait. Fixed overhead ≤ 150 tokens, estimated by a proxy (about 4 ASCII characters or 1
    Han character per token), not a tokenizer; the goal and paths are never truncated.
 4. **The helper** `mods/agentctl/bin/propose.mjs` reads bounded JSON on stdin, validates it with
    `readProposal`, writes the worktree's proposal file privately and atomically, and changes nothing
@@ -235,18 +236,27 @@ sequenceDiagram
    in an empty box with no turn running, and its result is not relied on; the copyable line is what
    always works. It is offered again at each turn's end while the proposal waits, and a
    `prompt.suggest` hook replaces the host's own next-prompt guess with it meanwhile (found live on
-   2.1.292: the guess "確認" took the box). The success reply says to ask Claude to begin. Digest and
+   2.1.292: the guess "確認" took the box). The success reply says to ask Claude to begin and names each
+   declared check as a line that reads back as its argv (quoted, never shortened). The formatter
+   quotes each word in one piece; a word it cannot quote that way (one holding `'` together with `$`, a backtick, `\`, `!` or `"`) is
+   shown as its JSON words, which do not match if copied as is — a correctly quoted spelling of the
+   same argv still does. A pipe, redirect or wrapper keeps a run
+   from counting; added arguments still match the prefix. Digest and
    revision checks stay the only authority; a stale suggestion cannot bind anything else.
 6. **Status and copy.** Bare `/agentctl` opens with the state's next step: no task → how to start and
-   that built-in refusals still apply; a proposal waiting → its accept line; a task bound → its goal.
+   that built-in refusals still apply; a proposal waiting → its accept line; a task bound → from its
+   declared checks (0.3.1): work then run them, re-run those not current on this tree, or — all
+   current — `/agentctl handoff`. The hand-over counts edit-tool calls only and says Bash changes
+   are in its tree line; a task refusal tells Claude not to reach the result another way, since edit
+   roots bind the edit tools and a shell redirect is the host's to classify.
    Labels say what they measure ("state storage", "execution evidence", "review gates"); a missing
    reading says why ("after Claude's first reply"). Empty states name their cause. Replies carry no
    `agentctl:` prefix of their own (the host adds one).
 7. **Language.** A limited English / Traditional Chinese copy heuristic: a composer-origin goal with Han
    characters selects Traditional Chinese for this session; otherwise English. Not locale detection.
 8. **Release gate** (Signal 13): the scripted interactive journey on the release artifact, standalone,
-   including replacing a bound task, and one uncoached first run — or, without one, the README line
-   "first-run UX not yet verified by an uncoached user" plus the owner's recorded walkthrough.
+   including replacing a bound task, and one uncoached first run — done on 0.3.0 by Codex as a
+   first-time user (mod README § Uncoached run); its findings are 0.3.1.
 
 ## 4. Risks and Dependencies
 
@@ -277,6 +287,7 @@ Dependencies: Claude Code ≥ 2.1.288 with mods enabled (V1 passed: no managed s
 | 10 | Mod 0.2.0: deny-list classifier, proposals and accept, evidence by task and policy version, reading times, bounded status | FR-7, FR-25, INV-004, INV-008 | Direct push refused without a task; scripts and fences delegated; swap, stale and override cases refused; `claude plugin test` passes |
 | 11 | Workflow integration: `status` and `propose`, the shared reference, optional sections in `/feature-dev`, `/bug-fix`, `/refactor` | FR-25, FR-26 | Helper and skill tests pass; the sections never present agentctl as a gate |
 | 12 | First run (0.3.0): goal entry with fill, bundled helper, accept suggestion, next-step status, strict parsing, copy and language | FR-19, FR-23, FR-25, NFR-10, INV-009 | The six reported attempts each end in a valid next step; Signal 13 |
+| 13 | Uncoached-run findings (0.3.1): next step from the declared checks, checks named at accept, hand-over edit count, refusal wording, ask-then-wait | FR-15, FR-23, FR-25 | Each finding has a test; the README disclosure is replaced by the run's record |
 
 ## 6. Testing Strategy
 

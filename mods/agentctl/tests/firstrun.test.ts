@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { draftingRequest, helpText, helperPath, languageOf, parseCommand, shellQuote, suggestionWhileWaiting } from '../lib/firstrun.js'
+import { checkArgv, copy, draftingRequest, helpText, helperPath, languageOf, nextForTask, parseCommand, shellQuote, suggestionWhileWaiting } from '../lib/firstrun.js'
 
 test('parseCommand: empty input is status; verbs are case-insensitive; arguments are checked per verb', () => {
   for (const x of [null, undefined, '', '   ']) expect(parseCommand(x)).toEqual({ kind: 'status', words: [] })
@@ -41,12 +41,12 @@ test('draftingRequest: goal verbatim, base, quoted paths and the rules, in both 
   expect(en).toMatch(/^Draft an agentctl task scope for: "fix "it""/)
   expect(en).toMatch(/node '\/p\/bin\/propose\.mjs' --worktree '\/w\/it'\\''s' --help/)
   expect(en).toMatch(/base "T9"/)
-  expect(en).toMatch(/ask me instead of inventing permissions/)
+  expect(en).toMatch(/ask me and wait for my answer — write no proposal before it/)
   expect(en).toMatch(/Write the proposal only, then wait for me to accept\./)
   const zh = draftingRequest({ goal: '測試', worktree: '/w', base: null, root: '/p', lang: 'zh' })
   expect(zh).toMatch(/「測試」/)
   expect(zh).toMatch(/base 為 null/)
-  expect(zh).toMatch(/別自己加權限/)
+  expect(zh).toMatch(/問我並等我回答——回答前不要寫 proposal/)
 })
 
 test('helpText: three verbs first, the rest on request', () => {
@@ -70,4 +70,22 @@ test('live finding: while a proposal waits, only the host\'s own suggestion beco
   expect(suggestionWhileWaiting('plugin', 'ee2d9ce908511d3aa6c20e43')).toBeNull()
   expect(suggestionWhileWaiting('suggestion', null)).toBeNull()
   expect(suggestionWhileWaiting(undefined, 'ee2d9ce9')).toBeNull()
+})
+
+test('nextForTask: no check, all current, none run, some stale — in both languages', () => {
+  for (const lang of ['en', 'zh']) {
+    const t = copy(lang)
+    expect(nextForTask(t, { declared: 0, ran: 0, pending: [] })).toBe(t.next.task)
+    expect(nextForTask(t, { declared: 2, ran: 2, pending: [] })).toBe(t.next.checksCurrent)
+    expect(nextForTask(t, { declared: 2, ran: 0, pending: ['npm test', 'npm run lint'] })).toBe(t.next.taskThenChecks(['npm test', 'npm run lint']))
+    expect(nextForTask(t, { declared: 2, ran: 1, pending: ['npm run lint'] })).toBe(t.next.rerun(['npm run lint']))
+  }
+  expect(copy('zh').next.rerun(['npm test'])).toMatch(/逐字執行：npm test/)
+})
+
+test('checkArgv: only checks, quoted to read back as declared; a missing task or executor list is empty', () => {
+  expect(checkArgv({ executors: [{ argv: ['npm', 'test'], check: true }, { argv: ['make'] }, { argv: ['node', '--test', 'a b'], check: true }] })).toEqual(['npm test', "node --test 'a b'"])
+  // A word no quoting can carry is shown as its words, never as a line that would not match.
+  expect(checkArgv({ executors: [{ argv: ['sh', "it's $x"], check: true }] })).toEqual(['["sh","it\'s $x"] (as these words)'])
+  for (const x of [null, undefined, {}, { executors: [] }]) expect(checkArgv(x)).toEqual([])
 })

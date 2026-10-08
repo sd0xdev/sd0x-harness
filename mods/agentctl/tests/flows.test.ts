@@ -321,7 +321,7 @@ test('regression: allowed edits are recorded and counted in the hand-over', asyn
   await $.tool.call({ tool: 'Edit', file_path: '/w/repo/src/a.ts', old_string: 'a', new_string: 'b', tool_use_id: 'e1' })
   await settle()
   const h = (await $.command.run({ command: 'agentctl', args: 'handoff' })).text
-  expect(h).toMatch(/Edits observed this session: 1/)
+  expect(h).toMatch(/Edit-tool calls this session: 1 \(changes made through Bash are not counted here; the tree line is the record\)/)
 })
 
 test('regression: descriptive task fields are stored redacted and unknown fields are dropped', async ($, on) => {
@@ -1071,4 +1071,58 @@ test('live finding: a proposal still waiting is offered again as a suggestion at
   await run($, 'discard')
   await turnEnd($, 'u3')
   expect(world.suggested.length).toBe(2)
+})
+
+// ── T13: findings from an uncoached run (2026-10-07) ─────────────────────────────────────────────
+
+test('uncoached run: the next step follows the declared checks — work, re-run verbatim, then hand over', async ($, on) => {
+  const { world, clock } = await setup($, on)
+  const next = async () => (await run($, '')).split('\n')[0]
+  expect(await next()).toBe('Next: ask Claude to work, then to run the checks exactly as written: npm test. Once they are current: /agentctl handoff')
+  // A piped run is not the declared check, so it leaves no evidence and the step stays the same.
+  await $.tool.call({ tool: 'Bash', command: 'npm test | grep pass', tool_use_id: 'p1' })
+  await settle()
+  expect(await next()).toMatch(/^Next: ask Claude to work, then to run the checks exactly as written: npm test\./)
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
+  await settle()
+  expect(await next()).toBe('Next: every declared check is current on this tree — /agentctl handoff saves the hand-over.')
+  // An edit after the check: the step asks for the check again, not for work to start.
+  world.git.status = '1 .M N... 100644 100644 100644 h1 h1 a.js\0'
+  world.git.hash = 'newbytes\n'
+  await clock.advance(1000)
+  expect(await next()).toBe('Next: not current on this tree — ask Claude to run exactly as written: npm test. Then: /agentctl handoff')
+})
+
+test('uncoached run: a task with no declared check keeps the plain next step', async ($, on) => {
+  await setup($, on, { task: { ...TASK, executors: [] } })
+  expect((await run($, '')).split('\n')[0]).toBe('Next: ask Claude to work; /agentctl handoff saves where things stand.')
+})
+
+test('uncoached run: accepting names the checks Claude must run verbatim', async ($, on) => {
+  const { world } = await setup($, on)
+  promptBox(on, world)
+  world.files[PROPOSAL] = draft({ executors: [{ argv: ['npm', 'test'], check: true }, { argv: ['npm', 'run', 'lint'] }] })
+  await turnEnd($)
+  const r = await run($, world.suggested[0].replace('/agentctl ', ''))
+  // Only checks are named: an executor without `check` leaves no evidence to keep current.
+  expect(r).toMatch(/\nTo leave evidence, run each check as written: npm test — a pipe, redirect or wrapper keeps a run from counting, and added arguments may check less than declared\.\n/)
+  expect(r).not.toMatch(/npm run lint/)
+})
+
+test('uncoached run: a task refusal tells Claude not to reach the same result another way', async ($, on) => {
+  await setup($, on, { task: { ...TASK, allow: ['edit'], editRoots: ['src'] } })
+  const r = await $.tool.call({ tool: 'Write', file_path: '/w/repo/docs/x.md', content: 'x', tool_use_id: 'w1' })
+  expect(JSON.stringify(r)).toMatch(/agentctl refused \(edit outside the allowed roots\)\. Do not reach the same result another way \(a shell redirect, a script\); if it is needed, ask the person to accept a wider scope\./)
+})
+
+test('review finding: a check with a spaced path or a long command is named as a line that still matches it', async ($, on) => {
+  const long = 'x'.repeat(200)
+  const argv = ['node', '--test', 'tests/a b.test.js', long]
+  await setup($, on, { task: { ...TASK, executors: [{ argv, check: true }] } })
+  const line = (await run($, '')).split('\n')[0].match(/as written: (.*)\. Once they are current/)[1]
+  expect(line).toBe(`node --test 'tests/a b.test.js' ${long}`)
+  // The line as shown, run as is, is the declared check and leaves current evidence.
+  await $.tool.call({ tool: 'Bash', command: line, tool_use_id: 'u1' })
+  await settle()
+  expect((await run($, '')).split('\n')[0]).toBe('Next: every declared check is current on this tree — /agentctl handoff saves the hand-over.')
 })

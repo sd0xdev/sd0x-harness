@@ -2,7 +2,34 @@
 // FR-23; tech spec § 3.3). Pure: every input arrives as data, every line names its source and age,
 // and a field whose source did not answer says so instead of showing a value.
 
+import { checkLine } from './firstrun.js'
+import { digest } from './fingerprint.js'
 import { sanitize } from './sanitize.js'
+
+// The opaque key evidence for a declared check is stored under: arguments never become a stored
+// identifier in plaintext.
+export function checkKey(argv) {
+  return 'check-' + digest(argv.join('\u0000'))
+}
+
+// Evidence counts as current only when the check reported no error, the tree did not change during
+// the run, the run's reading matches the last one, and no reading was partial.
+export function evidenceCurrent(ev, fingerprint) {
+  if (!fingerprint || !ev || ev.outcome !== 'ok' || !ev.before || !ev.after) return false
+  if (ev.before.value !== ev.after.value || ev.after.value !== fingerprint.value) return false
+  return ![ev.coverage, ev.before.coverage, ev.after.coverage, fingerprint.coverage].includes('partial')
+}
+
+// Where the task's declared checks stand on the current tree: how many there are, how many have run
+// at all, and which are not current (never run, failed, or stale).
+export function checkProgress(task, evidence, fingerprint) {
+  const rows = (task?.executors ?? []).filter((e) => e.check).map((e) => {
+    const ev = evidence?.[checkKey(e.argv)]
+    // Never shortened: the line is one Claude runs, and a cut command would not match the check.
+    return { argv: sanitize(checkLine(e.argv), Infinity), ran: Boolean(ev), current: evidenceCurrent(ev, fingerprint) }
+  })
+  return { declared: rows.length, ran: rows.filter((r) => r.ran).length, pending: rows.filter((r) => !r.current).map((r) => r.argv) }
+}
 
 // The four states a field can be in (FR-3).
 export function field(label, reading, now) {
