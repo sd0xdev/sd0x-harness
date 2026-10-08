@@ -84,6 +84,7 @@ Scripts use semantic tokens instead of hardcoded colors:
 - Shebang: `#!/bin/sh` (POSIX)
 - Read stdin: `input=$(cat)`
 - Parse JSON: `jq -r '.field // fallback'`
+- Normalize Windows path separators: when extracting `workspace.current_dir` (or the `cwd` fallback), apply `gsub("\\\\"; "/")` before the value reaches truncation, `git -C`, or `printf "%b"`.
 - Theme from env: `theme="${CLAUDE_STATUSLINE_THEME:-ansi-default}"`
 - NO_COLOR: `[ -n "${NO_COLOR:-}" ] && theme="none"`
 - Theme aliases: `catppuccin` → `catppuccin-mocha`
@@ -111,6 +112,8 @@ Scripts use semantic tokens instead of hardcoded colors:
 ```sh
 #!/bin/sh
 input=$(cat)
+# Normalize Windows separators before truncation, git lookups, or colored output.
+dir=$(printf '%s' "$input" | jq -r '(.workspace.current_dir // .cwd // "") | gsub("\\\\"; "/")')
 # ... extract JSON fields ...
 
 theme="${CLAUDE_STATUSLINE_THEME:-ansi-default}"
