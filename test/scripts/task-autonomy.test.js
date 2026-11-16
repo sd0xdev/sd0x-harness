@@ -257,7 +257,7 @@ test('committed → content changed between check and commit marks the task unve
   git(f.repo, 'commit', '-q', '-m', 'feat: x');
   const done = json(run(f.repo, f.home, ['task', 'committed']));
   assert.equal(done.ok, false);
-  assert.deepEqual(done.problems, ['content-changed:a.js']);
+  assert.deepEqual(done.problems, ['tree-mismatch']);
   passAll(f);
   assert.ok(json(run(f.repo, f.home, ['goal-publish', '--format=json'])).reasons.includes('unverified-commit'));
 });
@@ -272,6 +272,68 @@ test('committed → a file left out (not clean) is reported, never silently acce
   git(f.repo, 'add', '--', 'a.js');
   git(f.repo, 'commit', '-q', '-m', 'feat: part');
   assert.ok(json(run(f.repo, f.home, ['task', 'committed'])).problems.includes('not-clean'));
+});
+
+// R8 acceptance R2: the verified tree is the one the gates passed at, read in one pass. A rewrite
+// while the check runs, and any add, delete or mode change after it, cannot ride on that pass.
+test('committed → a rewrite while commit-check runs cannot be recorded as verified', () => {
+  const f = makeRepo();
+  readyTask(f);
+  writeFileSync(join(f.repo, 'a.js'), 'const a = 22;\n'); // a size change: status needs no hash
+  // A clean filter armed by a file outside the repo: the first hash after arming hands git the
+  // content it read, then rewrites the file — a write landing inside the check itself.
+  const arm = join(f.home, 'arm');
+  const filter = join(f.home, 'mut.sh');
+  writeFileSync(filter, `cat\nif [ -f '${arm}' ]; then rm -f '${arm}'; printf 'const a = 666;\\n' > '${join(f.repo, 'a.js')}'; fi\n`);
+  git(f.repo, 'config', 'filter.mut.clean', `sh '${filter}'`);
+  git(f.repo, 'config', 'filter.mut.smudge', 'cat');
+  writeFileSync(join(f.repo, '.git', 'info', 'attributes'), 'a.js filter=mut\n');
+  passAll(f);
+  writeFileSync(arm, '');
+  const c = json(run(f.repo, f.home, ['task', 'commit-check']));
+  assert.equal(readFileSync(join(f.repo, 'a.js'), 'utf8'), 'const a = 666;\n', 'the injection must have fired during the check');
+  assert.equal(c.ok, true, 'the gates passed at the content the check hashed — the window is real');
+  git(f.repo, 'add', '-A');
+  git(f.repo, 'commit', '-q', '-m', 'feat: x');
+  const done = json(run(f.repo, f.home, ['task', 'committed']));
+  assert.equal(done.ok, false, 'content the gates never saw was recorded as verified');
+  assert.deepEqual(done.problems, ['tree-mismatch']);
+  passAll(f);
+  assert.ok(json(run(f.repo, f.home, ['goal-publish', '--format=json'])).reasons.includes('unverified-commit'));
+});
+
+for (const [label, mutate] of [
+  ['an added path', (repo) => writeFileSync(join(repo, 'added.js'), 'x\n')],
+  ['a deleted clean path', (repo) => rmSync(join(repo, 'readme.md'))],
+  ['a mode change', (repo) => execFileSync('chmod', ['+x', join(repo, 'a.js')])],
+]) {
+  test(`committed → ${label} after the check, committed with the rest, is not the verified tree`, () => {
+    const f = makeRepo();
+    readyTask(f);
+    passAll(f);
+    assert.equal(json(run(f.repo, f.home, ['task', 'commit-check'])).ok, true);
+    mutate(f.repo);
+    git(f.repo, 'add', '-A');
+    git(f.repo, 'commit', '-q', '-m', 'feat: x');
+    const done = json(run(f.repo, f.home, ['task', 'committed']));
+    assert.deepEqual([done.ok, done.problems], [false, ['tree-mismatch']]);
+    assert.equal(json(run(f.repo, f.home, ['task', 'show'])).task.unverified, true);
+  });
+}
+
+test('committed → grouped commits verify only their final tree, which must equal the checked one', () => {
+  const f = makeRepo();
+  readyTask(f);
+  writeFileSync(join(f.repo, 'b.js'), 'b\n');
+  json(run(f.repo, f.home, ['task', 'own', 'b.js']));
+  passAll(f);
+  assert.equal(json(run(f.repo, f.home, ['task', 'commit-check'])).ok, true);
+  git(f.repo, 'add', '--', 'a.js');
+  git(f.repo, 'commit', '-q', '-m', 'feat: a');
+  git(f.repo, 'add', '--', 'b.js');
+  git(f.repo, 'commit', '-q', '-m', 'feat: b');
+  const done = json(run(f.repo, f.home, ['task', 'committed']));
+  assert.deepEqual([done.ok, done.problems, done.commits.length], [true, [], 2]);
 });
 
 test('goal-publish → ok after a verified commit on the task branch; nothing ahead and protected refuse', () => {

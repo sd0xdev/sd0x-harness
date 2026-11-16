@@ -1036,7 +1036,7 @@ test('section extraction when a fake heading is planted → does not truncate th
 // Changing a template is a separate, maintainer-approved change that updates these values.
 const TEMPLATE_SHA256 = {
   'auto-loop-project.md': 'dd279e6341242f55f66836d7ee8e812d82e8da2155bad6f5008f3b577622e46c',
-  'git-workflow-project.md': 'cbaf87eb2be8b0a9c1865c98493142b30396d10ccbfc8673adfd92f19507a0a9', // re-pinned 2026-11-16: git-autonomy R8 added four settings
+  'git-workflow-project.md': 'a4504f6807a78d19bd49ace04eab2cc788110a92658e313f407afd36c575e761', // re-pinned 2026-11-16: git-autonomy R8 added four settings
   'testing-project.md': '0a9df4bfb310cbaeb578179045cc5519ffd60e71570c7cfc58377be3e8e8e91e',
 };
 const sha256 = (text) => require('node:crypto').createHash('sha256').update(text).digest('hex');

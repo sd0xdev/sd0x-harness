@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { computeTreeState, planeOf } = require(path.join(__dirname, 'lib', 'tree-digest.js'));
+const { computeTreeState, planeOf, digestOfRev } = require(path.join(__dirname, 'lib', 'tree-digest.js'));
 
 // Gate plane → content plane. precommit binds the CODE digest: it is an
 // obligation of the code plane, so a doc-only edit never reopens it (§3.1).
@@ -537,13 +537,6 @@ const statusEntries = (root) => {
 const headOid = (root) => { const h = gitOut(root, ['rev-parse', '--verify', '-q', 'HEAD']); return h ? h.trim() : null; };
 const currentBranch = (root) => { const h = gitOut(root, ['symbolic-ref', '--short', '-q', 'HEAD']); return h && h.trim() ? h.trim() : null; };
 
-// Per-path content identity: the blob a work-tree file would become, or null for a deletion.
-function blobOf(root, p) {
-  if (!fs.existsSync(path.join(root, p))) return null;
-  const h = gitOut(root, ['hash-object', '--', p]);
-  return h ? h.trim() : 'unreadable';
-}
-
 function taskStart(intent, supersede) {
   const root = repoRoot();
   const prev = loadTask(root);
@@ -671,17 +664,19 @@ function commitCheckCmd(format) {
   });
   const result = { ...r, task_id: task ? task.id : null, branch, digest };
   if (r.ok) {
-    // Content identity of every candidate at the moment it was checked: `task committed` compares
-    // the committed blobs against it, so a write between this check and the commit is caught.
-    task.last_check = { digest, blobs: Object.fromEntries(r.candidate.map((p) => [p, blobOf(root, p)])), time: new Date().toISOString() };
+    // The digest the gates passed at, from the same single tree read — nothing is read after it.
+    // `task committed` requires the committed tree to digest to exactly this, so a write during or
+    // after the check, an added or deleted path or a mode change cannot ride on this pass.
+    task.last_check = { digest, time: new Date().toISOString() };
     saveTask(root, task);
   }
   emit(result, format, (o) => `[AUTO_COMMIT_CHECK] ok=${o.ok} reasons=${o.reasons.join(',') || 'none'} branch=${o.branch || '-'} candidates=${o.candidate.length}`);
 }
 
 // After the auto commit: the commits must sit on top of the task's tip, the work tree must be clean
-// (nothing was left out), and every committed path must hold exactly the content the check saw. A
-// mismatch marks the task unverified — the commit stays local, and goal publish refuses it.
+// (nothing was left out), and the final committed tree — every path, mode and object — must digest
+// to exactly what the gates passed at. Grouped commits are fine; only their final tree is verified.
+// A mismatch marks the task unverified — the commit stays local, and goal publish refuses it.
 function taskCommitted() {
   const root = repoRoot();
   const t = requireTask(root);
@@ -694,10 +689,9 @@ function taskCommitted() {
   const entries = statusEntries(root);
   const problems = [];
   if (entries === null || entries.length) problems.push('not-clean');
-  for (const [p, blob] of Object.entries(t.last_check.blobs)) {
-    const committed = gitOut(root, ['rev-parse', '--verify', '-q', `${head}:${p}`]);
-    if ((committed ? committed.trim() : null) !== blob) problems.push(`content-changed:${p}`);
-  }
+  const at = digestOfRev(root, head);
+  if (!at) problems.push('tree-unreadable');
+  else if (combinedDigest({ planes: { code: { digest: at.code }, doc: { digest: at.doc } } }) !== t.last_check.digest) problems.push('tree-mismatch');
   const range = gitOut(root, ['rev-list', '--reverse', `${tip}..${head}`]);
   const oids = range ? range.split('\n').filter(Boolean) : [];
   t.commits = [...t.commits, ...oids];

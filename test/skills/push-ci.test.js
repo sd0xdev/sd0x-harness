@@ -40,7 +40,7 @@ function readSkill() {
 // digest is what makes the claim complete.
 
 // Re-pinned 2026-11-16: git-autonomy R8 § Goal publish and --defer-watch (user decision).
-const SKILL_DIGEST = "5b6b0e5f4734915c1e19456fbcfca73a78ea50ec06e5c9194e7eb0a61993969f";
+const SKILL_DIGEST = "6c279e8f7844701a01a75f48091f3360b74d26c7c3026c615c032005887a5191";
 
 function digestOf(text) {
   return createHash('sha256').update(text).digest('hex');
@@ -610,8 +610,8 @@ test('push still requires explicit user approval regardless of gate state', () =
 
   assert.match(
     skill,
-    /Push REQUIRES explicit user approval via AskUserQuestion — no exceptions/,
-    'the anchor-level approval requirement must survive this change verbatim'
+    /Push REQUIRES explicit user approval via AskUserQuestion — with one exception, which replaces the\n⚠️ question and never bypasses it: § Goal publish below/,
+    'the anchor-level approval requirement survives; its one exception is the Goal publish credential (Register #4, 2026-11-16)'
   );
   assert.match(
     skill,

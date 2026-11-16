@@ -121,8 +121,9 @@ with what git reports, and any path nobody declared — another agent's file, a 
 stops the automatic commit.
 
 What the check cannot see, stated: a declared file that another process also edited before the gates
-passed is reviewed and tested as part of the task. A write after the pass reopens the gate, and a
-write between the check and the commit is caught by `task committed`.
+passed is reviewed and tested as part of the task. A write after the pass reopens the gate, and any
+write during or after the check — content, an added or deleted path, a mode — is caught by `task
+committed`, which compares the whole committed tree with the digest the gates passed at.
 
 ## Lifecycle
 

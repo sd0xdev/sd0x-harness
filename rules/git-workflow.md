@@ -28,8 +28,8 @@ its skill defines or under Goal publish, through a `/deploy-flow` run step the p
 after its per-step approval, or by user-authorized execution. Never bare `--force`; `--force-with-lease` only
 when explicitly passed, never onto a protected branch. Where the opt-in `pre-push` hook is installed
 and prompts, `pre-push-gate.sh` is the terminal credential; where it is absent or does not prompt,
-the workflow's in-session approval is the whole credential — an absent gate never means no approval
-is needed. A history-rewriting push through `/push-ci`, `/epic-merge` or `/gh-stack` also needs the
+the workflow's in-session approval (under Goal publish, the user's active goal and adopted mode)
+is the whole credential — an absent gate never means none is needed. A history-rewriting push through `/push-ci`, `/epic-merge` or `/gh-stack` also needs the
 operator's attestation that the rewritten refs are not shared, asked by name before the force
 approval. A declared `/deploy-flow` run step is the project's own script, which the harness does not
 check — the risk the project accepted with `Run Steps: execute`. `ALLOW_PUSH_PROTECTED` and
@@ -45,8 +45,8 @@ PR workflow: Develop -> /codex-review-fast -> /precommit -> /pr-review -> PR
 
 After a change's gates pass, offer the commit or push through one AskUserQuestion when
 `review-state.js offer --format=json` returns `offer: true`; never print a command to paste.
-`/smart-commit --execute` and `/push-ci` run only by that menu, the user's explicit request, or a
-credential that replaces the question: **Goal mode**, **Auto commit** or **Goal publish**.
+`/smart-commit --execute` and `/push-ci` run only by that menu, an explicit user request, or a
+credential replacing the question: Goal mode, Auto commit or Goal publish.
 
 Before offering or acting under one, Read `skills/push-ci/references/authorization-contract.md` § Proactive Offer and § Task autonomy — the menu and each credential's
 conditions. If that Read fails, offer nothing and commit or publish nothing unasked.

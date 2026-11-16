@@ -56,8 +56,9 @@ const BRANCH_RE = /^(?!.*\.\.)(?!.*\/\/)(?!.*@\{)(?!.*\.lock(?:\/|$))[A-Za-z0-9]
 const PROJECT_RE = /^[A-Z][A-Z0-9_]{1,19}$/;
 const validBranch = (b) => typeof b === 'string' && BRANCH_RE.test(b) && !/[./]$/.test(b);
 
-// Which policy is in force, and where it came from. Precedence: an explicit override value · the
-// user's own recorded decision (kept outside the repository, per user) · legacy. Legacy is the
+// Which policy is in force, and where it came from. Precedence: an explicit override `off` · the
+// user's own recorded decision (kept outside the repository, per user; a granting override value
+// counts only once that decision is `adopted`) · legacy. Legacy is the
 // conservative reading of everything else — plugin-only use, a clone of a repository someone else
 // set up: nothing in the repository is one user's consent for another, so the absence of the user's
 // own decision never widens anything. A fresh `/codex-setup init` records the installing user's

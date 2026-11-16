@@ -61,7 +61,7 @@ test('the first-instruction checker when the Read is moved or its stop removed �
 // rules/git-workflow.md; re-pinned 2026-11-16 for git-autonomy R8's two credentials). A later
 // Default-tier edit updates this value through review; an edit that
 // changes a step — a menu option, the revalidation, the offer-shown ordering — cannot pass unseen.
-const PROACTIVE_OFFER_SHA256 = '76ae3a90162cef71bba60ef0996c47b8d65ce495af6d23d28449f73d42dd3879';
+const PROACTIVE_OFFER_SHA256 = 'f7eb71b5a8a3321cccf9903a0f5c1df7a711b85d8626253ea315158928ef95e1';
 const sha = (s) => createHash('sha256').update(s).digest('hex');
 // It ends where § Task autonomy (git-autonomy R8, 2026-11-16) begins: that section has its own pins.
 const proactiveOffer = (text) => text.slice(text.indexOf('## Proactive Offer\n'), text.indexOf('\n## Task autonomy\n')).replace(/\n+$/, '');

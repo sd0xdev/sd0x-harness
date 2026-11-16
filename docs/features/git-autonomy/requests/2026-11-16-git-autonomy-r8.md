@@ -68,6 +68,37 @@ Batch B — goal publish:
 | Testing | In Progress | Review round 2 (2026-11-16): the fresh-install marker in `.sd0x/install-state.json` was dropped from the precedence — a tracked file would adopt for every clone — and replaced by the installing user's own recorded decision (`policy-decide --if-pending`), kept outside the repository and shared by its worktrees |
 | Acceptance | In Progress | 2026-11-16. Codex was unavailable (refresh token expired, adapter exit 1), so fallback carriers held the gates: code review `strict-reviewer` — round 1 ⛔ Blocked (a P1: goal publish could carry a reused branch's earlier unreviewed commit; P2s: a narrower sensitive list, no recorded PR base, adoption kept per worktree, a tracked fresh-install marker adopting for clones), round 2 ⛔ Blocked (a P2: a fresh init could overwrite a recorded `declined`; spec drift), round 3 ✅ Ready; four Nits deferred. Adequacy (ac-trace, `contract-neutral-reviewer`): Adequate, gaps none; its two coverage notes were closed with tests. A test-only change then reopened the gate: a rotated `strict-reviewer` thread found a P1 (an override `on`/`draft` in the tracked file granted the credentials over the user's own decision — now narrow-only) and a P2 (required checks never supplied and matched by workflow name — now read from `gh pr checks --required` by job name, plus a confirming second read), then ✅ Ready. `/precommit` ✅ PASS at that digest. Doc review (two batches, `contract-neutral-reviewer`): round 1 ⛔ Needs revision (the spec's risk table and push-ci's Prohibited/Verification lines lagged R8), round 2 ✅ Mergeable for both |
 
+### PM acceptance R2 (2026-11-16)
+
+After Draft PR #31 (CI green at `ce367bf`), the PM's acceptance review found four gaps, fixed in one
+follow-up:
+
+- **Verified tree.** `commit-check` stored per-path blobs read *after* the digest the gates passed
+  at, and `task committed` compared only those paths, so a rewrite during the check — or an added
+  path, a deleted clean path or a mode change after it — could be recorded as verified. Reproduced
+  with a clean filter that rewrites the file while the check hashes it. Now the check stores only
+  the digest from its single tree read, and `task committed` digests the whole committed tree
+  (`digestOfRev`) and requires equality (`tree-mismatch` otherwise).
+- **Confirming read.** `ci-readback.js` accepted a confirmation 41 s old. A read now returns
+  `next_confirm` (`{ ids, at }`), and the classifier itself refuses a missing, malformed,
+  mismatched, future or under-a-minute confirmation, on its own clock.
+- **Current authority.** `git-workflow.md` § Push safety, the `push-ci` header and its L2 table, and
+  the override scaffold now say the same thing about Goal publish: the user's active goal under the
+  mode they adopted replaces the per-use question for a plain non-protected publish, and an empty
+  setting means each user's own decision.
+- **Evidence.** PR body and handoff restated with the final test, CI and review results.
+
+These edits reopened the code and doc gates, so the earlier passes above do not cover them. Re-run
+on the follow-up, results recorded after each round finished:
+
+- Code review (`strict-reviewer`, same thread): ✅ Ready on the fixes, then ✅ Ready again after
+  the doc-driven pin moves in three test files.
+- `/precommit` at that final code tree: a first run failed only the known timing test in
+  `request-status.test.js` (passes 3/3 alone; file untouched); the re-run read
+  `## Overall: ✅ PASS` — 5201 tests, 5193 pass, 0 fail, 8 skipped.
+- Doc review batch 1, rotated to a fresh `contract-neutral-reviewer` thread after three replies:
+  ✅ Mergeable, coherence fixes, ✅ Mergeable. Batch 2: ✅ Mergeable.
+
 ## References
 
 - Contract: `skills/push-ci/references/authorization-contract.md` § Task autonomy

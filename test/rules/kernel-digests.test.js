@@ -75,8 +75,8 @@ const PINS = {
     "(preamble)": "39d10be220cca84ef053e4450ddad3a2e1773873be211d7363c317aeb6347b49",
     "Exception": "3963acfc2e72df3dc85213d8bff923066f2d031e14b893f18223c3236db16a6f",
     "Prohibited": "d7893f6a876b1f3a91423c00302f9ca83198955651c9a00d52df8550d18ae54f",
-    "Push safety": "8a5d5f59e54019adca3dc493078c353bd214261d8b8ada9060608b5ebcaaf7d5",
-    "Proactive Offer": "4386379bf40987804672dfc29de03a489ca21cee711bc58a43fa83ea3588933f",
+    "Push safety": "aff3a3f3c81092a8851d1817cf8b504b17aeddb84c1da225a71a0077fa0b0ee2",
+    "Proactive Offer": "5cc71529f3bdcfb0d323688bdd428af5fca35b4da87d078aa5c653be505ef20f",
     "Project Customization": "6e1295fbeecd7709c1802196bfb7921781846a51be2ba3920171ce0fe4ef815d",
   },
   "rules/logging.md": {

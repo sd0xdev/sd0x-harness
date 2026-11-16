@@ -14,9 +14,10 @@
 //   required `gh pr checks <n> --required --json name,bucket` — the branch-protection required
 //            checks by their check (job) names, for the PR's current head (whose OID `pr` binds).
 //            `[]` = none configured. Omitted = not read, which never passes
-//   confirm  the `runs[].id` list a previous read returned. A pass needs two reads at least a minute
-//            apart showing the same runs: a workflow that runs only on `pull_request` may not exist
-//            yet when an early `push` run has already finished, and one read cannot tell
+//   confirm  the `next_confirm` object a previous read returned (`{ ids, at }`); see confirmation()
+//
+// Output: `{ verdict, reasons, runs, next_confirm }` — `next_confirm` is what the next read passes
+// as `confirm`.
 //
 // Interface facts this relies on, measured on github.com 2026-11-16 (PR #30, run 37662123230): a
 // `pull_request` run's `headSha` is the PR head commit, not the merge commit the job checked out;
@@ -30,8 +31,26 @@ const SKIPPED = new Set(['skipped', 'neutral']);
 const EVENTS = new Set(['pull_request', 'push']);
 
 const BUCKET = { pass: 'pass', fail: 'fail', pending: 'pending', skipping: 'skipped', cancel: 'fail' };
+const MIN_GAP_MS = 60 * 1000;
 
-function classify({ pushed, pr, base = null, runs = [], required, confirm } = {}) {
+// A pass needs two reads at least MIN_GAP_MS apart showing the same runs: a workflow that runs only
+// on `pull_request` may not exist yet when an early `push` run has already finished, and one read
+// cannot tell. Missing → pending (`unconfirmed`); under a minute → pending (`confirm-too-soon`);
+// other runs → pending (`confirm-mismatch`); malformed, a bare id list or a time in the future →
+// unknown (`confirm-invalid`). The gap is measured on this process's own clock — the CLI takes no
+// `now` from its input, so a caller cannot shorten it.
+function confirmation(confirm, ids, now) {
+  if (confirm === undefined || confirm === null) return 'unconfirmed';
+  if (typeof confirm !== 'object' || Array.isArray(confirm) || !Array.isArray(confirm.ids)
+    || !confirm.ids.every((i) => Number.isSafeInteger(i)) || typeof confirm.at !== 'string') return 'confirm-invalid';
+  const at = Date.parse(confirm.at);
+  if (!Number.isFinite(at) || at > now) return 'confirm-invalid';
+  if (JSON.stringify([...confirm.ids].sort((a, b) => a - b)) !== JSON.stringify(ids)) return 'confirm-mismatch';
+  if (now - at < MIN_GAP_MS) return 'confirm-too-soon';
+  return null;
+}
+
+function classify({ pushed, pr, base = null, runs = [], required, confirm } = {}, { now = Date.now() } = {}) {
   const reasons = [];
   if (!/^[0-9a-f]{40,64}$/.test(pushed || '')) return { verdict: 'unknown', reasons: ['no-pushed-oid'], runs: [] };
   if (!pr || typeof pr.number !== 'number') return { verdict: 'unknown', reasons: ['no-pr'], runs: [] };
@@ -51,7 +70,9 @@ function classify({ pushed, pr, base = null, runs = [], required, confirm } = {}
     id: r.databaseId, workflow: r.workflowName, event: r.event, url: r.url,
     state: r.status !== 'completed' ? 'pending' : r.conclusion === 'success' ? 'pass' : SKIPPED.has(r.conclusion) ? 'skipped' : FAILED.has(r.conclusion) ? 'fail' : 'unknown',
   }));
-  if (!chosen.length) return { verdict: 'none', reasons: [...reasons, 'zero-runs'], runs: [] };
+  const ids = chosen.map((c) => c.id).sort((a, b) => a - b);
+  const next_confirm = { ids, at: new Date(now).toISOString() };
+  if (!chosen.length) return { verdict: 'none', reasons: [...reasons, 'zero-runs'], runs: [], next_confirm };
   // Required checks are judged by their own bucket — check names are job names, not workflow names.
   let reqStates = [];
   if (!Array.isArray(required)) reasons.push('required-unread');
@@ -64,16 +85,15 @@ function classify({ pushed, pr, base = null, runs = [], required, confirm } = {}
   else if (states.has('unknown')) verdict = 'unknown';
   else if (states.has('skipped')) verdict = 'skipped';
   else verdict = 'pass';
-  const ids = chosen.map((c) => c.id).sort((a, b) => a - b);
-  const confirmed = Array.isArray(confirm) && JSON.stringify([...confirm].sort((a, b) => a - b)) === JSON.stringify(ids);
+  const unconfirmed = confirmation(confirm, ids, now);
   if (verdict === 'pass' && reasons.includes('base-moved')) verdict = 'stale';
   else if (verdict === 'pass' && (reasons.includes('no-recorded-base') || reasons.includes('required-unread'))) verdict = 'unknown';
-  else if (verdict === 'pass' && !confirmed) { verdict = 'pending'; reasons.push('unconfirmed'); }
+  else if (verdict === 'pass' && unconfirmed) { verdict = unconfirmed === 'confirm-invalid' ? 'unknown' : 'pending'; reasons.push(unconfirmed); }
   if (verdict === 'pass' && pr.state !== 'OPEN') verdict = 'unknown';
-  return { verdict, reasons, runs: chosen };
+  return { verdict, reasons, runs: chosen, next_confirm };
 }
 
-module.exports = { classify };
+module.exports = { classify, MIN_GAP_MS };
 
 if (require.main === module) {
   let input;

@@ -117,9 +117,9 @@ around it (task start, ownership, branch) is `references/task-contract.md`.
    exactly its candidates. When the plan has more than one group, it adds `final tree verified; the
    intermediate commits were not verified on their own`.
 4. **Verify.** After the last group, `review-state.js task committed` must return `ok: true` — the
-   commits sit on the task's tip, the tree is clean, every committed blob is the content the check
-   saw. `ok: false` is reported as it reads (`content-changed:<path>`, `not-clean`); the commit stays
-   local and is never published.
+   commits sit on the task's tip, the tree is clean, and the final committed tree (every path, mode
+   and object) digests to exactly what the gates passed at. `ok: false` is reported as it reads
+   (`tree-mismatch`, `not-clean`); the commit stays local and is never published.
 
 Everything Goal mode keeps, this path keeps: every diagnostic and HALT, the attribution guard,
 `verify-last`, every judgement question; `--ai-co-author` is never passed on it.

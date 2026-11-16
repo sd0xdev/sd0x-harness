@@ -78,7 +78,7 @@
         "scripts/commit-msg-guard.sh",
         "skills/smart-commit/scripts/smart-commit-execute.sh"
       ],
-      "chars": 6673,
+      "chars": 6709,
       "lines": 59
     },
     {
@@ -175,8 +175,8 @@
       "carrier": [
         "scripts/review-state.js"
       ],
-      "chars": 4727,
-      "lines": 113
+      "chars": 4821,
+      "lines": 114
     }
   ]
 }
