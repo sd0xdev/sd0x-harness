@@ -257,7 +257,7 @@ test('committed → content changed between check and commit marks the task unve
   git(f.repo, 'commit', '-q', '-m', 'feat: x');
   const done = json(run(f.repo, f.home, ['task', 'committed']));
   assert.equal(done.ok, false);
-  assert.deepEqual(done.problems, ['tree-mismatch']);
+  assert.deepEqual(done.problems, ['foreign-commit', 'tree-mismatch']);
   passAll(f);
   assert.ok(json(run(f.repo, f.home, ['goal-publish', '--format=json'])).reasons.includes('unverified-commit'));
 });
@@ -297,7 +297,7 @@ test('committed → a rewrite while commit-check runs cannot be recorded as veri
   git(f.repo, 'commit', '-q', '-m', 'feat: x');
   const done = json(run(f.repo, f.home, ['task', 'committed']));
   assert.equal(done.ok, false, 'content the gates never saw was recorded as verified');
-  assert.deepEqual(done.problems, ['tree-mismatch']);
+  assert.deepEqual(done.problems, ['foreign-commit', 'tree-mismatch']);
   passAll(f);
   assert.ok(json(run(f.repo, f.home, ['goal-publish', '--format=json'])).reasons.includes('unverified-commit'));
 });
@@ -316,7 +316,7 @@ for (const [label, mutate] of [
     git(f.repo, 'add', '-A');
     git(f.repo, 'commit', '-q', '-m', 'feat: x');
     const done = json(run(f.repo, f.home, ['task', 'committed']));
-    assert.deepEqual([done.ok, done.problems], [false, ['tree-mismatch']]);
+    assert.deepEqual([done.ok, done.problems], [false, ['foreign-commit', 'tree-mismatch']]);
     assert.equal(json(run(f.repo, f.home, ['task', 'show'])).task.unverified, true);
   });
 }
@@ -398,6 +398,210 @@ test('goal-publish → a reused branch carrying an earlier unreviewed local comm
   const p = json(run(f.repo, f.home, ['goal-publish', '--format=json']));
   assert.equal(p.ahead, 2);
   assert.ok(p.reasons.includes('foreign-commits'), JSON.stringify(p));
+});
+
+// Codex release review (2026-11-16) F1/F2: the publish range is read from the push destination
+// itself, never from a cached tracking ref, and the answer carries the one HEAD it checked.
+test('goal-publish → a stale tracking ref cannot hide a foreign commit the destination lacks', () => {
+  const f = makeRepo();
+  adopt(f);
+  git(f.repo, 'switch', '-q', '-c', 'feat/y');
+  writeFileSync(join(f.repo, 'wip.js'), 'wip\n');
+  git(f.repo, 'add', '--', 'wip.js');
+  git(f.repo, 'commit', '-q', '-m', 'wip, never reviewed');
+  git(f.repo, 'push', '-q', 'origin', 'feat/y'); // refs/remotes/origin/feat/y now holds the wip commit
+  execFileSync('git', ['-C', f.remote, 'update-ref', '-d', 'refs/heads/feat/y']); // the destination drops it
+  json(run(f.repo, f.home, ['task', 'start', '--intent', 'x']));
+  json(run(f.repo, f.home, ['task', 'branch', 'feat/y']));
+  writeFileSync(join(f.repo, 'a.js'), 'const a = 2;\n');
+  json(run(f.repo, f.home, ['task', 'own', 'a.js']));
+  passAll(f);
+  assert.equal(json(run(f.repo, f.home, ['task', 'commit-check'])).ok, true);
+  git(f.repo, 'add', '--', 'a.js');
+  git(f.repo, 'commit', '-q', '-m', 'feat: x');
+  assert.equal(json(run(f.repo, f.home, ['task', 'committed'])).ok, true);
+  const p = json(run(f.repo, f.home, ['goal-publish', '--format=json']));
+  assert.equal(p.ok, false, 'the cached ref says only the task commit is ahead; the push would publish the wip commit too');
+  assert.ok(p.reasons.some((r) => r === 'foreign-commits' || r === 'ahead-unknown'), JSON.stringify(p));
+});
+
+test('goal-publish → the range is read from the push URL; two push URLs refuse; the answer names its HEAD', () => {
+  const f = makeRepo();
+  readyTask(f);
+  passAll(f);
+  json(run(f.repo, f.home, ['task', 'commit-check']));
+  git(f.repo, 'add', '--', 'a.js');
+  git(f.repo, 'commit', '-q', '-m', 'feat: x');
+  json(run(f.repo, f.home, ['task', 'committed']));
+  git(f.repo, 'push', '-q', 'origin', 'feat/x'); // the fetch remote and the tracking ref now hold HEAD
+  const other = tmp('ta-push-');
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', other]);
+  git(f.repo, 'config', 'remote.origin.pushurl', other); // ...but the push goes elsewhere
+  // Codex rotated review F4: an empty destination does not hold the base, so the inherited history
+  // would ride along uncounted — refuse.
+  assert.ok(json(run(f.repo, f.home, ['goal-publish', '--format=json'])).reasons.includes('ahead-unknown'), 'empty destination');
+  git(f.repo, 'push', '-q', other, 'refs/remotes/origin/main:refs/heads/main'); // now it holds the base
+  const p = json(run(f.repo, f.home, ['goal-publish', '--format=json']));
+  assert.deepEqual([p.ok, p.ahead, p.remote_tip], [true, 1, null], JSON.stringify(p));
+  assert.equal(p.head, git(f.repo, 'rev-parse', 'HEAD').trim(), 'one HEAD, the one checked');
+  assert.equal(p.dest_digest, require('node:crypto').createHash('sha256').update(other).digest('hex'), 'the destination digest push-ci Phase 0 computes');
+  // A chained insteadOf would rewrite the resolved URL a second time inside ls-remote: refuse.
+  const third = tmp('ta-chain-');
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', third]);
+  git(f.repo, 'config', `url.${third}.insteadOf`, other);
+  git(f.repo, 'config', `url.${other}.insteadOf`, 'chained:');
+  git(f.repo, 'config', 'remote.origin.pushurl', 'chained:');
+  assert.ok(json(run(f.repo, f.home, ['goal-publish', '--format=json'])).reasons.includes('ahead-unknown'), 'second rewrite refused');
+  git(f.repo, 'config', '--unset', `url.${third}.insteadOf`);
+  git(f.repo, 'config', 'remote.origin.pushurl', other);
+  git(f.repo, 'config', '--add', 'remote.origin.pushurl', f.remote);
+  assert.ok(json(run(f.repo, f.home, ['goal-publish', '--format=json'])).reasons.includes('ahead-unknown'));
+});
+
+// F4: a PR base belongs to the pushed head whose run tested it.
+test('task record → pr-base is bound to a head with --for and never re-recorded for it', () => {
+  const f = makeRepo();
+  json(run(f.repo, f.home, ['task', 'start', '--intent', 'x']));
+  const A = 'a'.repeat(40); const B0 = 'b'.repeat(40); const B1 = 'c'.repeat(40); const H2 = 'd'.repeat(40);
+  assert.notEqual(run(f.repo, f.home, ['task', 'record', '--pr-base', B0]).status, 0, 'a base names the head it belongs to');
+  assert.notEqual(run(f.repo, f.home, ['task', 'record', '--pr-base', B0, '--for', 'nope']).status, 0);
+  assert.notEqual(run(f.repo, f.home, ['task', 'record', '--for', A]).status, 0, '--for only with --pr-base');
+  const first = json(run(f.repo, f.home, ['task', 'record', '--pr-base', B0, '--for', A])).publish;
+  assert.deepEqual([first['pr-base'], first['pr-base-for']], [B0, A]);
+  assert.equal(run(f.repo, f.home, ['task', 'record', '--pr-base', B0, '--for', A]).status, 0, 'the same value is idempotent');
+  const relabel = run(f.repo, f.home, ['task', 'record', '--pr-base', B1, '--for', A]);
+  assert.notEqual(relabel.status, 0, 'a later read must not re-label the run for A as evidence about B1');
+  assert.match(relabel.stderr, /already recorded for this head/);
+  assert.equal(json(run(f.repo, f.home, ['task', 'record', '--pr-base', B1, '--for', H2])).publish['pr-base-for'], H2, 'a new head takes its own base');
+});
+
+// F5: grouped commits re-check before every group; HEAD may move only by the batch's own groups.
+test('commit-check → inside a grouped commit the next group re-checks; a foreign change breaks the batch', () => {
+  const setup = () => {
+    const f = makeRepo();
+    readyTask(f);
+    writeFileSync(join(f.repo, 'b.js'), 'b\n');
+    json(run(f.repo, f.home, ['task', 'own', 'b.js']));
+    passAll(f);
+    assert.equal(json(run(f.repo, f.home, ['task', 'commit-check'])).ok, true);
+    git(f.repo, 'add', '--', 'a.js');
+    git(f.repo, 'commit', '-q', '-m', 'feat: a');
+    return f;
+  };
+  const f = setup();
+  const second = json(run(f.repo, f.home, ['task', 'commit-check']));
+  assert.deepEqual([second.ok, second.candidate], [true, ['b.js']], JSON.stringify(second));
+  git(f.repo, 'add', '--', 'b.js');
+  git(f.repo, 'commit', '-q', '-m', 'feat: b');
+  assert.deepEqual(json(run(f.repo, f.home, ['task', 'committed'])).problems, []);
+
+  const g = setup();
+  writeFileSync(join(g.repo, 'b.js'), 'b changed after the check\n');
+  assert.ok(json(run(g.repo, g.home, ['task', 'commit-check'])).reasons.includes('batch-broken'));
+
+  const h = setup();
+  writeFileSync(join(h.repo, 'external.js'), 'someone else\n');
+  git(h.repo, 'add', '--', 'external.js');
+  git(h.repo, 'commit', '-q', '-m', 'unrelated');
+  const moved = json(run(h.repo, h.home, ['task', 'commit-check']));
+  assert.ok(moved.reasons.includes('batch-broken'), JSON.stringify(moved));
+  assert.ok(!moved.reasons.includes('head-moved'));
+});
+
+// Codex release review round 2, F6: a foreign commit later reverted restores the tree and the plan,
+// but it is not one of the batch's groups — it is never adopted, and never published.
+test('commit-check / committed → a reverted foreign commit inside a batch is refused, never task-owned', () => {
+  const f = makeRepo();
+  readyTask(f);
+  writeFileSync(join(f.repo, 'b.js'), 'b\n');
+  json(run(f.repo, f.home, ['task', 'own', 'b.js']));
+  passAll(f);
+  assert.equal(json(run(f.repo, f.home, ['task', 'commit-check'])).ok, true);
+  git(f.repo, 'add', '--', 'a.js');
+  git(f.repo, 'commit', '-q', '-m', 'feat: a');
+  writeFileSync(join(f.repo, 'external.js'), 'someone else\n');
+  git(f.repo, 'add', '--', 'external.js');
+  git(f.repo, 'commit', '-q', '-m', 'foreign');
+  git(f.repo, 'rm', '-q', '--', 'external.js');
+  git(f.repo, 'commit', '-q', '-m', 'foreign revert');
+  const again = json(run(f.repo, f.home, ['task', 'commit-check']));
+  assert.ok(again.reasons.includes('batch-broken'), JSON.stringify(again));
+  git(f.repo, 'add', '--', 'b.js');
+  git(f.repo, 'commit', '-q', '-m', 'feat: b');
+  const done = json(run(f.repo, f.home, ['task', 'committed']));
+  assert.deepEqual([done.ok, done.problems], [false, ['foreign-commit']], 'the final tree matches, the history does not');
+  passAll(f);
+  assert.ok(json(run(f.repo, f.home, ['goal-publish', '--format=json'])).reasons.includes('unverified-commit'));
+});
+
+test('commit-check → a group that commits a planned path with other content, then restores it, breaks the batch', () => {
+  const f = makeRepo();
+  readyTask(f);
+  writeFileSync(join(f.repo, 'b.js'), 'b\n');
+  json(run(f.repo, f.home, ['task', 'own', 'b.js']));
+  passAll(f);
+  assert.equal(json(run(f.repo, f.home, ['task', 'commit-check'])).ok, true);
+  writeFileSync(join(f.repo, 'a.js'), 'never reviewed\n');
+  git(f.repo, 'add', '--', 'a.js');
+  git(f.repo, 'commit', '-q', '-m', 'unreviewed content');
+  writeFileSync(join(f.repo, 'a.js'), 'const a = 2;\n'); // the reviewed content again
+  git(f.repo, 'add', '--', 'a.js');
+  git(f.repo, 'commit', '-q', '-m', 'restore');
+  assert.ok(json(run(f.repo, f.home, ['task', 'commit-check'])).reasons.includes('batch-broken'));
+});
+
+// Codex release review round 3, F7: the plan is looked up in the digest's own byte-keyed map, so a
+// non-ASCII path is planned with its real content, not as a deletion.
+test('commit-check → committed: a new and a modified non-ASCII path verify like ASCII ones', () => {
+  const f = makeRepo();
+  readyTask(f);
+  writeFileSync(join(f.repo, 'caf\u00e9.js'), 'c\n');
+  writeFileSync(join(f.repo, '\u65e5\u672c.md'), '# doc\n');
+  json(run(f.repo, f.home, ['task', 'own', 'caf\u00e9.js', '\u65e5\u672c.md']));
+  passAll(f);
+  assert.equal(json(run(f.repo, f.home, ['task', 'commit-check'])).ok, true);
+  git(f.repo, 'add', '-A');
+  git(f.repo, 'commit', '-q', '-m', 'feat: non-ascii');
+  const done = json(run(f.repo, f.home, ['task', 'committed']));
+  assert.deepEqual([done.ok, done.problems], [true, []], JSON.stringify(done));
+});
+
+// Codex rotated review F2: cutting the branch never resets the start's eligibility.
+test('task branch → a task that started dirty stays ineligible after tidying and branching', () => {
+  const f = makeRepo();
+  adopt(f);
+  writeFileSync(join(f.repo, 'a.js'), 'someone else\'s edit\n');
+  json(run(f.repo, f.home, ['task', 'start', '--intent', 'x']));
+  git(f.repo, 'checkout', '-q', '--', 'a.js'); // tidied before the branch is cut
+  json(run(f.repo, f.home, ['task', 'branch', 'feat/x']));
+  assert.equal(json(run(f.repo, f.home, ['task', 'show'])).task.baseline.clean, false);
+  writeFileSync(join(f.repo, 'a.js'), 'const a = 2;\n');
+  json(run(f.repo, f.home, ['task', 'own', 'a.js']));
+  passAll(f);
+  assert.ok(json(run(f.repo, f.home, ['task', 'commit-check'])).reasons.includes('baseline-dirty'));
+});
+
+// Codex rotated review round 2, F6: a reused branch records its PR target too, so delivery can
+// finish; with no proven base OID, a destination that lacks the branch still refuses.
+test('task branch (reused) → records the base name for the PR; publish passes on an existing remote branch', () => {
+  const f = makeRepo();
+  adopt(f);
+  git(f.repo, 'switch', '-q', '-c', 'feat/y');
+  git(f.repo, 'push', '-q', 'origin', 'feat/y');
+  json(run(f.repo, f.home, ['task', 'start', '--intent', 'x']));
+  const b = json(run(f.repo, f.home, ['task', 'branch', 'feat/y']));
+  assert.deepEqual([b.reused, b.base.name, b.base.oid], [true, 'main', null]);
+  writeFileSync(join(f.repo, 'a.js'), 'const a = 2;\n');
+  json(run(f.repo, f.home, ['task', 'own', 'a.js']));
+  passAll(f);
+  assert.equal(json(run(f.repo, f.home, ['task', 'commit-check'])).ok, true);
+  git(f.repo, 'add', '--', 'a.js');
+  git(f.repo, 'commit', '-q', '-m', 'feat: x');
+  assert.equal(json(run(f.repo, f.home, ['task', 'committed'])).ok, true);
+  const p = json(run(f.repo, f.home, ['goal-publish', '--format=json']));
+  assert.deepEqual([p.ok, p.base.name], [true, 'main'], JSON.stringify(p));
+  execFileSync('git', ['-C', f.remote, 'update-ref', '-d', 'refs/heads/feat/y']);
+  assert.ok(json(run(f.repo, f.home, ['goal-publish', '--format=json'])).reasons.includes('ahead-unknown'), 'no proven base OID to publish from');
 });
 
 test('policy-decide --if-pending → an installer never overrides a recorded answer, declined included', () => {

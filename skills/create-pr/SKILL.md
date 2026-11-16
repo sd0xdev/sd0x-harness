@@ -17,8 +17,8 @@ allowed-tools: Bash(git:*), Bash(gh:*), Bash(mktemp:*), Bash(rm:*), Bash(bash:*)
 - `--update`: Force update mode (re-generate title/body for existing PR)
 - `--dry-run`: Show command without executing (default). Scopes to mutating `gh` calls — the Step 1 `git fetch --prune origin` still runs, so the preview reflects the server's real refs
 - `--execute`: Actually create/update the PR (requires user confirmation — except under `--goal-publish`, § Goal publish)
-- `--draft`: Create the PR as a draft. Never applied to an existing PR: a ready PR is never turned back into a draft
-- `--goal-publish`: The goal delivery sequence's call (§ Goal publish) — execute without the confirmation, as a draft, after a verified push
+- `--draft`: Create the PR as a draft. Never applied to an existing PR: a ready PR is never turned back into a draft. **Rejected** with `--stack` — a stacked chain's readiness belongs to its own publishers (`/gh-stack --open` marks drafts ready), so the combination stops before mode dispatch
+- `--goal-publish`: The goal delivery sequence's call (§ Goal publish) — execute without the confirmation, as a draft, after a verified push. **Rejected** with `--stack`, for the same reason
 - No args: use current branch → default target, dry-run mode. Auto-detects existing PR → update mode
 
 ## Workflow
@@ -356,6 +356,7 @@ pushed OID, never on its own initiative, and changes only what follows:
 | Step | Under `--goal-publish` |
 |------|------------------------|
 | Confirmation (Steps 5a, 7) | Not asked: the goal, the adopted policy and the verified push are the credential. Re-check all three — the goal is still active, the policy still reads `goal_publish: draft` (and the user has not said "no PR"), and the task record holds the pushed OID for this head; otherwise stop |
+| Base | `--base` is passed and equals the task record's base (`task.base.name` — `main`, or `## Base Branch`); a missing or different base stops before anything is read or created, so a PR never targets a branch the task was not cut from |
 | Existing PR (Step 5) | `gh pr list --head <b> --base <base> --state all`: one open PR → update it; none → create a **draft**; closed, merged or more than one → stop and report, never reopen or guess |
 | Draft | New PRs only. An existing ready PR stays ready; a draft is never marked ready (not to start CI either) |
 | Body (Step 5a) | Updated only when the current body's SHA-256 equals the one recorded by `task record --pr-body-sha` at this flow's last write; otherwise someone edited it — leave the body, update nothing else silently, and report it. Record the new hash after each write |
@@ -364,8 +365,12 @@ pushed OID, never on its own initiative, and changes only what follows:
 | Sanitization | Step 4b and Step 7b unchanged |
 
 Afterwards read back `headRefOid` (`gh pr view <n> --json number,url,isDraft,headRefOid,baseRefOid`);
-it must equal the pushed OID. Record `task record --pr <n> --pr-url <url> --pr-base <baseRefOid> --delivery pr-open`
-after every create or update, then CI
+it must equal the pushed OID. Record `task record --pr <n> --pr-url <url> --delivery pr-open` after
+every create or update. The base is recorded only for a **new** PR, and only from a read taken before
+the create: the base branch's tip (`gh api repos/{owner}/{repo}/branches/<base> --jq .commit.sha`),
+which the created PR's `baseRefOid` must equal — then `task record --pr-base <oid> --for <pushed>`;
+otherwise record nothing (the readback stays `unknown`). An existing PR's base was recorded before the
+push (`/push-ci` § Goal publish step 1), and an update never re-records it. Then CI
 is read with `scripts/ci-readback.js` (authorization contract, Goal publish step 4) — not by this
 skill.
 

@@ -129,11 +129,26 @@ function branchReasons(task, branch, protectedStatus, head) {
 // The candidate is the WHOLE dirty set: v1 never commits a subset, because a subset's tree is not
 // the tree the gates verified. Ownership is the task's own declaration (`task own`), checked against
 // what git reports; a path nobody declared — another agent's file, a stray artefact — stops it.
-function commitCheck({ task, policy, branch, protectedStatus, head, entries, gatesPassed, digest }) {
+//   batch           { descends, commitsPlanned } when a grouped commit is under way: HEAD left the
+//                   task's tip; descends says whether the tip is still its ancestor, commitsPlanned
+//                   whether every commit since sets only planned paths to their checked content. With the batch's check open
+//                   (`task.last_check`), HEAD may move only by the batch's own groups: the effective
+//                   tree must still digest to what that check recorded and every remaining dirty path
+//                   must be one of its candidates — anything else is `batch-broken`, never `head-moved`
+//                   silently accepted
+function commitCheck({ task, policy, branch, protectedStatus, head, entries, gatesPassed, digest, batch = null }) {
   const reasons = [];
   if (!task || task.status !== 'active') reasons.push('no-task');
   if (policy.auto_commit !== 'on') reasons.push('policy-off');
-  reasons.push(...branchReasons(task, branch, protectedStatus, head));
+  let br = branchReasons(task, branch, protectedStatus, head);
+  if (task && task.last_check && br.includes('head-moved')) {
+    const planned = new Set(task.last_check.candidate || []);
+    const intact = Boolean(batch && batch.descends && batch.commitsPlanned) && digest !== null && digest === task.last_check.digest
+      && entries.every((e) => planned.has(e.path));
+    br = br.filter((r) => r !== 'head-moved');
+    if (!intact) br.push('batch-broken');
+  }
+  reasons.push(...br);
   if (task && !task.baseline.clean) reasons.push('baseline-dirty');
   const candidate = entries.map((e) => e.path);
   if (!candidate.length) reasons.push('nothing-to-do');

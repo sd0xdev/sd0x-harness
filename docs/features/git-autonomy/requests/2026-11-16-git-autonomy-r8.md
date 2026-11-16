@@ -99,6 +99,37 @@ on the follow-up, results recorded after each round finished:
 - Doc review batch 1, rotated to a fresh `contract-neutral-reviewer` thread after three replies:
   ✅ Mergeable, coherence fixes, ✅ Mergeable. Batch 2: ✅ Mergeable.
 
+### Release review (2026-11-16)
+
+Before marking PR #31 ready, the plugin version moved 5.1.1 → 5.1.2 (`/bump-version`, patch). The
+native Codex branch review could not run: two dispatches both failed with Codex's own
+"refresh token has expired" error, so the code gate fell back to `strict-reviewer` with the branch
+template. It found a P1 — `gh pr checks --required` lists only checks that have reported, so a
+required check configured for the base but not reported yet could read as a pass — fixed by
+`required_names` (the configured set, from classic protection and rulesets; unread → `unknown`,
+configured but unreported → `pending`); and a P2 — smart-commit's Auto commit path calls `node`
+without a `Bash(node:*)` grant — fixed.
+
+Results, recorded after each round finished: the re-review (`strict-reviewer`, same template) found
+that the new grant broke two exact grant pins (P1) and that a partial configured-set read was not
+specified as fail-closed (P2); both fixed and pinned, then ✅ Ready. `/precommit` at that code tree:
+`## Overall: ✅ PASS` — 5202 tests, 5194 pass, 0 fail, 8 skipped. Doc review
+(`contract-neutral-reviewer`): ✅ Mergeable twice, its `gh api` placeholder finding fixed in between.
+The native Codex review then ran (thread `01a1e47c…`, after the user's Codex credentials were
+refreshed): round 1 ⛔ Blocked with five P1 — the publish range read from the cached tracking ref
+instead of the push destination (F1), `goal-publish` answering with a re-read HEAD (F2), runs grouped
+by workflow display name (F3), the PR base re-recorded on every update (F4), and grouped commits
+unable to re-check between groups (F5). Fixes: `ls-remote` against `origin`'s one push URL and one
+captured HEAD the push is bound to; `workflowDatabaseId` grouping (`workflow-unidentified` →
+`unknown`); the base read before the triggering event and bound with `--pr-base <oid> --for <head>`
+(`base_for` must equal the pushed OID); batch progress whose every intermediate commit must set only
+planned paths to their checked content (`batch-broken`, `foreign-commit`). Round 2 ⛔ Blocked: F4's
+first record could already be wrong, and a reverted foreign commit could ride the batch (F6) — both
+fixed as above. Round 3 ⛔ Blocked: a non-ASCII path was planned as a deletion (F7) — the plan lookup
+now uses the digest's byte keys, with a task-level regression that fails on the old lookup. Round 4
+✅ Ready, `gate_reason=NONE`. `/precommit` at that code tree: `## Overall: ✅ PASS` — 5211 tests,
+5203 pass, 0 fail, 8 skipped.
+
 ## References
 
 - Contract: `skills/push-ci/references/authorization-contract.md` § Task autonomy

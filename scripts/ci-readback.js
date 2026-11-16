@@ -8,12 +8,18 @@
 // Input (JSON on stdin):
 //   pushed   the OID the push published (verified against the remote)
 //   pr       `gh pr view <n> --json number,state,isDraft,headRefOid,baseRefOid`
-//   base     the PR's base OID recorded when this flow last created or updated it (`task record
-//            --pr-base`). Required for a pass: without it the merge tree the run tested is unknown
-//   runs     `gh run list --branch <b> --json databaseId,headSha,event,status,conclusion,workflowName,url`
-//   required `gh pr checks <n> --required --json name,bucket` — the branch-protection required
-//            checks by their check (job) names, for the PR's current head (whose OID `pr` binds).
-//            `[]` = none configured. Omitted = not read, which never passes
+//   base     the PR's base OID read immediately before the event that triggered the run for `pushed`
+//            (`task record --pr-base <oid> --for <head>`). Required for a pass: without it the merge
+//            tree the run tested is unknown
+//   base_for the head that base was recorded for (`pr-base-for`); it must equal `pushed`
+//   runs     `gh run list --branch <b> --commit <pushed> --json databaseId,workflowDatabaseId,headSha,event,status,conclusion,workflowName,url`
+//            — grouped by workflowDatabaseId: display names are not unique and can be absent
+//   required `gh pr checks <n> --required --json name,bucket` — the required checks that have
+//            REPORTED for the PR's head, by check (job) name. Omitted = not read, never a pass
+//   required_names  the required check names CONFIGURED for the PR's base branch: classic
+//            protection's `required_status_checks.contexts` (`gh api repos/{owner}/{repo}/branches/
+//            <base>`) ∪ rulesets' required_status_checks contexts (`…/rules/branches/<base>`). A
+//            configured name not yet reported is pending. Omitted (or either read failed) = never a pass
 //   confirm  the `next_confirm` object a previous read returned (`{ ids, at }`); see confirmation()
 //
 // Output: `{ verdict, reasons, runs, next_confirm }` — `next_confirm` is what the next read passes
@@ -50,20 +56,24 @@ function confirmation(confirm, ids, now) {
   return null;
 }
 
-function classify({ pushed, pr, base = null, runs = [], required, confirm } = {}, { now = Date.now() } = {}) {
+function classify({ pushed, pr, base = null, base_for = null, runs = [], required, required_names, confirm } = {}, { now = Date.now() } = {}) {
   const reasons = [];
   if (!/^[0-9a-f]{40,64}$/.test(pushed || '')) return { verdict: 'unknown', reasons: ['no-pushed-oid'], runs: [] };
   if (!pr || typeof pr.number !== 'number') return { verdict: 'unknown', reasons: ['no-pr'], runs: [] };
   if (pr.state !== 'OPEN') reasons.push(`pr-${String(pr.state).toLowerCase()}`);
   if (pr.headRefOid !== pushed) return { verdict: 'stale', reasons: [...reasons, 'pr-head-moved'], runs: [] };
   if (!/^[0-9a-f]{40,64}$/.test(base || '')) reasons.push('no-recorded-base');
+  else if (base_for !== pushed) reasons.push('base-unbound');
   else if (pr.baseRefOid !== base) reasons.push('base-moved');
   // Latest run per workflow+event for exactly this head: an older green run for another SHA, or a
   // re-run superseded by a newer one, is not evidence for this delivery.
   const mine = (Array.isArray(runs) ? runs : []).filter((r) => r.headSha === pushed && EVENTS.has(r.event));
+  // A run without a stable workflow identity cannot be told apart from another workflow's run of the
+  // same name, so it can neither stand in for one nor be dropped as superseded: the read is unknown.
+  if (mine.some((r) => !Number.isSafeInteger(r.workflowDatabaseId))) return { verdict: 'unknown', reasons: [...reasons, 'workflow-unidentified'], runs: [] };
   const latest = new Map();
   for (const r of mine) {
-    const k = `${r.workflowName}|${r.event}`;
+    const k = `${r.workflowDatabaseId}|${r.event}`;
     if (!latest.has(k) || r.databaseId > latest.get(k).databaseId) latest.set(k, r);
   }
   const chosen = [...latest.values()].map((r) => ({
@@ -75,9 +85,18 @@ function classify({ pushed, pr, base = null, runs = [], required, confirm } = {}
   if (!chosen.length) return { verdict: 'none', reasons: [...reasons, 'zero-runs'], runs: [], next_confirm };
   // Required checks are judged by their own bucket — check names are job names, not workflow names.
   let reqStates = [];
+  // `gh pr checks --required` lists only checks that already reported, so the configured set is
+  // what tells "none required" from "required but not reported yet" (a Draft-gated or slow check).
+  const configured = Array.isArray(required_names) && required_names.every((n) => typeof n === 'string') ? new Set(required_names) : null;
   if (!Array.isArray(required)) reasons.push('required-unread');
-  else if (!required.length) reasons.push('no-required-checks');
-  else reqStates = required.map((c) => BUCKET[c && c.bucket] || 'unknown');
+  else if (!configured) reasons.push('required-config-unread');
+  else {
+    reqStates = required.map((c) => BUCKET[c && c.bucket] || 'unknown');
+    const reported = new Set(required.map((c) => c && c.name));
+    const missing = [...configured].filter((n) => !reported.has(n));
+    if (missing.length) { reqStates.push('pending'); reasons.push('required-missing'); }
+    if (!configured.size && !required.length) reasons.push('no-required-checks');
+  }
   const states = new Set([...chosen.map((c) => c.state), ...reqStates]);
   let verdict;
   if (states.has('fail')) verdict = 'fail';
@@ -87,7 +106,7 @@ function classify({ pushed, pr, base = null, runs = [], required, confirm } = {}
   else verdict = 'pass';
   const unconfirmed = confirmation(confirm, ids, now);
   if (verdict === 'pass' && reasons.includes('base-moved')) verdict = 'stale';
-  else if (verdict === 'pass' && (reasons.includes('no-recorded-base') || reasons.includes('required-unread'))) verdict = 'unknown';
+  else if (verdict === 'pass' && ['no-recorded-base', 'base-unbound', 'required-unread', 'required-config-unread'].some((r) => reasons.includes(r))) verdict = 'unknown';
   else if (verdict === 'pass' && unconfirmed) { verdict = unconfirmed === 'confirm-invalid' ? 'unknown' : 'pending'; reasons.push(unconfirmed); }
   if (verdict === 'pass' && pr.state !== 'OPEN') verdict = 'unknown';
   return { verdict, reasons, runs: chosen, next_confirm };

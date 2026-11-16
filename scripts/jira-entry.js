@@ -62,8 +62,12 @@ function plan({ project, type = 'Task', summary, description = '', base = 'main'
   const token = `sd0x-task:${crypto.createHash('sha256').update(`${taskId || ''}|${project}|${summary}`).digest('hex').slice(0, 12)}`;
   const body = `${String(description).trimEnd()}\n\n${token}`;
   const fields = { project, type, summary: String(summary || ''), description: body, base };
+  // A blocked plan returns no field text at all: the CLI prints this object, and a secret the scan
+  // found must not reach captured tool output just because the create was refused. Findings carry
+  // rule, field and line only.
+  if (findings.length) return { ok: false, errors, findings, token: null, plan_hash: null, fields: null };
   const planHash = crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex');
-  return { ok: errors.length === 0 && findings.length === 0, errors, findings, token, plan_hash: planHash, fields };
+  return { ok: errors.length === 0, errors, findings, token, plan_hash: planHash, fields };
 }
 
 const isoOk = (s) => /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2})?$/.test(s);

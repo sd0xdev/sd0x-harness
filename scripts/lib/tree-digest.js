@@ -459,7 +459,9 @@ function computeTreeState(repoRoot, opts = {}) {
     };
   }
 
-  return { planes, partialReasons };
+  // `withEntries`: the per-path `{mode, oid}` map the digests were computed from, for a caller that
+  // must later compare individual commits against exactly this read (git-autonomy R8 batches).
+  return opts.withEntries ? { planes, partialReasons, entries } : { planes, partialReasons };
 }
 
 function digestRecords(list) {

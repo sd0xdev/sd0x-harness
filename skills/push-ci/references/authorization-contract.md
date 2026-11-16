@@ -149,7 +149,12 @@ tree is clean, and the final committed tree (every path, mode and object) digest
 the check recorded from its own single tree read. Otherwise the commit stays local,
 the task is marked unverified (Goal publish refuses it) and the problem is reported. Commits may be
 grouped, but only the final tree is the verified one: the record says so, and no intermediate commit
-is described as verified. Identity and signing HALTs, the attribution guard, `verify-last` and every
+is described as verified. The check runs again before every group: inside the batch, HEAD may have
+moved only by the batch's own groups — every commit since the task's tip has one parent and sets only
+planned paths, each to exactly the content the first check recorded; the work tree still digests to
+what that check recorded; every remaining path is one it planned — and anything else reads
+`batch-broken`. `task committed` applies the same per-commit rule (`foreign-commit`), so a foreign
+commit, even one later reverted, is never recorded as the task's and never published. Identity and signing HALTs, the attribution guard, `verify-last` and every
 judgement question are unchanged, and this path never adds the `--ai-co-author` trailer.
 
 When any condition fails, nothing is committed automatically and no subset is committed: the ordinary
@@ -167,7 +172,16 @@ questions when **all** hold, each re-checked before each push:
 3. **The publish check passes**: `review-state.js goal-publish --format=json` returns `ok: true` — the
    task's commits verified, a clean tree, the task branch, `protected-branches.sh` exit 1 (unknown
    refuses), something ahead and every commit ahead made by this task, every plane the ahead content
-   needs passed.
+   needs passed. "Ahead" is read from the push destination itself — `origin`'s one push URL, by
+   `ls-remote`, never the cached `refs/remotes/origin/<branch>`, refusing a URL that a chained
+   `url.*.insteadOf` would rewrite again — and the answer names the `branch`, the one `head` and the
+   destination digest it checked; the push is bound to exactly those (`/push-ci` § Goal publish). A destination
+   rewound by someone else after this check is not caught by a plain push — binding it would need a
+   lease, a force form this credential never uses — so the check runs immediately before the push.
+   A branch the destination does not have yet publishes from the task's base only when the
+   destination's base branch already holds that base (its live tip is a commit we have, with the base
+   in its history); an empty or unrelated destination is refused, so history no check counted never
+   rides along.
 4. **The push is plain and bound**: `/push-ci` Phase 0 reports `PROTECTED=[no]`,
    `FORCE_WITH_LEASE=[false]`, one push destination with its digest and no `receivepack`. A plain push
    cannot rewrite: git refuses a non-fast-forward itself.
@@ -188,22 +202,41 @@ The sequence — each step only after the previous one is confirmed:
    guard runs unchanged; afterwards the remote branch OID is read back and must equal the pushed OID
    (`task record --pushed <oid>`). CI is not watched here: a workflow that runs only on
    `pull_request` has nothing to show until the PR exists.
-3. `/create-pr --execute --draft --goal-publish`: an open PR for the same head and base is reused and
+3. `/create-pr --execute --draft --goal-publish --base <the task's base>` (the base the task branch was
+   cut from — `main` or `## Base Branch`; `/create-pr` refuses any other): an open PR for the same head and base is reused and
    updated; none → a Draft PR is created; a closed or merged PR, or more than one, stops and is
    reported. An existing ready PR is never turned back into a draft, a draft is never marked ready,
    and a body someone edited by hand is never overwritten. An unclear create is read back by head
-   and base before anything is created again. After each create or update the PR's base OID is
-   recorded (`task record --pr-base <oid>`).
-4. CI readback: `node scripts/ci-readback.js` over the PR, the runs for the pushed OID and the
-   required checks (`gh pr checks <n> --required --json name,bucket`, by job name). Only a completed
+   and base before anything is created again. The base a head's CI is judged against is read
+   immediately **before the event that triggers its run** and bound to that head: for an existing PR,
+   its `baseRefOid` before the push (`/push-ci` § Goal publish step 1); for a new PR, the base
+   branch's tip before the create, which the created PR's `baseRefOid` must then equal (otherwise the
+   base is unknown and nothing is recorded) — `task record --pr-base <oid> --for <head>`. It is never
+   re-recorded for that head, so a base that moves after the trigger reads `stale`, and a later
+   metadata update cannot relabel an old run.
+4. CI readback: `node scripts/ci-readback.js` over the PR, the runs for the pushed OID (with their
+   `workflowDatabaseId`: runs are grouped by workflow identity, since display names repeat; a run
+   without one reads `unknown`), the
+   required checks that reported (`gh pr checks <n> --required --json name,bucket`, by job name) and
+   the required checks configured for the PR's base (`required_names`: classic protection's
+   `required_status_checks.contexts` from `gh api repos/{owner}/{repo}/branches/<base>` together
+   with the rulesets' required status checks from `gh api repos/{owner}/{repo}/rules/branches/<base>`
+   — `gh` fills in `{owner}` and `{repo}` itself; the rulesets' names are the
+   `.parameters.required_status_checks[].context` of their `required_status_checks` rules; both read
+   with read access). `gh pr checks` lists only checks that already reported, so a configured check
+   not reported yet — one gated on ready-for-review, or a slow external status — is pending, never
+   passed over. If either of those two configured-set reads fails, `required_names` is omitted
+   (it reads `unknown`) — never a partial union. Only a completed
    success for exactly that head, on the base recorded at PR time, with every required check passing
-   and the same runs seen on two reads at least a minute apart, is a pass — no recorded base or
-   unread required checks reads `unknown`. The classifier enforces the second read itself: each read
+   and the same runs seen on two reads at least a minute apart, is a pass — no recorded base, or
+   either required-check read missing, reads `unknown`. The classifier enforces the second read itself: each read
    returns `next_confirm` (the run ids it saw and when), the next read passes it back as `confirm`,
    and a missing, malformed, mismatched or under-a-minute confirmation is never a pass, measured on
-   the script's own clock. `gh pr checks --required` exits 1 with stderr beginning "no required
-   checks reported" when the branch has none: that message, and only that one, reads as `[]`
-   (measured on PR #31); any other failure leaves the checks unread. Pending, skipped, zero runs, a
+   the script's own clock. The readback passes the recorded `pr-base` as `base` and its `pr-base-for`
+   as `base_for`; a base recorded for another head reads `unknown`. `gh pr checks --required` exits 1 with stderr beginning "no required
+   checks reported" when no required check has reported — none configured, or none run yet: that
+   message, and only that one, reads as `[]` (measured on PR #31), and the configured set decides
+   which; any other failure leaves the checks unread. Pending, skipped, zero runs, a
    moved head or base, or unknown are each reported as what they are. A Draft PR is never marked
    ready to make CI start.
 5. A CI failure this task caused is fixed, its gates re-run, the fix committed under Auto commit, and

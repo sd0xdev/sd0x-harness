@@ -1,7 +1,7 @@
 ---
 name: smart-commit
 description: "Smart batch commit. Analyzes uncommitted changes, groups by cohesion, generates commit messages matching project style. Default: output git commands for manual execution. With --execute: directly run git add + git commit (requires user approval, except under a user-set goal — see Goal mode — or the adopted task-autonomy policy — see Auto commit). Use when: user says 'commit', 'batch commit', 'prepare commit', 'write commit message', or /smart-commit"
-allowed-tools: Bash(git:*), Bash(bash:*), Bash(env:*), Read, Write, Grep, Glob, AskUserQuestion
+allowed-tools: Bash(git:*), Bash(bash:*), Bash(env:*), Bash(node:*), Read, Write, Grep, Glob, AskUserQuestion
 ---
 
 # Smart Commit
@@ -111,7 +111,11 @@ around it (task start, ownership, branch) is `references/task-contract.md`.
    task with `task own` — and replaces the live-status selection of Step 3. Any `reasons` entry
    (`baseline-dirty`, `unowned`, `staged`, `sensitive`, `gates-open`, `protected`, …) means **this path
    does not run**: the ordinary per-use approval does, with the reason stated. Never commit a subset,
-   and never stash, reset or `git add -p` to make the check pass.
+   and never stash, reset or `git add -p` to make the check pass. In a plan with more than one group
+   the check runs again before each later group: inside the batch it answers with the remaining
+   candidates, and `batch-broken` stops the batch there: a commit since the task's tip that is not one
+   of the batch's own groups (another parent count, a path the check did not plan, content other than
+   what it recorded), or a tree that no longer digests to what it recorded.
 3. **Print, then commit.** The plan is printed, not asked, headed by
    `[AUTO_COMMIT] task=<id> | branch=<branch> | digest=<digest> | <ISO8601>`; each group stages
    exactly its candidates. When the plan has more than one group, it adds `final tree verified; the
@@ -850,7 +854,7 @@ trailer is added; with it, exactly one is: `Co-Authored-By: Claude <noreply@anth
 
 Each basename carries the skill name because `/install-scripts` flattens every skill's `scripts/*` into one `.claude/scripts/` directory — a future skill shipping `execute.sh` would otherwise overwrite the script that enforces the attribution anchor. That flattening is also why `smart-commit-execute.sh` and `smart-commit-inspect.sh` are both located installed-copy-first: in a consuming project `.claude/scripts/` is the only place either one exists.
 
-> **Note**: `--execute` runs the script above; it is not a procedure Claude assembles from bash in a reference document. That is why this skill needs no `Bash(mktemp:*)` or `Bash(rm:*)` grant — the only shell command it issues for `--execute` is `/bin/bash -p -- "$EXECUTE" …`, where `$EXECUTE` was assigned by the locator **in that same fence**. Why that exact spelling: [execute-mode.md § Why the entrypoint is spelled `/bin/bash -p --`](references/execute-mode.md).
+> **Note**: `--execute` runs the script above; it is not a procedure Claude assembles from bash in a reference document. That is why this skill needs no `Bash(mktemp:*)` or `Bash(rm:*)` grant — the commit itself runs only through `/bin/bash -p -- "$EXECUTE" …`, where `$EXECUTE` was assigned by the locator **in that same fence**; the other shell calls on the `--execute` path are the `review-state.js` checks (`goal-commit`, `task commit-check`, `task committed`, hence `Bash(node:*)`) and the prefixed `git add` of Step 5c.2. Why that exact spelling: [execute-mode.md § Why the entrypoint is spelled `/bin/bash -p --`](references/execute-mode.md).
 
 ## Examples
 

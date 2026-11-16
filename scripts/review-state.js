@@ -70,9 +70,9 @@ function note(plane, verdict) {
   process.stdout.write(`[REVIEW_STATE] ${plane} ${JSON.stringify(slot)}\n`);
 }
 
-function computeCheck() {
+function computeCheck(opts = {}) {
   const root = repoRoot();
-  const tree = computeTreeState(root);
+  const tree = computeTreeState(root, opts);
   const dir = stateDir(root);
   const planes = {};
   for (const [plane, content] of Object.entries(PLANES)) {
@@ -625,6 +625,10 @@ function taskBranch(name, baseArg) {
   const cur = currentBranch(root);
   if (cur === name) {
     t.branch = name;
+    // A reused branch still has a PR target: the resolved base NAME (`--base`, `## Base Branch`, else
+    // main), which /create-pr's Goal publish requires. No OID is invented for it — a destination
+    // that lacks this branch then has no proven base to publish from, and the publish check refuses.
+    if (!t.base) t.base = { name: base, oid: null, reused: true };
     saveTask(root, t);
     return out({ ok: true, reused: true, branch: name, base: t.base });
   }
@@ -640,7 +644,9 @@ function taskBranch(name, baseArg) {
   if (gitOut(root, ['switch', '--quiet', '--no-track', '-c', name, oid.trim()]) === null) return out({ ok: false, reason: 'switch-failed', branch: name });
   t.branch = name;
   t.base = { name: base, oid: oid.trim(), fetched_at: new Date().toISOString() };
-  t.baseline = { head: oid.trim(), clean: true, entries: [] };
+  // The start's eligibility is the task's, not the branch's: a task that started on a dirty or
+  // staged tree never auto-commits, however tidy the tree is when its branch is cut.
+  t.baseline = { ...t.baseline, head: oid.trim() };
   t.head_chain = [oid.trim()];
   saveTask(root, t);
   out({ ok: true, reused: false, branch: name, base: t.base });
@@ -650,25 +656,68 @@ function planesPassed(planes, contents) {
   return contents.flatMap((c) => PLANES_BY_CONTENT[c]).every((p) => planes[p].passed);
 }
 
+// Every commit in tip..head must be one a batch group could have made: one parent, touching only
+// planned paths, each set to exactly the content the batch's check recorded (a deletion where it
+// recorded none). Net-tree equality and ancestry alone cannot tell a group from a foreign commit
+// that was later reverted, and Goal publish takes every OID this accepts as the task's own.
+function batchCommitsPlanned(root, tip, head, planned) {
+  if (!planned || typeof planned !== 'object') return false;
+  const revs = gitOut(root, ['rev-list', '--parents', `${tip}..${head}`]);
+  if (revs === null) return false;
+  for (const line of revs.split('\n').filter(Boolean)) {
+    const [c, ...parents] = line.split(' ');
+    if (parents.length !== 1) return false;
+    const d = gitOut(root, ['diff-tree', '-r', '-z', '--no-commit-id', '--no-renames', parents[0], c]);
+    if (d === null) return false;
+    const f = d.split('\0');
+    for (let i = 0; i + 1 < f.length; i += 2) {
+      if (!f[i].startsWith(':')) return false;
+      const [, newMode, , newOid, status] = f[i].slice(1).split(' ');
+      const p = f[i + 1];
+      if (!Object.prototype.hasOwnProperty.call(planned, p)) return false;
+      const want = planned[p];
+      if (status === 'D' ? want !== null : want !== `${newMode} ${newOid}`) return false;
+    }
+  }
+  return true;
+}
+
 function commitCheckCmd(format) {
-  const { planes, root, tree } = computeCheck();
+  const { planes, root, tree } = computeCheck({ withEntries: true });
   const task = loadTask(root);
   const entries = statusEntries(root);
   if (entries === null) die('git status failed');
   const branch = currentBranch(root);
   const dirty = ['code', 'doc'].filter((p) => tree.planes[p].partial || tree.planes[p].dirty.length > 0);
   const digest = combinedDigest(tree);
+  const head = headOid(root);
+  const tip = task ? task.head_chain[task.head_chain.length - 1] : null;
+  const batch = task && task.last_check && head && tip && head !== tip
+    ? {
+      descends: gitOut(root, ['merge-base', '--is-ancestor', tip, head]) !== null,
+      commitsPlanned: batchCommitsPlanned(root, tip, head, task.last_check.planned),
+    } : null;
   const r = TA.commitCheck({
     task, policy: currentPolicy(root), branch, protectedStatus: branch ? protectedStatus(root, branch) : 2,
-    head: headOid(root), entries, gatesPassed: planesPassed(planes, dirty), digest,
+    head, entries, gatesPassed: planesPassed(planes, dirty), digest, batch,
   });
   const result = { ...r, task_id: task ? task.id : null, branch, digest };
   if (r.ok) {
     // The digest the gates passed at, from the same single tree read — nothing is read after it.
     // `task committed` requires the committed tree to digest to exactly this, so a write during or
     // after the check, an added or deleted path or a mode change cannot ride on this pass.
-    task.last_check = { digest, time: new Date().toISOString() };
-    saveTask(root, task);
+    // A check inside an open batch keeps the batch's own record: its digest and planned candidates
+    // are what every later group, and `task committed`, are held to.
+    if (!batch) {
+      // tree-digest keys its entries by raw path bytes held as latin1 strings; status paths here are
+      // UTF-8 strings, so the lookup converts (a miss would read as a planned deletion — fail-closed).
+      const planned = Object.fromEntries(r.candidate.map((p) => {
+        const e = tree.entries && tree.entries.get(Buffer.from(p, 'utf8').toString('latin1'));
+        return [p, e ? `${e.mode} ${e.oid}` : null];
+      }));
+      task.last_check = { digest, candidate: r.candidate, planned, time: new Date().toISOString() };
+      saveTask(root, task);
+    }
   }
   emit(result, format, (o) => `[AUTO_COMMIT_CHECK] ok=${o.ok} reasons=${o.reasons.join(',') || 'none'} branch=${o.branch || '-'} candidates=${o.candidate.length}`);
 }
@@ -689,6 +738,7 @@ function taskCommitted() {
   const entries = statusEntries(root);
   const problems = [];
   if (entries === null || entries.length) problems.push('not-clean');
+  if (!batchCommitsPlanned(root, tip, head, t.last_check.planned)) problems.push('foreign-commit');
   const at = digestOfRev(root, head);
   if (!at) problems.push('tree-unreadable');
   else if (combinedDigest({ planes: { code: { digest: at.code }, doc: { digest: at.doc } } }) !== t.last_check.digest) problems.push('tree-mismatch');
@@ -703,20 +753,52 @@ function taskCommitted() {
   out({ ok: problems.length === 0, problems, commits: oids, head });
 }
 
-// Ahead of what the remote already holds for this branch, else of the task's recorded base.
-function publishAhead(root, branch, task) {
-  const remote = gitOut(root, ['rev-parse', '--verify', '-q', `refs/remotes/origin/${branch}`]);
-  const from = remote ? remote.trim() : task && task.base ? task.base.oid : null;
-  if (!from) return null;
-  const count = gitOut(root, ['rev-list', '--count', `${from}..HEAD`]);
-  if (count === null) return null;
-  const names = gitOut(root, ['log', '--format=', '--name-only', '--no-renames', '--diff-merges=first-parent', '-z', `${from}..HEAD`]);
-  const oids = gitOut(root, ['rev-list', `${from}..HEAD`]);
+// What the push would publish: the commits of `head` the DESTINATION does not already hold. The
+// destination is `origin`'s push URL (exactly one, as push-ci Phase 0 requires), read live with
+// ls-remote — never the cached `refs/remotes/origin/<branch>`, which can be stale or name another
+// repository than the push goes to. Its tip must be a local ancestor of `head`; a branch the
+// destination lacks publishes from the task's fetched base. Anything unresolvable → null (refuse).
+function publishAhead(root, branch, task, head) {
+  const urls = gitOut(root, ['remote', 'get-url', '--push', '--all', 'origin']);
+  const list = urls ? urls.split('\n').filter(Boolean) : [];
+  if (list.length !== 1) return null;
+  // The URL above already went through one `url.*.insteadOf` pass; handing it to ls-remote applies
+  // another. A chained rule would make this read a repository the push never contacts, so the
+  // expansion must be the identity (push-ci Phase 2's second-rewrite refusal, same detector).
+  const again = gitOut(root, ['ls-remote', '--get-url', '--', list[0]]);
+  if (again === null || again.trim() !== list[0]) return null;
+  const adv = gitOut(root, ['ls-remote', '--upload-pack=git-upload-pack', '--', list[0], `refs/heads/${branch}`]);
+  if (adv === null) return null;
+  const tipOf = (text, ref) => {
+    const l = text.split('\n').find((x) => x.endsWith(`\t${ref}`));
+    return l ? l.split('\t')[0] : null;
+  };
+  const remoteTip = tipOf(adv, `refs/heads/${branch}`);
+  // A branch the destination lacks publishes from the task's base only if the DESTINATION already
+  // holds that base: its base branch's live tip must be a commit we have, with the base in its
+  // history. An empty or unrelated destination would otherwise receive history no check counted.
+  if (!remoteTip) {
+    if (!task || !task.base || !TA.validBranch(task.base.name)) return null;
+    const advBase = gitOut(root, ['ls-remote', '--upload-pack=git-upload-pack', '--', list[0], `refs/heads/${task.base.name}`]);
+    const destBase = advBase === null ? null : tipOf(advBase, `refs/heads/${task.base.name}`);
+    if (!destBase || gitOut(root, ['cat-file', '-e', `${destBase}^{commit}`]) === null) return null;
+    if (gitOut(root, ['merge-base', '--is-ancestor', task.base.oid, destBase]) === null) return null;
+  }
+  const from = remoteTip || (task && task.base ? task.base.oid : null);
+  if (!from || !/^[0-9a-f]{40,64}$/.test(from)) return null;
+  if (gitOut(root, ['merge-base', '--is-ancestor', from, head]) === null) return null;
+  const oids = gitOut(root, ['rev-list', `${from}..${head}`]);
+  const names = gitOut(root, ['log', '--format=', '--name-only', '--no-renames', '--diff-merges=first-parent', '-z', `${from}..${head}`]);
   if (names === null || oids === null) return null;
+  const list2 = oids.split('\n').filter(Boolean);
   return {
-    commits: Number(count.trim()),
-    oids: oids.split('\n').filter(Boolean),
+    commits: list2.length,
+    oids: list2,
     files: [...new Set(names.split('\0').map((n) => n.replace(/^\n+/, '')).filter(Boolean))],
+    remoteTip,
+    // The destination's identity as push-ci Phase 0 digests it (SHA-256 of the raw URL), so the push
+    // can be bound to the destination this check counted against.
+    destDigest: crypto.createHash('sha256').update(list[0]).digest('hex'),
   };
 }
 
@@ -725,14 +807,16 @@ function goalPublish(format) {
   const task = loadTask(root);
   const entries = statusEntries(root) || [{ path: '(status failed)' }];
   const branch = currentBranch(root);
-  const ahead = branch ? publishAhead(root, branch, task) : null;
+  // One HEAD for the whole check and its answer: the push must then be bound to exactly this OID.
+  const head = headOid(root);
+  const ahead = branch && head ? publishAhead(root, branch, task, head) : null;
   const contents = ahead ? [...new Set(ahead.files.map(planeOf))] : [];
   const r = TA.publishCheck({
     task, policy: currentPolicy(root), branch, protectedStatus: branch ? protectedStatus(root, branch) : 2,
-    head: headOid(root), entries, ahead: ahead ? ahead.commits : null, aheadOids: ahead ? ahead.oids : [], aheadGates: planesPassed(planes, contents),
+    head, entries, ahead: ahead ? ahead.commits : null, aheadOids: ahead ? ahead.oids : [], aheadGates: planesPassed(planes, contents),
     digest: combinedDigest(tree),
   });
-  const result = { ...r, task_id: task ? task.id : null, branch, head: headOid(root), base: task ? task.base : null, ahead: ahead ? ahead.commits : null };
+  const result = { ...r, task_id: task ? task.id : null, branch, head, remote_tip: ahead ? ahead.remoteTip : null, dest_digest: ahead ? ahead.destDigest : null, base: task ? task.base : null, ahead: ahead ? ahead.commits : null };
   emit(result, format, (o) => `[GOAL_PUBLISH_CHECK] ok=${o.ok} reasons=${o.reasons.join(',') || 'none'} branch=${o.branch || '-'} ahead=${o.ahead === null ? '?' : o.ahead}`);
 }
 
@@ -743,11 +827,24 @@ const PUBLISH_FIELDS = { pushed: /^[0-9a-f]{40,64}$/, 'pr-base': /^[0-9a-f]{40,6
 function taskRecord(opts) {
   const root = repoRoot();
   const t = requireTask(root);
+  const forHead = opts.for;
+  delete opts.for;
   for (const [k, v] of Object.entries(opts)) {
-    if (!PUBLISH_FIELDS[k]) die(`unknown field --${k} — valid: ${Object.keys(PUBLISH_FIELDS).map((f) => `--${f}`).join(', ')}`);
+    if (!PUBLISH_FIELDS[k]) die(`unknown field --${k} — valid: ${Object.keys(PUBLISH_FIELDS).map((f) => `--${f}`).join(', ')}, --for`);
     if (!PUBLISH_FIELDS[k].test(v)) die(`invalid value for --${k}`);
-    t.publish[k] = v;
   }
+  // The PR base is the base the run for ONE head is judged against, so it is read immediately before
+  // the event that triggers that run (the push, or the PR create) and bound to that head with --for.
+  // It is recorded once per head: a later metadata update can never re-label an old run as evidence
+  // about a newer base, and a base that moves after the trigger reads `stale` at readback.
+  if (opts['pr-base'] !== undefined) {
+    if (!forHead || !/^[0-9a-f]{40,64}$/.test(forHead)) die('--pr-base needs --for <the head OID whose run it is the base of>');
+    if (t.publish['pr-base-for'] === forHead && t.publish['pr-base'] !== opts['pr-base']) {
+      die('pr-base is already recorded for this head — it is read before the trigger and never re-recorded');
+    }
+  } else if (forHead !== undefined) die('--for only goes with --pr-base');
+  for (const [k, v] of Object.entries(opts)) t.publish[k] = v;
+  if (opts['pr-base'] !== undefined) t.publish['pr-base-for'] = forHead;
   t.publish.time = new Date().toISOString();
   saveTask(root, t);
   process.stdout.write(`${JSON.stringify({ ok: true, publish: t.publish })}\n`);

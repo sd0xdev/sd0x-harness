@@ -36,6 +36,8 @@ const AUTH_CLAUSES = {
   'edited body kept': 'a body someone edited by hand is never overwritten',
   'only this head on the recorded base passes': 'Only a completed success for exactly that head, on the base recorded at PR time, with every required check passing and the same runs seen on two reads at least a minute apart',
   'never ready to start CI': 'A Draft PR is never marked ready to make CI start',
+  'configured required checks are read': 'a configured check not reported yet — one gated on ready-for-review, or a slow external status — is pending, never passed over',
+  'a partial configured read never passes': 'If either of those two configured-set reads fails, `required_names` is omitted (it reads `unknown`) — never a partial union',
   'stall rules bound the fix loop': "the auto-loop's stall and cap rules bound the attempts",
   'external failures reported': 'A permission problem, platform outage, quota or approval wait is reported, never pushed again',
   'CI-gated goal not done early': 'A goal whose condition needs CI passing is not complete until `ci-pass`',

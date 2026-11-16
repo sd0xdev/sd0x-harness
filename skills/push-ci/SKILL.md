@@ -1608,14 +1608,22 @@ this credential holds; Read it first. Invoked as `/push-ci --goal-publish --defe
 delivery sequence, never on its own initiative.
 
 1. **Before Phase 0**, all of: a goal the user set or approved is affirmatively active (Goal mode
-   conditions 1–2); `node <scripts>/review-state.js goal-publish --format=json` returns `ok: true`;
-   `--force-with-lease` was **not** passed. The caller checks these before invoking with the flag;
-   if one fails here anyway, the flag is void and the ordinary Phase 1 question runs.
-2. **Phase 0 runs unchanged.** The credential holds only on `PROTECTED=[no]`,
+   conditions 1–2); `node <scripts>/review-state.js goal-publish --format=json` returns `ok: true`,
+   run immediately before Phase 0, and its `branch`, `head` and `dest_digest` are kept;
+   `--force-with-lease` was **not** passed.
+   The caller checks these before invoking with the flag; if one fails here anyway, the flag is void
+   and the ordinary Phase 1 question runs. When an open PR for this branch already exists, its
+   `baseRefOid` is read now — before the push that triggers its run — and recorded as
+   `task record --pr-base <oid> --for <head>`.
+2. **Phase 0 runs unchanged.** The credential holds only on `BRANCH`, `HEAD_SHA` and
+   `PUSH_URLS_DIGEST` equal to step 1's `branch`, `head` and `dest_digest` — the push is the one that
+   check counted — and on `PROTECTED=[no]`, with the "Has commits ahead" row read from step 1's
+   live `ahead` (the destination's own tip), not from Phase 0's count against the cached
+   `refs/remotes/origin/<branch>`, which can be stale or name another repository,
    `FORCE_WITH_LEASE=[false]`, exactly one line in `PUSH_URLS_SAFE`, a non-empty `PUSH_URLS_DIGEST` and
    `PUSH_RECEIVEPACK_SET=[no]`. Anything else: stop and report — never fall back to asking inside a
    goal-publish run, and never widen the push to make it fit.
-3. **Phase 1**: the plan is printed, not asked, headed by
+3. **Phase 1**: the plan is printed, not asked — its commit count is step 1's `ahead` — headed by
    `[GOAL_PUSH] task=<id> | branch=<branch> | head=<HEAD_SHA> | dest=<PUSH_URLS_DIGEST> | <ISO8601>`.
 4. **Phase 2 runs unchanged** — the branch, HEAD and destination comparisons, the cleared bypass
    variables, `--receive-pack`, `SD0X_PUSH_DEST_DIGEST`, the plain-push arm. A non-fast-forward is
@@ -1628,8 +1636,12 @@ delivery sequence, never on its own initiative.
    node <scripts>/review-state.js task record --pushed <PLAN_HEAD_SHA> --delivery pushed
    ```
 
-   Run it in the Phase 2 shell, after the push: `$PUSH_URLS` is the destination the push used (its
-   digest matched the plan), not `origin`'s fetch URL.
+   Run it in the same invocation as the Phase 2 block, after the push: `$PUSH_URLS` is the destination
+   the push used (its digest matched the plan), not `origin`'s fetch URL. Before reading, require
+   `git ls-remote --get-url -- "$PUSH_URLS"` to print `$PUSH_URLS` unchanged (with the same `env -u`
+   prefix): it already went through one `url.*.insteadOf` pass, and a chained rule would make the
+   lookup read a repository the push never contacted — any change, or a failed expansion, reads
+   `unknown`.
 
    A mismatch, an empty answer or a failed lookup is reported as `unknown` — read again; never push
    again on that reading.

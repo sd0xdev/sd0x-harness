@@ -40,7 +40,7 @@ function readSkill() {
 // digest is what makes the claim complete.
 
 // Re-pinned 2026-11-16: git-autonomy R8 § Goal publish and --defer-watch (user decision).
-const SKILL_DIGEST = "6c279e8f7844701a01a75f48091f3360b74d26c7c3026c615c032005887a5191";
+const SKILL_DIGEST = "92e8cf9f6eece2bb8cc85d70d3803b389101675fcfd054c5e51e324bce77531a";
 
 function digestOf(text) {
   return createHash('sha256').update(text).digest('hex');

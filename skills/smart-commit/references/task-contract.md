@@ -41,8 +41,9 @@ new task a repeated question.
    | Adoption | `adoption: pending` | Switch to the task-autonomy mode (auto commit on, Goal publish as Draft PR — state both and their risk) · Keep the current behaviour |
    | Branch | The work tree is dirty, or the current branch belongs to another task | The concrete choices for that conflict (§ Task branch) |
 
-   Nothing to ask → ask nothing. A clean tree on the base branch with no Jira capability starts with
-   no question at all.
+   Nothing to ask → ask nothing. A clean tree on the base branch with no Jira capability, and an
+   adoption that is already settled (not `pending`), starts with no question at all; a `pending`
+   adoption always brings its part.
 4. **Branch.** § Task branch.
 5. **Notice, then work** — one line, no "continue?":
    - auto commit on: "This task's changes are committed locally on `<branch>` once every required check passes."
@@ -64,8 +65,11 @@ edit.
 2. **Access**, once per task: one read — accessible resources or user info. It must return a usable
    Jira site. Empty, 401, expired authorization, timeout or a network error → no Jira question;
    record `unavailable`. Never retried inside the task.
-3. **Project.** `## Jira Project` (policy `jira_project`), else ask for it inside the entry question
-   (the sites from step 2 and recent keys from branch names are candidates, never a silent pick).
+3. **Project.** `## Jira Project` (policy `jira_project`). Without one, the entry question's Jira part
+   offers project choices instead of a create option (the sites from step 2 and recent keys from
+   branch names are candidates, never a silent pick); picking one is not a create approval, and it is
+   the only case where a second question follows — the create question of steps 4–5, showing the plan
+   built with that project.
 4. **Plan.** `node scripts/jira-entry.js plan` with project, type (`Task`), summary, description,
    base and task id. The description holds only the request in the user's words, its acceptance
    points, and the repository and branch names — no code, diff, log, stack trace, environment value,
@@ -75,7 +79,8 @@ edit.
    the branch name pattern.
 5. **The selection is the approval.** "Create the Task and its branch" authorizes exactly that plan
    (`plan_hash`): record `task jira prompted --plan-hash <h> --token <t>`, call the create tool, and
-   do not ask again through `/jira`. A changed field is a new plan and a new question.
+   do not ask again through `/jira`. A changed field is a new plan and a new question. The create
+   option is only ever shown with a complete plan — never before the project is known.
 6. **Outcome.**
 
    | Result | Action |
@@ -100,7 +105,9 @@ The base and PR target is `main`, or `## Base Branch` when the project sets one.
   successful push) and records `base: {name, oid}`;
 - refuses a dirty work tree (nothing is carried across bases), an existing branch name, and a base
   missing on the remote;
-- reuses the branch when it is already checked out.
+- reuses the branch when it is already checked out, recording the base **name** as its PR target
+  (`base: {name, oid: null}`) — no OID is assumed, so a destination that lacks the branch has no
+  proven base to publish from and Goal publish refuses there.
 
 | Situation | Action |
 |---|---|

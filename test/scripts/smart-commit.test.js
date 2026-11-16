@@ -2137,6 +2137,8 @@ test('F6: the frontmatter pre-authorizes every tool the execute path uses, and n
     // line every fence opens with (`git rev-parse --show-toplevel`) and `--execute` staging.
     [/Bash\(git:\*\)/, 'the root derivation in every fence, and --execute staging, are git calls'],
     [/Bash\(env:\*\)/, 'those diagnostics carry the env -u prefix'],
+    // git-autonomy R8: the unasked commit paths re-check mechanically before and after committing.
+    [/Bash\(node:\*\)/, 'Goal mode runs `review-state.js goal-commit`; Auto commit runs `task commit-check` and `task committed`'],
   ]) {
     assert.match(fm, tool, `allowed-tools must cover: ${why}`);
   }
@@ -2145,8 +2147,8 @@ test('F6: the frontmatter pre-authorizes every tool the execute path uses, and n
   // the procedure stopped being bash Claude assembles, so the grants must have gone with them.
   const grants = ((fm.split('\n').find((l) => /^allowed-tools:/.test(l)) ?? '')
     .match(/Bash\(([^:)]+):\*\)/g) || []).map((g) => g.slice(5, -3)).sort();
-  assert.deepEqual(grants, ['bash', 'env', 'git'],
-    'the execute path issues exactly one shell command — launching the script');
+  assert.deepEqual(grants, ['bash', 'env', 'git', 'node'],
+    'the commit runs only through the script; node carries the review-state.js checks, nothing more');
 });
 
 // ── Step 2 pre-flight: advisory default, --strict-preflight opt-in ─────────

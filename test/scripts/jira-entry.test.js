@@ -49,6 +49,24 @@ test('plan → a secret in summary or description blocks the create; findings ne
   assert.deepEqual(J.plan({ project: 'ok', summary: '' }).errors, ['project', 'summary']);
 });
 
+// Codex rotated review F1: the whole blocked-plan output — not only `findings` — stays free of the
+// value the scan found, on stdout and stderr alike.
+test('plan CLI → a blocked plan prints no field text: neither stream carries the secret', () => {
+  for (const input of [
+    { project: 'OK', summary: 'Fix login', description: 'curl https://u:hunter2secret@example.com\nAPI_KEY=abcdef123456' },
+    { project: 'OK', summary: 'password=hunter2secret rotate it' },
+  ]) {
+    const r = cli(['plan'], input);
+    assert.equal(r.status, 3, 'blocked');
+    assert.doesNotMatch(r.stdout + r.stderr, /hunter2secret|abcdef123456/);
+    const out = JSON.parse(r.stdout);
+    assert.deepEqual([out.ok, out.fields, out.token, out.plan_hash], [false, null, null, null]);
+    assert.ok(out.findings.length > 0);
+  }
+  const ok = JSON.parse(cli(['plan'], { project: 'OK', summary: 'Fix login' }).stdout);
+  assert.equal(ok.fields.summary, 'Fix login', 'an unblocked plan still shows every field');
+});
+
 test('secret scan → the common token shapes; ordinary prose and the attribution guard are different things', () => {
   const hits = (s) => scanSecrets(s).map((f) => f.rule);
   assert.deepEqual(hits('-----BEGIN RSA PRIVATE KEY-----'), ['private-key']);
