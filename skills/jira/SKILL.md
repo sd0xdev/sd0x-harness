@@ -1,12 +1,30 @@
 ---
 name: jira
 description: "Jira integration — view issues, generate branches, create tickets, transition status. Use when: user mentions Jira ticket key (XX-123), says /jira, wants to create branch from ticket, create a new ticket, or update Jira status. Not for: GitHub issues (use issue-analyze)."
-allowed-tools: mcp__claude_ai_Atlassian__getAccessibleAtlassianResources, mcp__claude_ai_Atlassian__getJiraIssue, mcp__claude_ai_Atlassian__getTransitionsForJiraIssue, mcp__claude_ai_Atlassian__transitionJiraIssue, mcp__claude_ai_Atlassian__addCommentToJiraIssue, mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql, mcp__claude_ai_Atlassian__createJiraIssue, mcp__claude_ai_Atlassian__getJiraProjectIssueTypesMetadata, Bash(git:*), AskUserQuestion
+allowed-tools: mcp__claude_ai_Atlassian_MCP__getAccessibleAtlassianResources, mcp__claude_ai_Atlassian_MCP__atlassianUserInfo, mcp__claude_ai_Atlassian_MCP__getJiraIssue, mcp__claude_ai_Atlassian_MCP__createJiraIssue, mcp__claude_ai_Atlassian_MCP__searchJiraIssuesUsingJql, mcp__claude_ai_Atlassian_MCP__transitionJiraIssue, Bash(node:*), mcp__claude_ai_Atlassian__getAccessibleAtlassianResources, mcp__claude_ai_Atlassian__getJiraIssue, mcp__claude_ai_Atlassian__getTransitionsForJiraIssue, mcp__claude_ai_Atlassian__transitionJiraIssue, mcp__claude_ai_Atlassian__addCommentToJiraIssue, mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql, mcp__claude_ai_Atlassian__createJiraIssue, mcp__claude_ai_Atlassian__getJiraProjectIssueTypesMetadata, Bash(git:*), AskUserQuestion
 ---
 
 # Jira Skill
 
 View Jira issues, generate branch names from tickets, transition issue status — all via Atlassian MCP.
+
+## Tool routing — by capability, never by server name
+
+The Atlassian MCP server has shipped under more than one name, and `allowed-tools` above lists the
+known spellings only as pre-approvals. Which tool to call is decided from the **runtime tool list**:
+pass its names to `node <scripts>/jira-entry.js capability` (stdin, JSON array) and call the tool it
+reports for each operation — `resources` (`getAccessibleAtlassianResources`), `identity`
+(`atlassianUserInfo`), `getIssue`, `createIssue`, `issueTypes`, and `search`
+(`searchJiraIssuesUsingJql`, the readback after an unclear create). The routing covers these
+operations — what the task-start entry and `create` need; `transition` still names its tools directly
+and needs a re-check if the server's spelling changes. A missing operation is a missing capability — report it; never guess a name.
+
+## Task-start entry
+
+When a task starts, the Jira question, the create+branch plan, the readback after an unclear create
+and the branch from the base are `@skills/smart-commit/references/task-contract.md` § Jira entry and
+§ Task branch. A selection made there ("Create the Task and its branch") is the approval of that
+exact plan: run `create` and the branch without asking again here.
 
 ## Trigger
 
@@ -86,7 +104,7 @@ Do NOT persist cloudId. Resolve at runtime each time; Claude context naturally c
 | 6 | Generate slug from summary |
 | 7 | Assemble branch name: `${prefix}/${issueKey}-${slug}` |
 | 8 | Check collision (local + remote) |
-| 9 | Plan mode: output branch name + command. Execute mode: run `git checkout -b` |
+| 9 | Plan mode: output branch name + command. Execute mode: `node <scripts>/review-state.js task branch <branch>` — from the freshly fetched `origin/<base>` (`main` unless `## Base Branch` names another), `--no-track`, refusing a dirty tree; never from the current HEAD |
 
 See `references/branch-policy.md` for full mapping table, slug algorithm, and collision detection.
 
@@ -96,10 +114,10 @@ See `references/branch-policy.md` for full mapping table, slug algorithm, and co
 Branch: feat/OK-51513-add-user-profile-page
 From: OK-51513 "Add user profile page" (Story)
 
-To create: git checkout -b feat/OK-51513-add-user-profile-page
+To create: node <scripts>/review-state.js task branch feat/OK-51513-add-user-profile-page   # from origin/main, --no-track
 ```
 
-**Execute mode** (`--execute`): run `git checkout -b <branch>` directly.
+**Execute mode** (`--execute`): run `review-state.js task branch <branch>` (an active task is required; `task start` first). A dirty tree, an existing branch or a failed fetch is reported, never worked around.
 
 ## Subcommand: `transition`
 
@@ -136,7 +154,8 @@ Execute? /jira transition OK-51513 --event start_work --execute
 | 3 | `getJiraProjectIssueTypesMetadata(cloudId, projectKey)` → list available types |
 | 4 | Validate issue type against available types (case-insensitive match) |
 | 5 | Format description as markdown (see `references/create-policy.md`) |
-| 6 | Plan mode: display creation plan. Execute mode: AskUserQuestion → `createJiraIssue` |
+| 6 | Plan mode: display creation plan. Execute mode: AskUserQuestion → `createJiraIssue` — unless the task-start entry already showed this exact plan and the user selected it (task contract § Jira entry): then create without asking again |
+| 7 | A timeout or unclear answer is `unknown`, not a failure. A create from the task-start entry carries a readback token: read back with `jira-entry.js jql` and the search tool. A standalone create carries none: search the project for the summary created since the call. Either way, never create a second time on an `unknown` |
 
 **Input sources** (both supported):
 - `--summary` and `--description` flags: explicit values
@@ -184,6 +203,7 @@ See `references/create-policy.md` for description format guidelines, project key
 | Issue not found | "Issue `<KEY>` not found. Verify the key and your access permissions." |
 | Transition not available | "Cannot execute `<event>` from current status `<status>`. Available transitions: ..." |
 | Network error | "Atlassian API unreachable. Please retry later." |
+| Create timed out | "Create outcome unknown — reading back before anything else." Never a blind retry |
 | Project not found | "Project '<KEY>' not accessible. Check key and permissions." |
 | Issue type not available | "Type '<type>' not in project '<KEY>'. Available: [list from metadata]" |
 

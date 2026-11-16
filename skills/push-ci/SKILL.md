@@ -1,7 +1,7 @@
 ---
 name: push-ci
 description: "Push to remote and monitor CI. Validates branch safety, executes git push WITH explicit user approval, then monitors CI run status via gh CLI. Use when: user says 'push', 'push and watch CI', 'ship it', 'push-ci'. Not for: committing (use /smart-commit), creating PRs (use /create-pr), merging (use /merge-prep)."
-allowed-tools: Bash(git:*), Bash(gh:*), Bash(bash:*), Bash(/bin/bash:*), Read, Grep, Glob, AskUserQuestion
+allowed-tools: Bash(git:*), Bash(gh:*), Bash(bash:*), Bash(/bin/bash:*), Read, Grep, Glob, AskUserQuestion, Bash(node:*)
 ---
 
 # Push & CI Monitor
@@ -23,6 +23,9 @@ Push to remote with user approval, then monitor CI run until completion.
 ⚠️ /deploy-flow never runs git push itself; a declared `run` step under `Run Steps: execute` may push on its own, outside this skill — the project's opted-in, stated risk.
 ⚠️ All other skills and rules MUST output push commands only (not execute).
 ⚠️ Push REQUIRES explicit user approval via AskUserQuestion — no exceptions.
+⚠️ One credential replaces that question, never bypasses it: § Goal publish below — the plain push
+⚠️ of a task's non-protected branch while a goal the user set or approved is active and the adopted policy says
+⚠️ `Goal Publish: draft` (Anchor Register #4, user decision 2026-11-16). Every other push asks.
 ```
 
 | Rule | This Skill | `/epic-merge` | `/gh-stack` | `/deploy-flow` | All Other Skills |
@@ -723,6 +726,8 @@ against with nothing in it.
 **Gate**: Use AskUserQuestion with options:
 - "Approve push" (or "Approve **force**-with-lease push to `<branch>`" when the flag is set) — proceed to execute
 - "Abort" — stop, do not push
+
+The one exception is § Goal publish below, and it never covers a force form.
 
 **When `--force-with-lease` was passed, ask a second and separate question first — the unshared
 attestation** (2026-08-21, option A of
@@ -1596,7 +1601,45 @@ fi
 
 Since round 72 that value no longer selects a **flag**. `-u` cannot bind an object-ID source (measured, git 2.55.0: the push succeeds and `@{u}` still reports no upstream), so both push forms drop it and the upstream is written afterwards, by `git config branch.<name>.remote` + `.merge`, gated on the push having exited 0. The two forms are therefore the same command with and without the lease — and what the plan must still name is the **upstream**, not a flag that is no longer on the line.
 
+### Goal publish (`--goal-publish`)
+
+`@skills/push-ci/references/authorization-contract.md` § Task autonomy "Goal publish" decides whether
+this credential holds; Read it first. Invoked as `/push-ci --goal-publish --defer-watch` by the goal
+delivery sequence, never on its own initiative.
+
+1. **Before Phase 0**, all of: a goal the user set or approved is affirmatively active (Goal mode
+   conditions 1–2); `node <scripts>/review-state.js goal-publish --format=json` returns `ok: true`;
+   `--force-with-lease` was **not** passed. The caller checks these before invoking with the flag;
+   if one fails here anyway, the flag is void and the ordinary Phase 1 question runs.
+2. **Phase 0 runs unchanged.** The credential holds only on `PROTECTED=[no]`,
+   `FORCE_WITH_LEASE=[false]`, exactly one line in `PUSH_URLS_SAFE`, a non-empty `PUSH_URLS_DIGEST` and
+   `PUSH_RECEIVEPACK_SET=[no]`. Anything else: stop and report — never fall back to asking inside a
+   goal-publish run, and never widen the push to make it fit.
+3. **Phase 1**: the plan is printed, not asked, headed by
+   `[GOAL_PUSH] task=<id> | branch=<branch> | head=<HEAD_SHA> | dest=<PUSH_URLS_DIGEST> | <ISO8601>`.
+4. **Phase 2 runs unchanged** — the branch, HEAD and destination comparisons, the cleared bypass
+   variables, `--receive-pack`, `SD0X_PUSH_DEST_DIGEST`, the plain-push arm. A non-fast-forward is
+   refused by git itself, and is reported, never retried with a force form.
+5. **Readback.** After `PUSH_STATUS=0`, read the remote branch OID and require it to equal
+   `PLAN_HEAD_SHA`, then record it:
+
+   ```bash
+   /usr/bin/env -u BASH_ENV -u ENV -u GIT_EXEC_PATH -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE -u GIT_CEILING_DIRECTORIES -u GIT_GLOB_PATHSPECS -u GIT_ICASE_PATHSPECS -u GIT_NOGLOB_PATHSPECS -u GIT_LITERAL_PATHSPECS -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_CONFIG_NOSYSTEM -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_IMPLICIT_WORK_TREE -u GIT_GRAFT_FILE -u GIT_SHALLOW_FILE -u GIT_PREFIX -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_SSH_COMMAND -u GIT_SSH -u GIT_PROXY_COMMAND -u GIT_SSH_VARIANT git ls-remote --upload-pack=git-upload-pack -- "$PUSH_URLS" "refs/heads/${BRANCH}"
+   node <scripts>/review-state.js task record --pushed <PLAN_HEAD_SHA> --delivery pushed
+   ```
+
+   Run it in the Phase 2 shell, after the push: `$PUSH_URLS` is the destination the push used (its
+   digest matched the plan), not `origin`'s fetch URL.
+
+   A mismatch, an empty answer or a failed lookup is reported as `unknown` — read again; never push
+   again on that reading.
+
 ### Phase 3: Monitor CI (delegation)
+
+With `--defer-watch` this phase is skipped: report the verified branch, pushed OID and remote, and
+return. The caller creates or reuses the PR first, then reads CI against it — a workflow that runs
+only on `pull_request` shows nothing before the PR exists. Skipping the watch is never reported as
+CI passing.
 
 After successful push, invoke `/watch-ci` to monitor CI runs:
 
@@ -1674,13 +1717,15 @@ Anchor Register #4).
 | `--timeout <min>` | CI watch timeout in minutes | 10 |
 | `--force-with-lease` | Use `--force-with-lease` instead of regular push | off |
 | `--set-upstream` | Set the branch upstream (first push of new branch). Written as two `git config` keys after a successful push, not as `-u` on the push — see Phase 2 | auto-detect |
+| `--goal-publish` | Replace the Phase 1 question with the § Goal publish credential when every one of its conditions holds | off |
+| `--defer-watch` | Skip Phase 3; return the verified branch and pushed OID for the caller to watch CI against its PR | off |
 
 **`--force` is NOT supported.** Force push is always forbidden.
 
 ## Prohibited
 
 ```
-- Executing git push WITHOUT prior user approval via AskUserQuestion
+- Executing git push WITHOUT prior user approval via AskUserQuestion — except under § Goal publish, with every one of its conditions re-checked on that invocation
 - Suggesting or executing git push --force (ever)
 - Executing or offering to approve git push --force-with-lease onto a protected branch (main/master/develop/release/*) — hard abort in Phase 0, re-asserted in Phase 2
 - Pushing to protected branches WITHOUT explicit user pre-approval via AskUserQuestion
@@ -1692,18 +1737,19 @@ Anchor Register #4).
 - Pushing when `remote.origin.receivepack` is configured, or emitting `--exec` / any `--receive-pack=` value other than the exact literal `git-receive-pack`. The flag names the program that receives the objects, and a program can ignore the repository the URL named — so a *chosen* value makes the destination digest true and meaningless at the same time. The canonical value is the opposite: it pins git's own default onto the command line, where it overrides configuration, which is what closes the window between the check above and the push (measured 2026-08-22 — `-c remote.<name>.receivepack=` does not override; the flag does)
 - Printing the value of `remote.origin.receivepack` anywhere. It is a command line and may carry a token; report only whether it is set
 - Pushing without `SD0X_PUSH_DEST_DIGEST="$PUSH_URLS_DIGEST"` on the push line. The direction is the opposite of the two ALLOW_* rules above and the contrast is the point: those attest a fact only the operator has, so this skill must never set them; this one is a constraint the skill puts on its own push — it names the destination the approval covered and can only cause a refusal, never an authorization. Omitting it leaves the destination checked in one process and pushed in another, which is a window, not a check. Setting it inline is also what stops an inherited value from deciding
-- Pushing without this invocation's own AskUserQuestion approval. The model may invoke this skill, and invoke it again after new commits, but each invocation runs Phase 0 afresh and asks for its own approval — an earlier approval, a menu selection or a goal never stands in for it
+- Pushing without this invocation's own AskUserQuestion approval. The model may invoke this skill, and invoke it again after new commits, but each invocation runs Phase 0 afresh and asks for its own approval — an earlier approval or a menu selection never stands in for it, and a goal stands in only through § Goal publish, with every one of its conditions re-checked on this invocation
+- Using `--goal-publish` with `--force-with-lease`, on a protected or unknown branch, for a destination that is not exactly one URL, or while the goal is not affirmatively active
 - Skipping preflight checks
-- Skipping `/watch-ci` delegation after successful push
+- Skipping `/watch-ci` delegation after successful push — except under `--defer-watch`, where the caller reads CI against its PR (`scripts/ci-readback.js`) and the skipped watch is never reported as CI passing
 ```
 
 ## Verification
 
 - [ ] Preflight passed (branch + remote + commits + `pre-push` gate detection)
 - [ ] Push plan stated the **conditional** credential rule and the probe's limits — never a credential verdict (§ Phase 0: the probe reports `PUSH_GATE=referenced`, and reference is not invocation; which credential actually authorized is known only from whether the `/dev/tty` prompt appeared)
-- [ ] User approved push via AskUserQuestion
+- [ ] User approved push via AskUserQuestion (or § Goal publish held, with its `[GOAL_PUSH]` record)
 - [ ] Push executed successfully
-- [ ] CI monitoring delegated to `/watch-ci` with correct SHA + branch
+- [ ] CI monitoring delegated to `/watch-ci` with correct SHA + branch (or, under `--defer-watch`, the verified branch and pushed OID returned to the caller)
 
 ## Examples
 

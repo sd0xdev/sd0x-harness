@@ -39,7 +39,8 @@ function readSkill() {
 // The section pins below survive because they give a precise message for the common case; the
 // digest is what makes the claim complete.
 
-const SKILL_DIGEST = "412475b8cdfe5bc194ebcabd7f5914d01aac1424f8bf6d7f31428742777d01a3";
+// Re-pinned 2026-11-16: git-autonomy R8 § Goal publish and --defer-watch (user decision).
+const SKILL_DIGEST = "5b6b0e5f4734915c1e19456fbcfca73a78ea50ec06e5c9194e7eb0a61993969f";
 
 function digestOf(text) {
   return createHash('sha256').update(text).digest('hex');

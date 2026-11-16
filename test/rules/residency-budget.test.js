@@ -201,13 +201,15 @@ test('the manifest check when an entry is dropped, duplicated, malformed or stal
 
 // ── § Contract Triggers ─────────────────────────────────────────────────────────────────────
 
-// The eight tech-spec § 3.2 situations, as the contract each one loads, in table order.
+// The tech-spec § 3.2 situations, as the contract each one loads, in table order — eight, plus the
+// task-start row git-autonomy R8 added (2026-11-16).
 const TRIGGER_CONTRACTS = [
   'skills/codex-code-review/references/codex-invocation-contract.md',
   'skills/codex-code-review/references/review-common.md',
   'skills/codex-code-review/references/scope-contract.md',
   'skills/codex-code-review/references/loop-diagnostics.md',
   'skills/push-ci/references/authorization-contract.md',
+  'skills/smart-commit/references/task-contract.md',
   'skills/test-review/references/testing-contract.md',
   'skills/doc-review/references/documentation-contract.md',
   'rules/override-contract.md',
@@ -231,7 +233,7 @@ function triggerPairs(doc) {
     .map(([situation, target]) => [situation, ((/^`([^`]+)`$/.exec(target) || [])[1] || '').replace(/^\.claude\/rules\//, 'rules/')]);
 }
 
-/** What is wrong with one file's trigger table against the specified eight. */
+/** What is wrong with one file's trigger table against the specified rows. */
 function triggerProblems(doc) {
   const problems = [];
   const pairs = triggerPairs(doc);
@@ -245,7 +247,7 @@ function triggerProblems(doc) {
   return problems;
 }
 
-test('§ Contract Triggers when read → the eight specified situations, each loading its contract, with the stop and the placement rule, identical in both CLAUDE files', () => {
+test('§ Contract Triggers when read → the specified situations, each loading its contract, with the stop and the placement rule, identical in both CLAUDE files', () => {
   const tpl = read('CLAUDE.template.md');
   const repo = read('CLAUDE.md');
   assert.deepEqual(triggerProblems(tpl), []);
@@ -262,7 +264,7 @@ test('the trigger check when a row points at a different existing contract, or a
   assert.deepEqual(triggerProblems(swapped),
     ['row 2 "A review report arrives, or a verdict blocks" loads skills/codex-code-review/references/scope-contract.md, expected skills/codex-code-review/references/review-common.md']);
   const extra = repo.replace('\n\nNew policy lands', '\n| Planted situation | `rules/security.md` |\n\nNew policy lands');
-  assert.equal(triggerProblems(extra)[0], '9 rows, expected 8');
+  assert.equal(triggerProblems(extra)[0], '10 rows, expected 9');
   const noStop = repo.replace('if that Read fails, stop the governed action and say so.', 'read it if convenient.');
   assert.deepEqual(triggerProblems(noStop), ['no failed-Read stop']);
 });

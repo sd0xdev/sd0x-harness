@@ -424,6 +424,357 @@ function goalCommit(format) {
   else process.stdout.write(`[GOAL_COMMIT_CHECK] ok=${r.ok} reason=${r.reason || 'none'} branch=${r.branch || '-'} needs_branch_allowance=${r.needs_branch_allowance}\n`);
 }
 
+// --- Task autonomy (git-autonomy R8, 2026-11-16) ------------------------------------------------
+// The I/O half of scripts/lib/task-autonomy.js: the policy in force, the per-worktree task record,
+// the task branch, and the two mechanical checks. Every record here is a fact store, never a
+// credential — skills/smart-commit/references/task-contract.md.
+// Loaded on first use, not at startup: an installed copy (.claude/scripts/) ships with
+// lib/tree-digest.js only, and its check / note / offer paths — what the hooks run — must keep working
+// without this library. The task commands run from the plugin's own scripts/.
+let taModule = null;
+const TA = new Proxy({}, {
+  get(_, key) {
+    if (!taModule) {
+      try { taModule = require(path.join(__dirname, 'lib', 'task-autonomy.js')); } catch {
+        die('lib/task-autonomy.js is missing beside this copy — run the task commands from the plugin\'s scripts/');
+      }
+    }
+    return taModule[key];
+  },
+});
+
+// A setting's raw state, for the settings that may GRANT: absent (no file, heading or value),
+// unknown (a selected file that cannot be read), or the first live value line under the heading.
+function overrideRaw(root, heading) {
+  const sel = selectOverride(root);
+  if (!sel) return { state: 'absent' };
+  if (sel.unknown) return { state: 'unknown' };
+  let text;
+  try { text = fs.readFileSync(sel.path, 'utf8'); } catch { return { state: 'unknown' }; }
+  const live = text.replace(/<!--[\s\S]*?-->/g, '');
+  const esc = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = new RegExp(`^##[ \\t]+${esc}[ \\t]*$([\\s\\S]*?)(?=^##[ \\t]|(?![\\s\\S]))`, 'm').exec(live);
+  if (!m) return { state: 'absent' };
+  const value = m[1].split('\n').map((l) => l.trim()).find((l) => l.length > 0);
+  return value ? { state: 'value', value } : { state: 'absent' };
+}
+
+function readJson(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+}
+
+// The adoption decision belongs to the REPOSITORY, not to one worktree of it: keyed by the shared
+// git directory, so every linked worktree reads the same answer and none asks again. It lives in
+// this user's state directory — never in the repository, where a clone would inherit one user's
+// consent for another.
+function policyDir(root) {
+  const common = gitOut(root, ['rev-parse', '--git-common-dir']);
+  if (!common || !common.trim()) return stateDir(root);
+  const abs = path.resolve(root, common.trim());
+  let real;
+  try { real = fs.realpathSync(abs); } catch { return stateDir(root); }
+  const key = `repo-${crypto.createHash('sha256').update(real).digest('hex').slice(0, 12)}`;
+  return path.join(os.homedir(), '.cache', 'sd0x-dev-flow', 'state', key);
+}
+
+function currentPolicy(root) {
+  const d = readJson(path.join(policyDir(root), 'policy.json'));
+  return TA.resolvePolicy({
+    override: {
+      auto_commit: overrideRaw(root, 'Auto Commit'),
+      goal_publish: overrideRaw(root, 'Goal Publish'),
+      base_branch: overrideRaw(root, 'Base Branch'),
+      jira_project: overrideRaw(root, 'Jira Project'),
+    },
+    decision: d && d.policy === TA.POLICY_ID && ['adopted', 'declined'].includes(d.decision) ? d.decision : null,
+  });
+}
+
+function emit(obj, format, factLine) {
+  process.stdout.write(format === 'json' ? `${JSON.stringify(obj)}\n` : `${factLine(obj)}\n`);
+}
+
+function policyCmd(format) {
+  const p = currentPolicy(repoRoot());
+  emit(p, format, (r) => `[POLICY] auto_commit=${r.auto_commit} goal_publish=${r.goal_publish} base=${r.base_branch} source=${r.source} adoption=${r.adoption}`);
+}
+
+// The user's one-time answer to the adoption question, or their explicit request to switch. Written
+// only on that answer; never asked again either way. `--if-pending` is the installer's form: it
+// records nothing when a decision already exists, so a fresh install never overrides an answer the
+// user gave — a `declined` above all.
+function policyDecide(decision, ifPending) {
+  if (!['adopted', 'declined'].includes(decision)) die(`invalid decision "${decision}" — valid: adopted, declined`);
+  const root = repoRoot();
+  const dir = policyDir(root);
+  const prev = readJson(path.join(dir, 'policy.json'));
+  if (ifPending && prev && prev.policy === TA.POLICY_ID && ['adopted', 'declined'].includes(prev.decision)) {
+    process.stdout.write(`[POLICY_KEPT] ${prev.decision}\n`);
+    return;
+  }
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'policy.json'), `${JSON.stringify({ policy: TA.POLICY_ID, decision, time: new Date().toISOString() })}\n`);
+  process.stdout.write(`[POLICY_DECIDED] ${decision}\n`);
+}
+
+const taskFile = (root) => path.join(stateDir(root), 'task.json');
+function loadTask(root) {
+  const t = readJson(taskFile(root));
+  return t && typeof t.id === 'string' && Array.isArray(t.head_chain) && Array.isArray(t.owned) && t.baseline ? t : null;
+}
+function saveTask(root, t) {
+  fs.mkdirSync(stateDir(root), { recursive: true });
+  fs.writeFileSync(taskFile(root), `${JSON.stringify(t)}\n`);
+}
+function archiveTask(root, t) {
+  fs.appendFileSync(path.join(stateDir(root), 'task-history.jsonl'), `${JSON.stringify(t)}\n`);
+}
+
+const statusEntries = (root) => {
+  const s = gitOut(root, ['status', '--porcelain=v2', '-z', '--untracked-files=all']);
+  return s === null ? null : TA.parseStatus(s);
+};
+const headOid = (root) => { const h = gitOut(root, ['rev-parse', '--verify', '-q', 'HEAD']); return h ? h.trim() : null; };
+const currentBranch = (root) => { const h = gitOut(root, ['symbolic-ref', '--short', '-q', 'HEAD']); return h && h.trim() ? h.trim() : null; };
+
+// Per-path content identity: the blob a work-tree file would become, or null for a deletion.
+function blobOf(root, p) {
+  if (!fs.existsSync(path.join(root, p))) return null;
+  const h = gitOut(root, ['hash-object', '--', p]);
+  return h ? h.trim() : 'unreadable';
+}
+
+function taskStart(intent, supersede) {
+  const root = repoRoot();
+  const prev = loadTask(root);
+  if (prev && prev.status === 'active') {
+    if (!supersede) {
+      process.stdout.write(`${JSON.stringify({ ok: false, reason: 'active-task', task: prev })}\n`);
+      return;
+    }
+    archiveTask(root, { ...prev, status: 'superseded', ended_at: new Date().toISOString() });
+  }
+  const entries = statusEntries(root);
+  if (entries === null) die('git status failed — the task baseline cannot be read');
+  const head = headOid(root);
+  const t = {
+    id: TA.newTaskId(),
+    status: 'active',
+    intent: String(intent || '').slice(0, 300),
+    started_at: new Date().toISOString(),
+    branch: currentBranch(root),
+    base: null,
+    baseline: { head, clean: entries.length === 0, entries: entries.map((e) => ({ path: e.path, kind: e.kind, staged: e.staged })) },
+    head_chain: [head],
+    owned: [],
+    commits: [],
+    jira: { state: 'unchecked' },
+    publish: {},
+  };
+  saveTask(root, t);
+  process.stdout.write(`${JSON.stringify({ ok: true, task: t })}\n`);
+}
+
+function requireTask(root) {
+  const t = loadTask(root);
+  if (!t || t.status !== 'active') die('no active task — run `task start` first');
+  return t;
+}
+
+function taskShow() {
+  const root = repoRoot();
+  process.stdout.write(`${JSON.stringify({ task: loadTask(root) })}\n`);
+}
+
+function taskEnd(status) {
+  if (!['completed', 'cancelled', 'superseded'].includes(status)) die(`invalid status "${status}" — valid: completed, cancelled, superseded`);
+  const root = repoRoot();
+  const t = requireTask(root);
+  const done = { ...t, status, ended_at: new Date().toISOString() };
+  archiveTask(root, done);
+  saveTask(root, done);
+  process.stdout.write(`[TASK_ENDED] ${t.id} ${status}\n`);
+}
+
+// The task's own declaration of the paths it changed. Repo-relative, inside the work tree only.
+function taskOwn(paths) {
+  const root = repoRoot();
+  const t = requireTask(root);
+  for (const p of paths) {
+    if (!p || path.isAbsolute(p) || p.split('/').includes('..')) die(`invalid path "${p}" — repo-relative paths only`);
+  }
+  t.owned = [...new Set([...t.owned, ...paths])];
+  saveTask(root, t);
+  process.stdout.write(`${JSON.stringify({ ok: true, owned: t.owned })}\n`);
+}
+
+const JIRA_STATES = ['unavailable', 'prompted', 'declined', 'existing', 'created', 'unknown', 'failed'];
+function taskJira(state, opts) {
+  if (!JIRA_STATES.includes(state)) die(`invalid jira state "${state}" — valid: ${JIRA_STATES.join(', ')}`);
+  if (opts.key && !/^[A-Z][A-Z0-9_]+-\d+$/.test(opts.key)) die(`invalid issue key "${opts.key}"`);
+  const root = repoRoot();
+  const t = requireTask(root);
+  t.jira = { state, key: opts.key || t.jira.key || null, plan_hash: opts['plan-hash'] || t.jira.plan_hash || null, token: opts.token || t.jira.token || null, time: new Date().toISOString() };
+  saveTask(root, t);
+  process.stdout.write(`${JSON.stringify({ ok: true, jira: t.jira })}\n`);
+}
+
+// The task branch: from the freshly fetched base (main unless the project names another), never from
+// a stale ref, never carrying a dirty tree across bases, never tracking the base.
+function taskBranch(name, baseArg) {
+  const root = repoRoot();
+  const t = requireTask(root);
+  const pol = currentPolicy(root);
+  const base = baseArg || pol.base_branch;
+  const out = (o) => { process.stdout.write(`${JSON.stringify(o)}\n`); };
+  if (!TA.validBranch(name)) die(`invalid branch name "${name}"`);
+  if (!TA.validBranch(base)) die(`invalid base "${base}"`);
+  const cur = currentBranch(root);
+  if (cur === name) {
+    t.branch = name;
+    saveTask(root, t);
+    return out({ ok: true, reused: true, branch: name, base: t.base });
+  }
+  const entries = statusEntries(root);
+  if (entries === null) die('git status failed');
+  if (entries.length) return out({ ok: false, reason: 'dirty', paths: entries.map((e) => e.path) });
+  if (gitOut(root, ['show-ref', '--verify', '-q', `refs/heads/${name}`]) !== null) return out({ ok: false, reason: 'exists', branch: name });
+  if (gitOut(root, ['fetch', '--quiet', 'origin', `refs/heads/${base}:refs/remotes/origin/${base}`]) === null) {
+    return out({ ok: false, reason: 'fetch-failed', base });
+  }
+  const oid = gitOut(root, ['rev-parse', '--verify', '-q', `refs/remotes/origin/${base}^{commit}`]);
+  if (!oid) return out({ ok: false, reason: 'base-missing', base });
+  if (gitOut(root, ['switch', '--quiet', '--no-track', '-c', name, oid.trim()]) === null) return out({ ok: false, reason: 'switch-failed', branch: name });
+  t.branch = name;
+  t.base = { name: base, oid: oid.trim(), fetched_at: new Date().toISOString() };
+  t.baseline = { head: oid.trim(), clean: true, entries: [] };
+  t.head_chain = [oid.trim()];
+  saveTask(root, t);
+  out({ ok: true, reused: false, branch: name, base: t.base });
+}
+
+function planesPassed(planes, contents) {
+  return contents.flatMap((c) => PLANES_BY_CONTENT[c]).every((p) => planes[p].passed);
+}
+
+function commitCheckCmd(format) {
+  const { planes, root, tree } = computeCheck();
+  const task = loadTask(root);
+  const entries = statusEntries(root);
+  if (entries === null) die('git status failed');
+  const branch = currentBranch(root);
+  const dirty = ['code', 'doc'].filter((p) => tree.planes[p].partial || tree.planes[p].dirty.length > 0);
+  const digest = combinedDigest(tree);
+  const r = TA.commitCheck({
+    task, policy: currentPolicy(root), branch, protectedStatus: branch ? protectedStatus(root, branch) : 2,
+    head: headOid(root), entries, gatesPassed: planesPassed(planes, dirty), digest,
+  });
+  const result = { ...r, task_id: task ? task.id : null, branch, digest };
+  if (r.ok) {
+    // Content identity of every candidate at the moment it was checked: `task committed` compares
+    // the committed blobs against it, so a write between this check and the commit is caught.
+    task.last_check = { digest, blobs: Object.fromEntries(r.candidate.map((p) => [p, blobOf(root, p)])), time: new Date().toISOString() };
+    saveTask(root, task);
+  }
+  emit(result, format, (o) => `[AUTO_COMMIT_CHECK] ok=${o.ok} reasons=${o.reasons.join(',') || 'none'} branch=${o.branch || '-'} candidates=${o.candidate.length}`);
+}
+
+// After the auto commit: the commits must sit on top of the task's tip, the work tree must be clean
+// (nothing was left out), and every committed path must hold exactly the content the check saw. A
+// mismatch marks the task unverified — the commit stays local, and goal publish refuses it.
+function taskCommitted() {
+  const root = repoRoot();
+  const t = requireTask(root);
+  const head = headOid(root);
+  const tip = t.head_chain[t.head_chain.length - 1];
+  const out = (o) => { process.stdout.write(`${JSON.stringify(o)}\n`); };
+  if (!t.last_check) return out({ ok: false, reason: 'no-check' });
+  if (head === tip) return out({ ok: false, reason: 'no-new-commit' });
+  if (gitOut(root, ['merge-base', '--is-ancestor', tip, head]) === null) return out({ ok: false, reason: 'not-descendant' });
+  const entries = statusEntries(root);
+  const problems = [];
+  if (entries === null || entries.length) problems.push('not-clean');
+  for (const [p, blob] of Object.entries(t.last_check.blobs)) {
+    const committed = gitOut(root, ['rev-parse', '--verify', '-q', `${head}:${p}`]);
+    if ((committed ? committed.trim() : null) !== blob) problems.push(`content-changed:${p}`);
+  }
+  const range = gitOut(root, ['rev-list', '--reverse', `${tip}..${head}`]);
+  const oids = range ? range.split('\n').filter(Boolean) : [];
+  t.commits = [...t.commits, ...oids];
+  t.head_chain = [...t.head_chain, head];
+  t.unverified = problems.length > 0 || Boolean(t.unverified);
+  t.verified_digest = problems.length ? null : t.last_check.digest;
+  delete t.last_check;
+  saveTask(root, t);
+  out({ ok: problems.length === 0, problems, commits: oids, head });
+}
+
+// Ahead of what the remote already holds for this branch, else of the task's recorded base.
+function publishAhead(root, branch, task) {
+  const remote = gitOut(root, ['rev-parse', '--verify', '-q', `refs/remotes/origin/${branch}`]);
+  const from = remote ? remote.trim() : task && task.base ? task.base.oid : null;
+  if (!from) return null;
+  const count = gitOut(root, ['rev-list', '--count', `${from}..HEAD`]);
+  if (count === null) return null;
+  const names = gitOut(root, ['log', '--format=', '--name-only', '--no-renames', '--diff-merges=first-parent', '-z', `${from}..HEAD`]);
+  const oids = gitOut(root, ['rev-list', `${from}..HEAD`]);
+  if (names === null || oids === null) return null;
+  return {
+    commits: Number(count.trim()),
+    oids: oids.split('\n').filter(Boolean),
+    files: [...new Set(names.split('\0').map((n) => n.replace(/^\n+/, '')).filter(Boolean))],
+  };
+}
+
+function goalPublish(format) {
+  const { planes, root, tree } = computeCheck();
+  const task = loadTask(root);
+  const entries = statusEntries(root) || [{ path: '(status failed)' }];
+  const branch = currentBranch(root);
+  const ahead = branch ? publishAhead(root, branch, task) : null;
+  const contents = ahead ? [...new Set(ahead.files.map(planeOf))] : [];
+  const r = TA.publishCheck({
+    task, policy: currentPolicy(root), branch, protectedStatus: branch ? protectedStatus(root, branch) : 2,
+    head: headOid(root), entries, ahead: ahead ? ahead.commits : null, aheadOids: ahead ? ahead.oids : [], aheadGates: planesPassed(planes, contents),
+    digest: combinedDigest(tree),
+  });
+  const result = { ...r, task_id: task ? task.id : null, branch, head: headOid(root), base: task ? task.base : null, ahead: ahead ? ahead.commits : null };
+  emit(result, format, (o) => `[GOAL_PUBLISH_CHECK] ok=${o.ok} reasons=${o.reasons.join(',') || 'none'} branch=${o.branch || '-'} ahead=${o.ahead === null ? '?' : o.ahead}`);
+}
+
+// Delivery facts the publish steps read back: pushed OID, the PR's base OID at this flow's last create
+// or update (what CI is judged against), PR number and URL, the hash of the PR body
+// this flow last wrote (so a hand-edited body is never overwritten), the CI verdict. Facts only.
+const PUBLISH_FIELDS = { pushed: /^[0-9a-f]{40,64}$/, 'pr-base': /^[0-9a-f]{40,64}$/, pr: /^\d+$/, 'pr-url': /^https:\/\/\S+$/, 'pr-body-sha': /^[0-9a-f]{64}$/, ci: /^(pass|pending|fail|skipped|none|unknown|stale)$/, delivery: /^(pushed|pr-open|ci-pass|blocked|partial)$/ };
+function taskRecord(opts) {
+  const root = repoRoot();
+  const t = requireTask(root);
+  for (const [k, v] of Object.entries(opts)) {
+    if (!PUBLISH_FIELDS[k]) die(`unknown field --${k} — valid: ${Object.keys(PUBLISH_FIELDS).map((f) => `--${f}`).join(', ')}`);
+    if (!PUBLISH_FIELDS[k].test(v)) die(`invalid value for --${k}`);
+    t.publish[k] = v;
+  }
+  t.publish.time = new Date().toISOString();
+  saveTask(root, t);
+  process.stdout.write(`${JSON.stringify({ ok: true, publish: t.publish })}\n`);
+}
+
+function parseOpts(args) {
+  const opts = {};
+  const rest = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith('--') && !args[i].startsWith('--format=')) {
+      const key = args[i].slice(2);
+      if (['supersede'].includes(key)) opts[key] = true;
+      else {
+        if (i + 1 >= args.length) die(`--${key} needs a value`);
+        opts[key] = args[++i];
+      }
+    } else if (!args[i].startsWith('--format=')) rest.push(args[i]);
+  }
+  return { opts, rest };
+}
+
 // --- Custom-flow detection (git-autonomy R6) ----------------------------------------------------
 // When a project releases its own way and has no git override, the model may ask once whether to
 // scaffold one (rules/git-workflow.md § Proactive Offer, "Custom flow"). A fact, never an action:
@@ -648,6 +999,33 @@ try {
     const fmt = (args.find(a => a.startsWith('--format=')) || '--format=fact').slice('--format='.length);
     if (!['fact', 'json'].includes(fmt)) die(`unknown format "${fmt}" — valid: fact, json`);
     goalCommit(fmt);
+  } else if (cmd === 'policy') {
+    const fmt = (args.find(a => a.startsWith('--format=')) || '--format=fact').slice('--format='.length);
+    if (!['fact', 'json'].includes(fmt)) die(`unknown format "${fmt}" — valid: fact, json`);
+    policyCmd(fmt);
+  } else if (cmd === 'policy-decide') {
+    const rest = args.filter((a) => a !== '--if-pending');
+    if (rest.length !== 1) die('usage: policy-decide [--if-pending] <adopted|declined>');
+    policyDecide(rest[0], args.includes('--if-pending'));
+  } else if (cmd === 'task') {
+    const [sub, ...rest] = args;
+    const fmt = (rest.find(a => a.startsWith('--format=')) || '--format=json').slice('--format='.length);
+    if (!['fact', 'json'].includes(fmt)) die(`unknown format "${fmt}" — valid: fact, json`);
+    const { opts, rest: pos } = parseOpts(rest);
+    if (sub === 'start') taskStart(opts.intent, Boolean(opts.supersede));
+    else if (sub === 'show') taskShow();
+    else if (sub === 'end') taskEnd(pos[0]);
+    else if (sub === 'own') { if (!pos.length) die('usage: task own <path>...'); taskOwn(pos); }
+    else if (sub === 'jira') taskJira(pos[0], opts);
+    else if (sub === 'branch') taskBranch(pos[0], opts.base);
+    else if (sub === 'commit-check') commitCheckCmd(fmt);
+    else if (sub === 'committed') taskCommitted();
+    else if (sub === 'record') taskRecord(opts);
+    else die('usage: task start --intent <text> [--supersede] | show | end <completed|cancelled|superseded> | own <path>... | jira <state> [--key K] [--plan-hash H] [--token T] | branch <name> [--base <b>] | commit-check [--format=json|fact] | committed | record [--pushed OID] [--pr-base OID] [--pr N] [--pr-url URL] [--pr-body-sha HEX] [--ci STATE] [--delivery STATE]');
+  } else if (cmd === 'goal-publish') {
+    const fmt = (args.find(a => a.startsWith('--format=')) || '--format=fact').slice('--format='.length);
+    if (!['fact', 'json'].includes(fmt)) die(`unknown format "${fmt}" — valid: fact, json`);
+    goalPublish(fmt);
   } else if (cmd === 'flow-detect') {
     const fmt = (args.find(a => a.startsWith('--format=')) || '--format=fact').slice('--format='.length);
     if (!['fact', 'json', 'md'].includes(fmt)) die(`unknown format "${fmt}" — valid: fact, json, md`);
@@ -656,7 +1034,7 @@ try {
   } else if (cmd === 'flow-answer') {
     flowAnswer(args[0]);
   } else {
-    die(`usage: review-state.js note <plane> <pass|fail> | check [--format=md|fact|json] | offer [--format=md|fact|json] | offer-shown <digest> | goal-commit [--format=fact|json] | flow-detect [--format=fact|json|md] [--session <id>] | flow-answer never`);
+    die(`usage: review-state.js note <plane> <pass|fail> | check [--format=md|fact|json] | offer [--format=md|fact|json] | offer-shown <digest> | goal-commit [--format=fact|json] | policy [--format=fact|json] | policy-decide [--if-pending] <adopted|declined> | task <sub> | goal-publish [--format=fact|json] | flow-detect [--format=fact|json|md] [--session <id>] | flow-answer never`);
   }
 } catch (e) {
   die(String((e && e.message) || e));

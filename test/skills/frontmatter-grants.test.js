@@ -230,10 +230,10 @@ describe('the justification check fails on a grant nothing runs', () => {
   });
 });
 
-// `jira` grants a tool for a feature its own SKILL.md defers ("Searching Jira issues → v1.1"),
-// so the permission is live and the caller is not. Pre-existing and outside this feature's reach;
-// same burndown ticket as the Bash residual, same equality pin.
-const KNOWN_UNJUSTIFIED_MCP = ['jira: mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql'];
+// `jira` used to grant `searchJiraIssuesUsingJql` for a deferred feature with no caller; since
+// git-autonomy R8 (2026-11-16) the readback after an unclear create calls it, so the inventory is
+// empty — and stays an equality pin, so a new uncalled grant still fails here.
+const KNOWN_UNJUSTIFIED_MCP = [];
 
 // A body calls these by method name — `createJiraIssue`, not the wire id — so the suffix after
 // the last `__` counts as naming the tool. The suffix is distinctive enough to be evidence; the

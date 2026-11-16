@@ -58,11 +58,13 @@ test('the first-instruction checker when the Read is moved or its stop removed �
 });
 
 // The digest of § Proactive Offer as r3 moved it (identical to the pre-move section of
-// rules/git-workflow.md). A later Default-tier edit updates this value through review; an edit that
+// rules/git-workflow.md; re-pinned 2026-11-16 for git-autonomy R8's two credentials). A later
+// Default-tier edit updates this value through review; an edit that
 // changes a step — a menu option, the revalidation, the offer-shown ordering — cannot pass unseen.
-const PROACTIVE_OFFER_SHA256 = 'e344520639fd5b198aa8d8e2848ce81b540adc9dcf9cbd544cdd6fb8a41f96fe';
+const PROACTIVE_OFFER_SHA256 = '76ae3a90162cef71bba60ef0996c47b8d65ce495af6d23d28449f73d42dd3879';
 const sha = (s) => createHash('sha256').update(s).digest('hex');
-const proactiveOffer = (text) => text.slice(text.indexOf('## Proactive Offer\n')).replace(/\n+$/, '');
+// It ends where § Task autonomy (git-autonomy R8, 2026-11-16) begins: that section has its own pins.
+const proactiveOffer = (text) => text.slice(text.indexOf('## Proactive Offer\n'), text.indexOf('\n## Task autonomy\n')).replace(/\n+$/, '');
 
 test('§ Proactive Offer in the contract when hashed → is the section r3 moved, byte for byte', () => {
   assert.equal(sha(proactiveOffer(read(CONTRACT))), PROACTIVE_OFFER_SHA256);
@@ -76,7 +78,7 @@ test('§ Proactive Offer in the contract when hashed → is the section r3 moved
 // sees it. Authorization-bearing text, so a change here is meant to be read, not absorbed.
 const FIRST_INSTRUCTIONS = {
   'push-ci': "**Read first**: `references/authorization-contract.md` before any push — § Push safety for the credential and the two prompt classes, § Efficacy Boundary for what an approval here does and does not authorize. If that Read fails, stop and report it; do not push.",
-  'smart-commit': "**Read first**: `@skills/push-ci/references/authorization-contract.md` before `--execute` commits anything — § Proactive Offer for the menu and the four Goal mode conditions, § Efficacy Boundary for what the per-use approval authorizes. If that Read fails, stop and report it; commit nothing (manual mode, which only prints commands, is unaffected).",
+  'smart-commit': "**Read first**: `@skills/push-ci/references/authorization-contract.md` before `--execute` commits anything — § Proactive Offer for the menu and the four Goal mode conditions, § Task autonomy for the Auto commit conditions, § Efficacy Boundary for what the per-use approval authorizes. If that Read fails, stop and report it; commit nothing (manual mode, which only prints commands, is unaffected).",
   'epic-merge': "**Read first**: `@skills/push-ci/references/authorization-contract.md` before any push or merge — § Push safety for the credential, the unshared attestation and the force-with-lease rules, § Efficacy Boundary for what the per-iteration approval authorizes. If that Read fails, stop and report it; push and merge nothing.",
   'gh-stack': "**Read first**: `@skills/push-ci/references/authorization-contract.md` before any `gh stack` operation that pushes — § Push safety for the credential and the unshared attestation, § Efficacy Boundary for what the per-use approval authorizes. If that Read fails, stop and report it; run no pushing operation.",
   'deploy-flow': "**Read first**: `@skills/push-ci/references/authorization-contract.md` before executing a declared merge or run step — § Efficacy Boundary for what the per-step approval authorizes, § Push safety for any step that pushes. If that Read fails, stop and report it; execute no step.",
@@ -94,7 +96,7 @@ test('each git skill first instruction when read → is exactly the pinned Read-
 // § Efficacy Boundary byte for byte. discretion-tiers.test.js pins its content with blank-line runs
 // collapsed (run length is Default-tier housekeeping there); this digest is the r3 move record — the
 // section exactly as it left rules/discretion.md — and a later edit updates it through review.
-const EFFICACY_BOUNDARY_SHA256 = 'f7c132404c020db2d8b445292a2ba772e17ecc84b9bb8849143c393bf67b2e91';
+const EFFICACY_BOUNDARY_SHA256 = '5e409c3d967a288c84b9d2c54f4347c1c6f89c920e0ce8dbd64a8256d325371a';
 const efficacyBoundary = (text) => text.slice(text.indexOf('## Efficacy Boundary\n'), text.indexOf('\n## Proactive Offer\n')).replace(/\n+$/, '');
 
 test('§ Efficacy Boundary in the contract when hashed → is the section r3 moved, byte for byte', () => {

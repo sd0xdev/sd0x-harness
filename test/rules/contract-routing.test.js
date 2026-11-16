@@ -92,8 +92,17 @@ const CONTRACTS = [
     path: 'skills/push-ci/references/authorization-contract.md',
     activatedBy: ['rules/git-workflow.md', 'rules/discretion.md', 'skills/push-ci/SKILL.md', 'skills/smart-commit/SKILL.md',
       'skills/epic-merge/SKILL.md', 'skills/gh-stack/SKILL.md', 'skills/deploy-flow/SKILL.md'],
-    headings: ['Push safety', 'Efficacy Boundary', 'Proactive Offer'],
-    minHeadings: 3,
+    headings: ['Push safety', 'Efficacy Boundary', 'Proactive Offer', 'Task autonomy'],
+    minHeadings: 4,
+  },
+  {
+    // git-autonomy R8 (2026-11-16): task start, Jira entry, task branch and ownership, read when a
+    // request first needs an artifact changed and before an automatic commit.
+    path: 'skills/smart-commit/references/task-contract.md',
+    activatedBy: ['CLAUDE.md', 'CLAUDE.template.md', 'rules/auto-loop.md', 'skills/smart-commit/SKILL.md', 'skills/jira/SKILL.md',
+      'skills/push-ci/references/authorization-contract.md'],
+    headings: ['When a task starts', 'Start sequence', 'Jira entry', 'Task branch', 'Ownership', 'Lifecycle'],
+    minHeadings: 6,
   },
 ];
 

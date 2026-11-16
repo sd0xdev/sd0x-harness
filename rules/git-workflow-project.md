@@ -72,7 +72,41 @@ run scripts/deploy.sh staging
 ## Goal Commit
 
 <!-- on (default) · off — while a goal you set with /goal is active, whether the model may commit
-     without asking each time (git-workflow.md § Proactive Offer, "Goal mode"). Pushes always ask.
-     Bare value, no trailing comment. -->
+     without asking each time (git-workflow.md § Proactive Offer, "Goal mode"). Pushes ask unless
+     ## Goal Publish below says draft. Bare value, no trailing comment. -->
 
 <!-- on -->
+
+## Auto Commit
+
+<!-- on · off — whether a task you asked for is committed locally, without a commit menu, once every
+     required check passes and its commit check holds (git-workflow.md § Proactive Offer, "Auto
+     commit"). off applies to everyone who clones this file; on applies only to a user who adopted
+     the mode. Bare value, no trailing comment. -->
+
+<!-- on -->
+
+## Goal Publish
+
+<!-- draft · off — while a goal you set with /goal is active, whether its task branch is pushed to
+     origin and a Draft PR created or updated, without asking each time, then CI read back
+     ("Goal publish"). Risk of `draft`: the changes and their history reach the remote, where they
+     can trigger CI cost, automations and notifications. It never merges, marks ready, releases or
+     deploys, and never pushes a protected branch or a force form. off applies to everyone; draft
+     only to a user who adopted the mode. -->
+
+<!-- draft -->
+
+## Base Branch
+
+<!-- The base and PR target of new task branches. Default: main — never the remote's default
+     branch in its place. -->
+
+<!-- main -->
+
+## Jira Project
+
+<!-- The Jira project key the task-start entry plans a Task in, e.g. OK. Absent: asked once per
+     task when Jira is connected. -->
+
+<!-- OK -->

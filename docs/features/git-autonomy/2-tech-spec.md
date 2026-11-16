@@ -3,6 +3,7 @@
 > **Doc class**: Lifecycle — Phase 2 technical spec (current authority for this feature's design).
 > **Created**: 2026-09-24
 > **Requirements**: [1-requirements.md](./1-requirements.md) · **Intent**: [intent-git-autonomy.md](./intent-git-autonomy.md)
+> **Length**: over the 400-line write budget by cohesion — eight requests share one credential model, and splitting would separate each credential's conditions from the risks and tests that answer them.
 
 ## 1. Requirement Summary
 
@@ -97,7 +98,9 @@ Same header shape as the two existing overrides: a live `Precedence:` paragraph 
 | `## Offer Mode` | Setting — read by § Proactive Offer | `on` (default) · `commit-only` · `off` | Default |
 | `## Deploy Workflow` | Setting — read by `/deploy-flow` | fenced `text` block, one step per line (below) | Default; the steps are only ever run by `/deploy-flow` under its Register #4 entry |
 | `## Run Steps` | Setting — read by `/deploy-flow` | `print` (default) · `execute` | Default. The scaffold's comment states the risk verbatim (§ 3.3 `/deploy-flow` step 3); choosing `execute` is the project's decision |
-| `## Goal Commit` | Setting — read by § 3.5 | `on` (default) · `off` | Default. `off` only narrows: every commit goes back to the menu |
+| `## Goal Commit` | Setting — read by § 3.5 | `on` (default) · `off` | Default. `off` only narrows: a Goal-mode commit goes back to the menu (an Auto commit follows `## Auto Commit`, § 3.6) |
+| `## Auto Commit` · `## Goal Publish` | Setting — read by `review-state.js policy` (§ 3.6) | `on` · `off` / `draft` · `off` | Default; an unreadable or unrecognised value reads `off` |
+| `## Base Branch` · `## Jira Project` | Setting — read by `task branch` / the task-start Jira entry (§ 3.6) | a branch name / a project key | Default |
 
 No heading restates a parent `##` heading, so the file carries **settings only** — no section
 replacement is offered (a same-named heading would replace the parent section wholesale under the
@@ -195,7 +198,8 @@ once. Nothing here writes the override; Scaffold invokes `/install-rules --custo
 
 The question text states that each workflow will show its own plan and ask again. Picking an option
 **invokes** the workflow; the workflow's AskUserQuestion is the credential (INV-001) — except a
-commit under Goal mode (§ 3.5), which takes precedence over this menu and prints its plan instead. The menu is
+commit under Goal mode (§ 3.5), which takes precedence over this menu and prints its plan instead
+(since R8 also Auto commit and Goal publish, § 3.6). The menu is
 never offered for `stash`, `reset --hard` or `rebase` (FR-13).
 
 **Suggested next command → option, never text (FR-16).** Wherever the model or a skill would end a
@@ -317,7 +321,8 @@ Conditions 3 and 4 are one call, `review-state.js goal-commit --format=json` →
 `disabled` · `gates-open`); a protected branch answers `ok: true` with `needs_branch_allowance: true`.
 Conditions 1 and 2 are behaviour-layer only — no hook input carries the goal. When all four hold,
 Goal mode takes precedence over the offer menu for the commit (`rules/git-workflow.md` § Proactive
-Offer); a push still goes through the menu and `/push-ci`'s own approval, but the menu **waits for
+Offer); a push still goes through the menu and `/push-ci`'s own approval (R8's Goal publish excepted,
+§ 3.6), but the menu **waits for
 the goal** (user direction 2026-09-25): the deferral keys on the goal being active (conditions 1–2),
 not on Goal mode holding for a commit — after a goal-mode commit the tree is clean, `goal-commit`
 reads `nothing-to-do` and `offer` reads `kind: push` while the goal still runs. So while it runs no
@@ -351,6 +356,23 @@ per-use AskUserQuestion inside `/smart-commit --execute` is replaced — not byp
 user-set goal (on a protected branch, one the user allowed for that goal); CLAUDE.md rule 4 names it. Each pin is re-recorded in the same
 reviewed change.
 
+### 3.6 Task autonomy (R8, user decision 2026-11-16)
+
+The user re-decided `INV-008`'s boundary: a task commits on its own once its gates pass, and a goal
+the user set publishes it — a plain push, a Draft PR, CI read back. The conditions are rule text
+(`skills/push-ci/references/authorization-contract.md` § Task autonomy); the task procedure is
+`skills/smart-commit/references/task-contract.md`; the mechanical halves are `review-state.js
+policy | task … | goal-publish` (`scripts/lib/task-autonomy.js`), `scripts/jira-entry.js` and
+`scripts/ci-readback.js`.
+
+| Decision | Choice |
+|---|---|
+| Who adopts | The policy: `## Auto Commit` / `## Goal Publish` settings (narrow-only: `off` for everyone, a granting value only for a user who adopted), else the user's own decision kept outside the repository per user and per repository (a fresh `/codex-setup init` records it only when none exists), else legacy (both off). Nothing in the repository adopts for another user; no evidence never widens anything |
+| What may auto-commit | Only a task with a clean baseline whose every dirty path it declared, the whole verified tree, after every gate; never a subset; content re-checked after the commit |
+| What may auto-publish | A plain push of the task's non-protected branch (`protected-branches.sh` exit 1), one destination, carrying only the task's verified commits, under a user-set active goal; then a Draft PR; CI judged by runs for the pushed OID, the required checks by job name and two confirming reads |
+| Base | `main`, or `## Base Branch`; fetched first, `--no-track`; a failed fetch creates nothing |
+| Jira | Asked only with the runtime capability (matched by operation name) and a successful access read; one question per task; the selection approves the shown plan; an unclear create is read back, never repeated |
+
 ## 4. Risks and Dependencies
 
 | Risk | Mitigation |
@@ -361,8 +383,10 @@ reviewed change.
 | The run-script risk (§ 3.3 step 3) | Default `print`; `execute` is a per-project opt-in whose scaffold comment and per-step question state the risk; argv invocation, no shell string; the step names the exact command before it runs |
 | A declared merge targets a protected branch | Allowed locally under per-step approval (it is the user's release flow); a push the harness issues goes through `/push-ci`'s protected pre-approval and the hook — unchanged. A push inside an opted-in `run` script is the run-script risk (§ 3.3 step 3) |
 | Offer nags | One per digest; `not now` silences until a new gate pass at a new digest; `## Offer Mode: off` |
-| Goal credential forged or stale | Behaviour-layer only, so the four § 3.5 conditions are rule text re-read at every commit; a model-set goal never counts; the `[GOAL_COMMIT]` record makes each unasked commit auditable; push stays behind `/push-ci`'s own approval, so a wrong local commit costs a `reset` |
-| Anchor pins churn | Register #4 and grant-block pins change in R5 (`/deploy-flow`) and R7 (goal-mode commit, which also edits § Efficacy Boundary) only, each citing the maintainer's decision; R3 separately re-records `push-ci`'s whole-file `SKILL_DIGEST` |
+| Goal credential forged or stale | Behaviour-layer only, so the § 3.5 conditions are rule text re-read at every commit and every publish; a model-set goal never counts; `[GOAL_COMMIT]` / `[AUTO_COMMIT]` / `[GOAL_PUSH]` records make each unasked step auditable. Since R8 a goal's commits can reach `origin` and a Draft PR (§ 3.6) — bounded by a plain push of a non-protected branch carrying only the task's verified commits, and never a merge |
+| Remote exposure under Goal publish (R8) | A Draft PR sends the changes and history to the remote, where they can trigger CI cost, automations and notifications; stated once per goal, `## Goal Publish: off` narrows it, and legacy repositories never get it without the user's adoption |
+| A wrong tree auto-committed (R8) | Only a clean baseline, every path declared, the whole verified tree after every gate; the content is re-checked after the commit, and an unverified commit is never published |
+| Anchor pins churn | Register #4 and grant-block pins change in R5 (`/deploy-flow`), R7 (goal-mode commit, which also edits § Efficacy Boundary) and R8 (Auto commit and Goal publish, user decision 2026-11-16), each citing its decision; R3 separately re-records `push-ci`'s whole-file `SKILL_DIGEST` |
 
 Dependencies: `jq`/`node` already required by the hooks; `git check-ref-format`.
 
@@ -377,8 +401,9 @@ Dependencies: `jq`/`node` already required by the hooks; `git check-ref-format`.
 | R5 | Register #4 + grant block + `CLAUDE*.md` rule 4 + `/deploy-flow` skill, registered in `docs/skill-catalog.yml` with the generated READMEs re-verified | FR-10, FR-13 | thorough (Anchor) |
 | R6 | Detect a custom flow and ask once to scaffold the override | FR-9 | standard |
 | R7 | Goal-mode commit: § 3.5 rule text, `/smart-commit` Step 5 branch, `## Goal Commit` setting, Register #4 / grant block / § Efficacy Boundary / rule 4 and their pins | FR-17, NFR-1 | thorough (Anchor) |
+| R8 | Task autonomy (§ 3.6): policy and adoption, task record, auto commit, Jira entry, task branch, goal publish (push → Draft PR → CI readback), Register #4 / grant block / § Efficacy Boundary / rule 4 and their pins | user decision 2026-11-16 | thorough (Anchor) |
 
-Order: R1 → R2 (R2's protected heading needs R1) → R3 ∥ R4 → R5 → R6; R7 after R2 and R5 (it shares their setting and their pins).
+Order: R1 → R2 (R2's protected heading needs R1) → R3 ∥ R4 → R5 → R6; R7 after R2 and R5 (it shares their setting and their pins); R8 after R7.
 
 ## 6. Testing Strategy
 
@@ -391,6 +416,7 @@ Order: R1 → R2 (R2's protected heading needs R1) → R3 ∥ R4 → R5 → R6; 
 | Guard (both directions) | Menu path reaches `smart-commit-execute.sh commit` (AI trailer → exit 4); `/deploy-flow`'s pre-merge `commit-msg-guard.sh` check passes the fixed template and refuses the step when the guard rejects (mutation proof on that call); a `commit-msg` hook that appends an AI trailer during the merge is caught by the post-merge read-back and stops the flow naming the OID; override omitting `main` → `main` still protected in all four workflows |
 | Goal-mode commit | Contract tests on the rule text for each § 3.5 condition in both directions (user goal on a feature branch → no question; a protected branch the user allowed for the goal → no question after the first-commit pair; a protected branch not yet allowed or declined, model-set goal, `/goal clear`, open gate, `## Goal Commit` set to `off` (the heading, then a bare `off` line under it) → the ordinary approval); the goal path still reaches `smart-commit-execute.sh commit` (AI trailer → exit 4) and never passes `--ai-co-author` |
 | Carriers | Override count/list agrees with `rules/*-project.md` on disk in every carrier (NFR-5) |
+| Task autonomy (R8) | Synthetic repos with a bare remote: policy precedence and adoption, task record, commit check reasons, the post-commit content check, goal publish incl. foreign commits, branch from the fetched base; Jira capability/plan/readback and CI classification as pure functions; contract clauses with negative controls (`test/scripts/task-autonomy.test.js`, `jira-entry.test.js`, `ci-readback.test.js`, `test/rules/task-autonomy-contract.test.js`) |
 
 ## 7. Open Questions
 
