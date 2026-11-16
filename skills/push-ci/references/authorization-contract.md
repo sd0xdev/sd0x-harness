@@ -197,7 +197,9 @@ The sequence — each step only after the previous one is confirmed:
    required checks (`gh pr checks <n> --required --json name,bucket`, by job name). Only a completed
    success for exactly that head, on the base recorded at PR time, with every required check passing
    and the same runs seen on two reads at least a minute apart (`confirm`), is a pass — no recorded
-   base or unread required checks reads `unknown`; pending,
+   base or unread required checks reads `unknown`. `gh pr checks --required` exits 1 with "no
+   required checks reported" when the branch has none: that message, and only that one, reads as
+   `[]` (measured on PR #31); any other failure leaves the checks unread; pending,
    skipped, zero runs, a moved head or base, or unknown are each reported as what they are. A Draft
    PR is never marked ready to make CI start.
 5. A CI failure this task caused is fixed, its gates re-run, the fix committed under Auto commit, and
