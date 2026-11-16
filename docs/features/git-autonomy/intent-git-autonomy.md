@@ -58,3 +58,14 @@ shows its plan and asks → commits pass the guard → `/push-ci` shows its plan
 Same session on `main`: a commit-only menu; `/push-ci` still asks the protected pre-approval. A
 commit body carrying `Co-Authored-By: Claude …` is rejected with exit 4 on the menu path. Under a
 user-typed `/goal` on `feat/x` the commit runs unasked through the same guard; push still asks.
+
+## Re-decision 2026-11-16 (R8)
+
+The user widened the credentials (recorded here; the text above is kept as the 2026-09-24 decision):
+`/smart-commit --execute` may also commit a task without its per-use question under the task-autonomy
+policy the user adopted, and `/push-ci` may make the plain push of a task's non-protected branch —
+followed by a Draft PR and a CI readback — while a goal the user set is active under that policy. The
+first Non-goal and `INV-001`, `INV-006` and `INV-008` read with that exception. Unchanged: protected
+branches, force forms, merges, releases, deploys and every guard; nothing widens without the user's
+adoption, and a repository with no evidence of it keeps the 2026-09-24 behaviour.
+

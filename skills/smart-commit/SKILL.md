@@ -1,12 +1,12 @@
 ---
 name: smart-commit
-description: "Smart batch commit. Analyzes uncommitted changes, groups by cohesion, generates commit messages matching project style. Default: output git commands for manual execution. With --execute: directly run git add + git commit (requires user approval, except under a user-set goal — see Goal mode). Use when: user says 'commit', 'batch commit', 'prepare commit', 'write commit message', or /smart-commit"
-allowed-tools: Bash(git:*), Bash(bash:*), Bash(env:*), Read, Write, Grep, Glob, AskUserQuestion
+description: "Smart batch commit. Analyzes uncommitted changes, groups by cohesion, generates commit messages matching project style. Default: output git commands for manual execution. With --execute: directly run git add + git commit (requires user approval, except under a user-set goal — see Goal mode — or the adopted task-autonomy policy — see Auto commit). Use when: user says 'commit', 'batch commit', 'prepare commit', 'write commit message', or /smart-commit"
+allowed-tools: Bash(git:*), Bash(bash:*), Bash(env:*), Bash(node:*), Read, Write, Grep, Glob, AskUserQuestion
 ---
 
 # Smart Commit
 
-**Read first**: `@skills/push-ci/references/authorization-contract.md` before `--execute` commits anything — § Proactive Offer for the menu and the four Goal mode conditions, § Efficacy Boundary for what the per-use approval authorizes. If that Read fails, stop and report it; commit nothing (manual mode, which only prints commands, is unaffected).
+**Read first**: `@skills/push-ci/references/authorization-contract.md` before `--execute` commits anything — § Proactive Offer for the menu and the four Goal mode conditions, § Task autonomy for the Auto commit conditions, § Efficacy Boundary for what the per-use approval authorizes. If that Read fails, stop and report it; commit nothing (manual mode, which only prints commands, is unaffected).
 
 
 Analyze uncommitted changes → group by cohesion → generate commit messages → output git commands (or execute directly with `--execute`).
@@ -74,7 +74,7 @@ Read CLAUDE.md and `.claude/rules/git-workflow.md` to determine mode:
 
 Default to **manual mode**. Direct execution requires explicit `--execute` flag regardless of project git restrictions.
 
-**`--execute` mode**: When `--execute` is passed, use `AskUserQuestion` to show the full commit plan and get explicit user approval before executing. This is a skill-level exception to git-workflow rules (same pattern as `/push-ci`). The one exception to asking is § Goal mode below.
+**`--execute` mode**: When `--execute` is passed, use `AskUserQuestion` to show the full commit plan and get explicit user approval before executing. This is a skill-level exception to git-workflow rules (same pattern as `/push-ci`). The one exception to asking is § Goal mode below. § Auto commit below replaces the question the same way, under its own conditions.
 
 ### Goal mode (git-autonomy FR-17)
 
@@ -94,6 +94,39 @@ ambiguous grouping, a `--sign`/`--no-sign` override) still asks. `--ai-co-author
 this path: when the user explicitly asks for it, Goal mode does not apply and the ordinary per-use
 approval runs, so the attribution whitelist is always reached through the user. `needs_branch_allowance: true` means the first goal-mode commit on that protected branch
 asks first (recommend a feature branch; if declined, ask to allow the branch for this goal).
+
+### Auto commit (git-autonomy R8)
+
+Where the task-autonomy policy the user adopted says `Auto Commit: on`, `--execute` commits a task
+without the plan approval when `@skills/push-ci/references/authorization-contract.md` § Task autonomy
+"Auto commit" says all four of its conditions hold — re-checked before every commit. The procedure
+around it (task start, ownership, branch) is `references/task-contract.md`.
+
+1. **Gates first.** Every gate the change requires has passed after the last edit — review,
+   `/precommit`, the Adequacy Gate where it applies, Doc Sync and its doc review. A gate that is
+   stale is **run**, through the auto-loop, before anything else; this path never commits on a warning
+   (Step 2's advisory row does not apply here).
+2. **The check.** `node <scripts>/review-state.js task commit-check --format=json` must return
+   `ok: true`. Its `candidate` list is the selection — the whole dirty set, every path declared by the
+   task with `task own` — and replaces the live-status selection of Step 3. Any `reasons` entry
+   (`baseline-dirty`, `unowned`, `staged`, `sensitive`, `gates-open`, `protected`, …) means **this path
+   does not run**: the ordinary per-use approval does, with the reason stated. Never commit a subset,
+   and never stash, reset or `git add -p` to make the check pass. In a plan with more than one group
+   the check runs again before each later group: inside the batch it answers with the remaining
+   candidates, and `batch-broken` stops the batch there: a commit since the task's tip that is not one
+   of the batch's own groups (another parent count, a path the check did not plan, content other than
+   what it recorded), or a tree that no longer digests to what it recorded.
+3. **Print, then commit.** The plan is printed, not asked, headed by
+   `[AUTO_COMMIT] task=<id> | branch=<branch> | digest=<digest> | <ISO8601>`; each group stages
+   exactly its candidates. When the plan has more than one group, it adds `final tree verified; the
+   intermediate commits were not verified on their own`.
+4. **Verify.** After the last group, `review-state.js task committed` must return `ok: true` — the
+   commits sit on the task's tip, the tree is clean, and the final committed tree (every path, mode
+   and object) digests to exactly what the gates passed at. `ok: false` is reported as it reads
+   (`tree-mismatch`, `not-clean`); the commit stays local and is never published.
+
+Everything Goal mode keeps, this path keeps: every diagnostic and HALT, the attribution guard,
+`verify-last`, every judgement question; `--ai-co-author` is never passed on it.
 
 **1b. Learn Commit Style**
 
@@ -555,7 +588,7 @@ INSPECT="$REPO_ROOT/.claude/scripts/smart-commit-inspect.sh"
 /bin/bash -p -- "$INSPECT" branch
 ```
 
-Show grouping plan and ask user to confirm. Under § Goal mode, show it and do not ask. Include identity, signing, and AI guard metadata from
+Show grouping plan and ask user to confirm. Under § Goal mode, show it and do not ask. Under § Auto commit, likewise, with its own record. Include identity, signing, and AI guard metadata from
 Step 1c/1d/1e, and the pre-flight verdict from Step 2 — in `--execute` mode this is the same block
 `AskUserQuestion` shows, so the approval screen carries pre-flight state rather than only the
 grouping. **Pre-flight** is one of `passed` / `stale` / `not run`; when it is not `passed`, append
@@ -801,7 +834,7 @@ trailer is added; with it, exactly one is: `Co-Authored-By: Claude <noreply@anth
 - **No omissions**: Must `git status` verify after completion
 - **No secrets**: Sensitive files must be warned about, never included
 - **No unauthorized execution**: Without `--execute` flag, **never** directly execute git add/commit
-- **No silent execution**: In `--execute` mode, must use `AskUserQuestion` for approval before executing commits — except under § Goal mode, where the plan is printed with its `[GOAL_COMMIT]` record, never silently
+- **No silent execution**: In `--execute` mode, must use `AskUserQuestion` for approval before executing commits — except under § Goal mode, where the plan is printed with its `[GOAL_COMMIT]` record, never silently, and under § Auto commit, with its `[AUTO_COMMIT]` record
 - **No file the plan never showed**: Selection is the whole live git status, so the Commit Plan is the only filter — every file a commit will touch appears in the confirmed plan (under § Goal mode, the printed plan), and a file added after confirmation (or after printing) re-opens the plan
 
 ## Bundled References
@@ -821,7 +854,7 @@ trailer is added; with it, exactly one is: `Co-Authored-By: Claude <noreply@anth
 
 Each basename carries the skill name because `/install-scripts` flattens every skill's `scripts/*` into one `.claude/scripts/` directory — a future skill shipping `execute.sh` would otherwise overwrite the script that enforces the attribution anchor. That flattening is also why `smart-commit-execute.sh` and `smart-commit-inspect.sh` are both located installed-copy-first: in a consuming project `.claude/scripts/` is the only place either one exists.
 
-> **Note**: `--execute` runs the script above; it is not a procedure Claude assembles from bash in a reference document. That is why this skill needs no `Bash(mktemp:*)` or `Bash(rm:*)` grant — the only shell command it issues for `--execute` is `/bin/bash -p -- "$EXECUTE" …`, where `$EXECUTE` was assigned by the locator **in that same fence**. Why that exact spelling: [execute-mode.md § Why the entrypoint is spelled `/bin/bash -p --`](references/execute-mode.md).
+> **Note**: `--execute` runs the script above; it is not a procedure Claude assembles from bash in a reference document. That is why this skill needs no `Bash(mktemp:*)` or `Bash(rm:*)` grant — the commit itself runs only through `/bin/bash -p -- "$EXECUTE" …`, where `$EXECUTE` was assigned by the locator **in that same fence**; the other shell calls on the `--execute` path are the `review-state.js` checks (`goal-commit`, `task commit-check`, `task committed`, hence `Bash(node:*)`) and the prefixed `git add` of Step 5c.2. Why that exact spelling: [execute-mode.md § Why the entrypoint is spelled `/bin/bash -p --`](references/execute-mode.md).
 
 ## Examples
 
@@ -832,3 +865,5 @@ Each basename carries the skill name because `/install-scripts` flattens every s
 | `/smart-commit --execute` | Execute mode → pre-flight → group → AskUserQuestion approval → `git add` + `git commit` per group → `git status` verify |
 | `/smart-commit --execute --ai-co-author` | As above, plus the one permitted `Co-Authored-By` trailer |
 | `/smart-commit --execute` while a goal the user set is active (no `--ai-co-author`) | § Goal mode → `goal-commit` check → plan printed with a `[GOAL_COMMIT]` record → `git add` + `git commit` per group, no approval question → verify |
+| `/smart-commit --execute` for a task, policy `Auto Commit: on`, every gate passed | § Auto commit → `task commit-check` ok → plan printed with an `[AUTO_COMMIT]` record → the candidates staged and committed → `task committed` ok |
+| The same, but the check reports `unowned` or `baseline-dirty` | No automatic commit: the ordinary plan and its one approval, naming the reason |

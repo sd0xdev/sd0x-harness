@@ -41,7 +41,7 @@ const POINTERS = [
   ['rules/git-workflow.md', 'Push safety', 'skills/push-ci/references/authorization-contract.md',
     'Before any push, Read', 'If that Read fails, do not push.'],
   ['rules/git-workflow.md', 'Proactive Offer', 'skills/push-ci/references/authorization-contract.md',
-    'Before offering, or committing under Goal mode, Read', 'If that Read fails, offer nothing and make no Goal-mode commit.'],
+    'Before offering or acting under one, Read', 'If that Read fails, offer nothing and commit or publish nothing unasked.'],
   ['rules/discretion.md', 'Efficacy Boundary', 'skills/push-ci/references/authorization-contract.md',
     'Read it before relying on an approval as a push credential', 'if that Read fails, do not push.'],
 ];

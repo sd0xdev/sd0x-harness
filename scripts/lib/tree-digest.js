@@ -450,27 +450,52 @@ function computeTreeState(repoRoot, opts = {}) {
   const partialPlanes = new Set(partialReasons.map(r => r.plane));
   const planes = {};
   for (const plane of ['code', 'doc']) {
-    const list = records[plane].sort((a, b) => (a.p < b.p ? -1 : a.p > b.p ? 1 : 0));
-    let digest = null;
-    if (!partialPlanes.has(plane)) {
-      const h = crypto.createHash('sha256');
-      for (const { p, mode, oid } of list) {
-        h.update(Buffer.from(`${mode} ${oid} ${p}\0`, 'latin1'));
-      }
-      digest = `sha256:${h.digest('hex')}`;
-    }
+    const list = records[plane];
     planes[plane] = {
-      digest,
+      digest: partialPlanes.has(plane) ? null : digestRecords(list),
       partial: partialPlanes.has(plane),
       dirty: [...dirty[plane]].sort(),
       entryCount: list.length,
     };
   }
 
-  return { planes, partialReasons };
+  // `withEntries`: the per-path `{mode, oid}` map the digests were computed from, for a caller that
+  // must later compare individual commits against exactly this read (git-autonomy R8 batches).
+  return opts.withEntries ? { planes, partialReasons, entries } : { planes, partialReasons };
 }
 
-module.exports = { computeTreeState, planeOf };
+function digestRecords(list) {
+  const h = crypto.createHash('sha256');
+  for (const { p, mode, oid } of [...list].sort((a, b) => (a.p < b.p ? -1 : a.p > b.p ? 1 : 0))) {
+    h.update(Buffer.from(`${mode} ${oid} ${p}\0`, 'latin1'));
+  }
+  return `sha256:${h.digest('hex')}`;
+}
+
+// The same per-plane digests for a committed tree (`git ls-tree -r`): every path, mode and object
+// of <rev>, in the record format computeTreeState hashes. A clean work tree at <rev> digests to
+// exactly this, so "the commit holds the tree the gates passed at" is one equality — no per-path
+// snapshot, nothing read after the digest. null when the tree cannot be read.
+function digestOfRev(repoRoot, rev) {
+  let out;
+  try {
+    out = git(repoRoot, ['ls-tree', '-r', '-z', '--full-tree', rev]);
+  } catch {
+    return null;
+  }
+  const records = { code: [], doc: [] };
+  for (const rec of out.toString('latin1').split('\0')) {
+    if (!rec) continue;
+    const tab = rec.indexOf('\t');
+    if (tab < 0) return null;
+    const [mode, , oid] = rec.slice(0, tab).split(' ');
+    const p = rec.slice(tab + 1);
+    records[planeOf(p)].push({ p, mode, oid });
+  }
+  return { code: digestRecords(records.code), doc: digestRecords(records.doc) };
+}
+
+module.exports = { computeTreeState, planeOf, digestOfRev };
 
 if (require.main === module) {
   const repoRoot = process.argv[2] || process.cwd();

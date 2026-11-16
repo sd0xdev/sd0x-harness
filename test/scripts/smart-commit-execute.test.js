@@ -3739,8 +3739,8 @@ test('SKILL.md points --execute at the script, not at bash to translate', () => 
     const line = fm.split('\n').find((l) => /^allowed-tools:/.test(l)) ?? '';
     return [...line.matchAll(/Bash\(([^:)]+):\*\)/g)].map((m) => m[1]).sort();
   };
-  assert.deepEqual(grants(skill), ['bash', 'env', 'git'],
-    'the grants the fenced procedure needed must not outlive it');
+  assert.deepEqual(grants(skill), ['bash', 'env', 'git', 'node'],
+    'the grants the fenced procedure needed must not outlive it (node: the R8 review-state.js checks)');
   assert.ok(/`Bash\(mktemp:\*\)`/.test(skill) && !grants(skill).includes('mktemp'),
     'prose naming a withdrawn grant must not be read as the grant itself');
 });

@@ -29,10 +29,11 @@ const CLAUSES = {
   'never --ai-co-author': '`--ai-co-author` is never passed',
   'the record hashes the goal': '`[GOAL_COMMIT] goal=<first 12 hex of git hash-object of the condition>',
   'never the goal text': 'never the goal text',
-  'push and deploy keep their approvals': 'Pushes, `/deploy-flow` and every other operation keep their own approvals',
-  'the push menu waits for the goal': 'while a user goal is active (Goal mode conditions 1–2) the commit follows Goal mode (else a commit-only menu), and no push menu is offered until the goal ends, then once as the deferred menu',
+  // git-autonomy R8 (2026-11-16): a Goal publish is the one push that does not; the clause names it.
+  'push and deploy keep their approvals': 'Pushes keep their own approvals except a § Task autonomy Goal publish; `/deploy-flow` and every other operation keep theirs',
+  'the push menu waits for the goal': 'while a user goal is active (Goal mode conditions 1–2) the commit follows § Task autonomy\'s Auto commit where it applies, else Goal mode (else a commit-only menu), and no push menu is offered until the goal ends, then once as the deferred menu',
   'the deferred menu keeps its own marker end to end': 'The deferred menu adds `--deferred` to each `offer`/`offer-shown` call',
-  'commits only': 'the one exception is Goal mode, below, and it covers commits only',
+  'commits only': 'the exceptions are Goal mode, below, which covers commits only, and the two § Task autonomy credentials',
 };
 
 // rules-residency Q2-F: the `## Goal Commit` setting row moved to the path-scoped override contract;

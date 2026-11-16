@@ -124,6 +124,7 @@ const ALLOWED_CLAUDE_READERS = new Set([
   'test/skills/context-management-rule.test.js',   // pins @rules/context-management.md references
   'test/skills/create-pr-sanitization.test.js',    // pins Development Rules #3 wording
   'test/rules/discretion-tiers.test.js',           // pins @rules/discretion.md import in the two tracked CLAUDE templates (R7)
+  'test/rules/task-autonomy-contract.test.js',     // pins rule 4's Goal publish / Auto commit exceptions in both CLAUDE files (git-autonomy R8)
   'test/skills/remind.test.js',                    // pins /remind extraction targets (section headings, not registration)
   'test/rules/scope-discipline.test.js',           // pins the closed-list human-exit union sentence (auto-loop + scope-discipline) in both tracked CLAUDE templates
   'test/skills/review-dispatch.test.js',           // pins {TEST_COMMAND} placeholder + comments-only honesty prose

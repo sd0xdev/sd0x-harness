@@ -471,6 +471,15 @@ Write `.sd0x/install-state.json` to repo root:
 }
 ```
 
+**Task-autonomy mode on a fresh install.** An `init` that found no manifest at all states the mode's
+two defaults and their risk in its summary — Auto commit on, Goal publish as a Draft PR (the push
+authorization contract of the `push-ci` skill, § Task autonomy) — and records the installing user's
+adoption with `node <plugin>/scripts/review-state.js policy-decide --if-pending adopted`, which keeps
+any decision the user already recorded (a `declined` included) and says so (`[POLICY_KEPT]`). The decision is kept per
+user outside the repository, never in this manifest: a teammate's clone is asked once for their own.
+An `init` or `sync` over an existing manifest records nothing, so upgrading an install never widens
+what it allowed.
+
 The template above shows the **no-flag run, with the `commit-msg` hook active**. When
 `init --with-push-gate` installed the hook in Phase 3, the `pre-push` entry is written like
 `commit-msg`: `{ "status": "installed", "hash": "<sha1>", "mode": "<husky|hooksPath|direct|fallback>" }` —

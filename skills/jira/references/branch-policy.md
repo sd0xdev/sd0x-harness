@@ -69,5 +69,5 @@ feat/OK-51513-add-user-profile-page-3    # if still collision
 
 | Mode | Behavior |
 |------|----------|
-| Plan (default) | Output branch name + `git checkout -b` command |
-| Execute (`--execute`) | Run `git checkout -b` directly |
+| Plan (default) | Output branch name + the `review-state.js task branch <branch>` command |
+| Execute (`--execute`) | Run `review-state.js task branch <branch>`: from the freshly fetched `origin/<base>` (`main` unless `## Base Branch` names another), `--no-track`; a dirty tree, an existing branch or a failed fetch refuses (`skills/smart-commit/references/task-contract.md` § Task branch) |

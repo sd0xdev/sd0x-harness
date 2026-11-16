@@ -17,6 +17,7 @@
         "skills/codex-code-review/references/scope-contract.md",
         "skills/codex-code-review/references/loop-diagnostics.md",
         "skills/push-ci/references/authorization-contract.md",
+        "skills/smart-commit/references/task-contract.md",
         "skills/test-review/references/testing-contract.md",
         "skills/doc-review/references/documentation-contract.md",
         "rules/override-contract.md"
@@ -24,8 +25,8 @@
       "carrier": [
         "scripts/review-state.js"
       ],
-      "chars": 10692,
-      "lines": 141
+      "chars": 10811,
+      "lines": 142
     },
     {
       "file": "rules/discretion.md",
@@ -38,7 +39,7 @@
       "carrier": [
         "test/rules/discretion-tiers.test.js"
       ],
-      "chars": 8712,
+      "chars": 8780,
       "lines": 73
     },
     {
@@ -51,14 +52,15 @@
         "skills/codex-code-review/references/loop-diagnostics.md",
         "skills/codex-code-review/references/scope-contract.md",
         "rules/override-contract.md",
-        "docs/features/hook-lightweighting/2-tech-spec.md"
+        "docs/features/hook-lightweighting/2-tech-spec.md",
+        "skills/smart-commit/references/task-contract.md"
       ],
       "carrier": [
         "scripts/review-state.js",
         "scripts/validate-family-sentinel.js",
         "scripts/lib/review-dispatch.js"
       ],
-      "chars": 10630,
+      "chars": 10694,
       "lines": 80
     },
     {
@@ -68,15 +70,16 @@
       "justification": "A git mutation is irreversible and outward-facing and can be asked for in any session; the prohibitions, grants and attribution rule cannot wait for a Read.",
       "detail": [
         "skills/push-ci/references/authorization-contract.md",
-        "rules/override-contract.md"
+        "rules/override-contract.md",
+        "skills/smart-commit/references/task-contract.md"
       ],
       "carrier": [
         "scripts/pre-push-gate.sh",
         "scripts/commit-msg-guard.sh",
         "skills/smart-commit/scripts/smart-commit-execute.sh"
       ],
-      "chars": 6597,
-      "lines": 62
+      "chars": 6709,
+      "lines": 59
     },
     {
       "file": "rules/security.md",
@@ -172,8 +175,8 @@
       "carrier": [
         "scripts/review-state.js"
       ],
-      "chars": 3430,
-      "lines": 79
+      "chars": 4821,
+      "lines": 114
     }
   ]
 }

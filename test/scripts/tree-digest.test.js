@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { computeTreeState, planeOf } = require('../../scripts/lib/tree-digest.js');
+const { computeTreeState, planeOf, digestOfRev } = require('../../scripts/lib/tree-digest.js');
 
 const CLEAN_GIT_ENV = { ...process.env };
 for (const k of Object.keys(CLEAN_GIT_ENV)) {
@@ -526,5 +526,41 @@ describe('computeTreeState — submodules (gitlink three-state rule)', () => {
     // dirtying is the only thing standing between the hidden content and a
     // derived owed=false.
     assert.ok(s.planes.code.dirty.includes('vendor/sub'));
+  });
+});
+
+// git-autonomy R8: `task committed` compares a committed tree against the digest the gates passed
+// at, so the two derivations must agree record for record on a clean checkout.
+describe('digestOfRev', () => {
+  test('clean work tree → equals computeTreeState for every plane (symlink, exec bit, doc, non-ASCII)', () => {
+    const dir = repo();
+    write(dir, 'a.js', 'a\n');
+    write(dir, 'bin/run.sh', '#!/bin/sh\n');
+    fs.chmodSync(path.join(dir, 'bin/run.sh'), 0o755);
+    write(dir, 'docs/x.md', '# x\n');
+    write(dir, 'caf\u00e9.js', 'c\n');
+    fs.symlinkSync('a.js', path.join(dir, 'link.js'));
+    commitAll(dir, 'init');
+    const live = computeTreeState(dir).planes;
+    assert.deepEqual(digestOfRev(dir, 'HEAD'), { code: live.code.digest, doc: live.doc.digest });
+  });
+
+  test('a mode change, an added path or a deletion moves the digest; an unreadable rev → null', () => {
+    const dir = repo();
+    write(dir, 'a.js', 'a\n');
+    write(dir, 'b.js', 'b\n');
+    commitAll(dir, 'init');
+    const base = digestOfRev(dir, 'HEAD').code;
+    fs.chmodSync(path.join(dir, 'a.js'), 0o755);
+    commitAll(dir, 'mode');
+    const moded = digestOfRev(dir, 'HEAD').code;
+    write(dir, 'c.js', 'c\n');
+    commitAll(dir, 'add');
+    const added = digestOfRev(dir, 'HEAD').code;
+    fs.rmSync(path.join(dir, 'b.js'));
+    commitAll(dir, 'delete');
+    const deleted = digestOfRev(dir, 'HEAD').code;
+    assert.equal(new Set([base, moded, added, deleted]).size, 4);
+    assert.equal(digestOfRev(dir, 'no-such-rev'), null);
   });
 });
