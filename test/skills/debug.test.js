@@ -130,3 +130,65 @@ test('debug trigger keywords do not overlap with bug-fix or issue-analyze', () =
   assert.doesNotMatch(debugTrigger, /analyze issue/i, 'should not overlap with issue-analyze');
   assert.doesNotMatch(debugTrigger, /triage review/i, 'should not overlap with issue-analyze');
 });
+
+// --- Hypothesis tie: observe before debating ---
+
+test('hypothesis tie → a cheap, safe, discriminating observation comes before /codex-brainstorm', () => {
+  const content = readFileSync(skillPath, 'utf8');
+  const tie = content.slice(content.indexOf('### When Hypotheses Tie'), content.indexOf('## Phase 3: Root Cause Confirmation'));
+
+  assert.ok(tie.indexOf('cheap, safe observation') < tie.indexOf('### `/codex-brainstorm` Integration'), 'the probe is described first');
+  assert.match(tie, /whose possible outcomes lead to \*\*different next actions\*\* — e\.g\. read the effective config/);
+  assert.match(tie, /If every outcome leads to the same next action, the observation does not discriminate/);
+  assert.match(tie, /Only when no suitable probe is available .* → `\/codex-brainstorm`/);
+  assert.match(tie, /Reached from step 4 above — never as the first response to a tie/);
+});
+
+test('hypothesis tie → the termination tables in SKILL.md and the protocol both route to the probe first', () => {
+  const skill = readFileSync(skillPath, 'utf8');
+  const protocol = readFileSync(refProtocol, 'utf8');
+
+  assert.match(skill, /\| ≥2 競爭假設無法區分（tie） \| \*\*Tie-break probe first\*\* → .*找不到合適 probe 才 \*\*Brainstorm\*\*/);
+  assert.match(protocol, /\| 多個競爭假設（≥2 同等可信） \| \*\*Tie-break probe first\*\*（§ Tie-Break）；沒有合適的 probe 才 \*\*Brainstorm\*\*/);
+  assert.doesNotMatch(skill, /無法區分 \| \*\*Brainstorm\*\*/, 'no row sends a tie straight to debate');
+  assert.doesNotMatch(protocol, /同等可信） \| \*\*Brainstorm\*\*/, 'no row sends a tie straight to debate');
+});
+
+test('no suitable probe → the debate designs an experiment instead of picking a hypothesis', () => {
+  const skill = readFileSync(skillPath, 'utf8').replace(/\s+/g, ' ');
+  const protocol = readFileSync(refProtocol, 'utf8');
+
+  assert.match(skill, /topic = \*\*design an experiment\*\* that would separate the hypotheses .* not "which hypothesis is right"/);
+  assert.match(protocol, /topic = \*\*設計一個能區分各假設的實驗\*\*.*不是「哪個假設才對」/);
+  assert.match(protocol, /需要 `\[WRITE_PROBE\]` 的觀察不算安全的 tie-break probe/);
+});
+
+test('debate consensus → never a root cause without execution evidence', () => {
+  const skill = readFileSync(skillPath, 'utf8');
+  const protocol = readFileSync(refProtocol, 'utf8');
+
+  assert.match(skill, /\*\*Consensus alone cannot establish cause\.\*\*/);
+  assert.match(protocol, /\*\*共識不能確立因果。\*\*/);
+  assert.match(skill, /Root cause has ≥1 execution evidence — a debate consensus is not one/);
+  assert.doesNotMatch(skill, /Nash equilibrium result as new primary hypothesis/);
+  assert.doesNotMatch(protocol, /以收斂結果作為新的主假設/);
+});
+
+test('tie handling → evidence-based closure and bounded escalation are unchanged', () => {
+  const skill = readFileSync(skillPath, 'utf8');
+  const protocol = readFileSync(refProtocol, 'utf8');
+
+  assert.match(skill, /\| 根因已定位 \+ ≥1 執行結果佐證 \| \*\*Stop\*\* → Phase 3 \|/);
+  assert.match(skill, /\| 連續 2 輪無新資訊 \| \*\*Escalate\*\* → `⚠️ Need Human` \|/);
+  assert.match(skill, /\| Max rounds \(6\) reached \| \*\*Escalate\*\* → `⚠️ Need Human` \|/);
+  assert.match(skill, /it is journaled and counts toward `debug\.max_probe_rounds`/);
+  assert.match(skill.replace(/\s+/g, ' '), /the debate adds no probe rounds, and 2 rounds without new information or `debug\.max_probe_rounds` still escalate to `⚠️ Need Human`/);
+  assert.match(protocol, /辯論不增加 probe rounds；連續 2 輪無新資訊或達到 max rounds 仍然 `⚠️ Need Human`/);
+});
+
+test('tie-break probe → journaled with its outcome-to-next-action mapping', () => {
+  const protocol = readFileSync(refProtocol, 'utf8');
+
+  assert.match(protocol, /- \*\*Outcome → Next action\*\*: <結果 1> → <下一步 A>；<結果 2> → <下一步 B>/);
+  assert.match(protocol, /若所有結果都導向同一個下一步，這個觀察沒有鑑別力/);
+});

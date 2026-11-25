@@ -37,8 +37,9 @@ Intake  →  Classify →  Probe Loop   →   Root Cause    →   Fix +       �
   │          │           │                 │                │              │
   ▼          ▼           ▼                 ▼                ▼              ▼
 Execute    refs/       Bash            /seek-verdict    Edit+test     --export
-reproduce  failure-    /codex-         /code-investigate /bug-fix      (optional)
-           taxonomy    brainstorm      (optional)
+reproduce  failure-    tie-break probe /code-investigate /bug-fix      (optional)
+           taxonomy    /codex-         (optional)
+                       brainstorm
 ```
 
 ## Phase 0: Intake + Reproduce
@@ -80,17 +81,39 @@ See `references/failure-taxonomy.md` for:
 | Condition | Action |
 |-----------|--------|
 | 根因已定位 + ≥1 執行結果佐證 | **Stop** → Phase 3 |
-| ≥2 競爭假設無法區分 | **Brainstorm** → `/codex-brainstorm` 對抗辯論 |
+| ≥2 競爭假設無法區分（tie） | **Tie-break probe first** → 便宜、安全、能分流下一步的觀察；找不到合適 probe 才 **Brainstorm** → `/codex-brainstorm` 設計實驗（見 § When Hypotheses Tie） |
 | 連續 2 輪無新資訊 | **Escalate** → `⚠️ Need Human` |
 | Max rounds (6) reached | **Escalate** → `⚠️ Need Human` |
 
+### When Hypotheses Tie
+
+When ≥2 equally credible hypotheses (競爭假設) remain, observe before debating. Full rules:
+`references/probe-protocol.md` § Tie-Break.
+
+| Step | Action |
+|------|--------|
+| 1 | Look for a **cheap, safe observation** (read-only, inside § Probe Safety Rules) whose possible outcomes lead to **different next actions** — e.g. read the effective config: value X → follow H1's next probe, value Y → follow H2's |
+| 2 | Before running it, write each possible outcome and the next action it leads to. If every outcome leads to the same next action, the observation does not discriminate — pick another |
+| 3 | Run it as a normal probe round: it is journaled and counts toward `debug.max_probe_rounds` |
+| 4 | Only when no suitable probe is available (none is safe, cheap or reachable from here) → `/codex-brainstorm` |
+
 ### `/codex-brainstorm` Integration
 
-When ≥2 equally credible hypotheses exist:
+Reached from step 4 above — never as the first response to a tie:
+
 1. Pause probe loop
-2. Invoke `/codex-brainstorm` via Skill tool — topic = hypothesis comparison
-3. Use Nash equilibrium result as new primary hypothesis
-4. Resume probe loop to verify
+2. Invoke `/codex-brainstorm` via Skill tool — topic = **design an experiment** that would separate
+   the hypotheses (what to observe, and which outcome points to which hypothesis), not "which
+   hypothesis is right"
+3. Take the debate's output as an experiment to run, or as the hypothesis to test first. It is
+   still a hypothesis
+4. Resume probe loop and run it
+
+**Consensus alone cannot establish cause.** Two debaters agreeing — or a debate that stops with no
+new objections — is not evidence about the system. A hypothesis becomes the root cause only through
+the § Termination row above: located, with ≥1 execution result supporting it, then Phase 3. The
+bounds do not move either: the debate adds no probe rounds, and 2 rounds without new information or
+`debug.max_probe_rounds` still escalate to `⚠️ Need Human`.
 
 ## Phase 3: Root Cause Confirmation
 
@@ -186,7 +209,8 @@ Doc Sync is governed by `@rules/auto-loop.md` (behavior-layer rule). After preco
 - [ ] Problem classified using failure taxonomy
 - [ ] Probe journal recorded for each round
 - [ ] `/seek-verdict --intent confirm` executed (Phase 3)
-- [ ] Root cause has ≥1 execution evidence
+- [ ] Root cause has ≥1 execution evidence — a debate consensus is not one
+- [ ] A hypothesis tie went to a tie-break probe first; `/codex-brainstorm` only when none was available
 - [ ] Regression test written (if fix applied)
 - [ ] Review loop completed (if code changed)
 - [ ] No `git add/commit/push` executed
@@ -226,6 +250,18 @@ Phase 2: R1: 檢查 query filter → 發現 status 欄位名稱不符
 Phase 3: /seek-verdict confirm → ACTIONABLE
 Phase 4: 修正 field name + unit test
 Phase 5: Debug Report
+```
+
+### Hypothesis Tie
+
+```
+Input: /debug 服務啟動後 request 全部 timeout
+Phase 2: R1: 重現 → timeout；H1 = timeout 設定被環境變數覆寫，H2 = 上游 DNS 解析慢（同等可信）
+         R2: tie-break probe — 讀取 effective config（唯讀）
+             outcome: timeout=5ms → 走 H1，查覆寫來源 / timeout=30s（預設）→ 走 H2，量 DNS
+             actual: timeout=5ms → H1
+         R3: 查環境變數來源 → 部署檔寫錯單位 → Stop（有執行結果佐證）
+Phase 3: /seek-verdict confirm → ACTIONABLE
 ```
 
 ### Silent Failure
