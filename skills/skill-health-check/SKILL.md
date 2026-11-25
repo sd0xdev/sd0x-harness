@@ -9,7 +9,7 @@ context: fork
 
 ## Trigger
 
-- Keywords: skill health, skill audit, skill lint, check skills, skill quality, validate skills
+- Keywords: skill health, skill audit, skill lint, check skills, skill quality, validate skills, skill discovery, skill not found, 找不到 skill
 
 ## When NOT to Use
 
@@ -83,7 +83,38 @@ Read flagged skills and evaluate:
 
 Only run Step 2 when user explicitly requests deep audit. Default: Step 1 only.
 
+### Discovery (`--discovery`, instead of Steps 1–2)
+
+Use when a user could not find a skill, the wrong one was used, or they want to note how an install lists
+this plugin. It observes; it changes no description, setting or skill, and runs no model.
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/skills/skill-health-check/scripts/skill-discovery.js" observe
+```
+
+1. Run it once and show its table as printed. *Listed* and *described* read `unknown` until the user gives
+   numbers; offer, once, that they may read them in the host (`/doctor`, `/context`) and pass
+   `--listed N --described N --method doctor|context`, and ask how the plugin was installed
+   (`--install ordinary|checkout`, the user's answer; without it there is no ordinary-install verdict). Numbers taken from your own skill list are
+   `--method self-report`, and from a forked run they describe the fork.
+2. Optional: `--name-only a,b` (this plugin's skills that showed no description) and
+   `--reached a=explicit,b=described` (the user's answer, never yours). The last line is the verdict;
+   do not restate it more strongly. A count never shows which skill would be chosen.
+3. "Which skill should I use?" → `@skills/ask/references/close-skills.md`.
+4. A comparison needs the user's explicit consent, because it costs model runs: `worksheet` prints the fixed
+   phrases without answers, and `score --answers <file>` counts missed, wrong and unwanted use apart. The file is
+   `{"answers":[{"id":"t07","condition":"described","chosen":"doc-refactor"},{"id":"n04","condition":"described","chosen":null}]}`:
+   `condition` is `described` or `name-only` as read in the host for the target skill; a no-skill control and
+   an explicit control take the condition of the run they belong to. `chosen` is what was used, a skill name
+   or `null` for none, whichever was expected. Never
+   run it on your own initiative, and never change a description on an observation alone.
+
+In the plugin's source checkout without the plugin loaded, the path is
+`skills/skill-health-check/scripts/skill-discovery.js`.
+
 ## Output
+
+Default and `--deep` (`--discovery` prints the reader's own table instead):
 
 ```markdown
 # Skill Health Check Report
@@ -118,14 +149,21 @@ Only run Step 2 when user explicitly requests deep audit. Default: Step 1 only.
 
 ## Verification
 
+Default and `--deep`:
+
 - [ ] Automated lint executed (exit code checked)
 - [ ] All P0/P1 findings have fix recommendations
 - [ ] Per-skill table includes all scanned skills
 - [ ] Gate sentinel present for hook parsing
 
+`--discovery` (no lint report, no gate):
+
+- [ ] Layer table and the reader's verdict line shown as printed
+
 ## References
 
 - `references/routing-signature-guide.md` — How to write effective routing signatures (read when fixing P1 routing issues)
+- `references/discovery-phrases.json` — Fixed phrases and answers for a consented comparison (read by `skill-discovery.js`)
 
 ## Examples
 
@@ -135,6 +173,9 @@ Action: Run skill-lint.js → Output markdown report + Gate
 
 Input: /skill-health-check --deep
 Action: Run skill-lint.js → Manual review of flagged skills → Integrated report
+
+Input: /skill-health-check --discovery
+Action: Run skill-discovery.js observe → Layered table + verdict; nothing changed, no model run
 
 Input: Are my skills well-designed?
 Action: Trigger health check → Report + improvement suggestions

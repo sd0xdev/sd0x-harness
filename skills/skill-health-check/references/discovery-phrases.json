@@ -1,0 +1,27 @@
+{
+  "about": "Fixed phrases and answers for a like-for-like comparison (docs/features/skill-discoverability/1-requirements.md § 8, step 2). Answers are committed before any run. `accept` lists every skill that counts as right, so an alias and its parent count alike; a `none` phrase has no right skill. Nothing runs these automatically.",
+  "phrases": [
+    { "id": "t01", "kind": "target", "lang": "en", "phrase": "Have a second reviewer look over the edits I have not committed yet", "accept": ["codex-review-fast", "codex-review", "codex-code-review", "codex-cli-review"] },
+    { "id": "t02", "kind": "target", "lang": "en", "phrase": "Do any of the packages this repo pulls in have known vulnerabilities?", "accept": ["dep-audit", "security-review"] },
+    { "id": "t03", "kind": "target", "lang": "en", "phrase": "Look for injection and broken access control in this API", "accept": ["security-review", "codex-security"] },
+    { "id": "t04", "kind": "target", "lang": "en", "phrase": "Which change first made this number come out wrong, and who wrote it?", "accept": ["git-investigate"] },
+    { "id": "t05", "kind": "target", "lang": "en", "phrase": "Before we design anything, write down what this feature has to do and for whom", "accept": ["req-analyze"] },
+    { "id": "t06", "kind": "target", "lang": "en", "phrase": "Split my finished work into a few well-described commits", "accept": ["smart-commit"] },
+    { "id": "t07", "kind": "target", "lang": "zh", "phrase": "這份說明太長，幫我精簡但不要漏掉資訊", "accept": ["doc-refactor"] },
+    { "id": "t08", "kind": "target", "lang": "zh", "phrase": "這些測試案例夠不夠完整？", "accept": ["test-review", "codex-test-review", "check-coverage"] },
+    { "id": "t09", "kind": "target", "lang": "zh", "phrase": "我不確定接下來該做什麼", "accept": ["next-step"] },
+    { "id": "t10", "kind": "target", "lang": "zh", "phrase": "我剛推上去，幫我看自動檢查跑完沒", "accept": ["watch-ci"] },
+    { "id": "n01", "kind": "none", "lang": "en", "phrase": "What does the regex ^a+b$ match?", "accept": [] },
+    { "id": "n02", "kind": "none", "lang": "en", "phrase": "Rename tmp to total in this function", "accept": [] },
+    { "id": "n03", "kind": "none", "lang": "en", "phrase": "What is 2 to the power of 20?", "accept": [] },
+    { "id": "n04", "kind": "none", "lang": "en", "phrase": "Translate good morning into French", "accept": [] },
+    { "id": "n05", "kind": "none", "lang": "en", "phrase": "Add a trailing comma after the last item", "accept": [] },
+    { "id": "n06", "kind": "none", "lang": "en", "phrase": "Thanks, that is clear", "accept": [] },
+    { "id": "n07", "kind": "none", "lang": "zh", "phrase": "這個函式回傳什麼型別？", "accept": [] },
+    { "id": "n08", "kind": "none", "lang": "zh", "phrase": "把這一行的引號改成單引號", "accept": [] },
+    { "id": "n09", "kind": "none", "lang": "zh", "phrase": "JSON 可以有註解嗎？", "accept": [] },
+    { "id": "n10", "kind": "none", "lang": "zh", "phrase": "好，先這樣", "accept": [] },
+    { "id": "x01", "kind": "explicit", "lang": "any", "phrase": "/sd0x-dev-flow:doc-review", "accept": ["doc-review"] },
+    { "id": "x02", "kind": "explicit", "lang": "any", "phrase": "/sd0x-dev-flow:next-step", "accept": ["next-step"] }
+  ]
+}

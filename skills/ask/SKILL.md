@@ -27,6 +27,9 @@ allowed-tools: Read, Grep, Glob, Bash(git:*), Bash(node:*), Agent
 
 ### Phase 0: Session Context Capture
 
+Routing reads no feature document: for a request that asks which skill to use, or that fits more than one skill
+(§ 1c), skip rows 2 and 2b and go to § 1c. Run them afterwards only if the answer turns out to need the docs.
+
 Run these 4 commands in parallel to build session context:
 
 | # | Action | Tool |
@@ -71,6 +74,11 @@ Classify the question (LLM-inferred) into one or more intents:
 #### 1c. Skill Routing Check
 
 Before gathering context, check if the question is action-oriented. See `references/routing-table.md`.
+
+When the request fits more than one skill, or asks which skill to use, read this skill's own
+`references/close-skills.md`. Where one of its rows covers the request, give that row's one question before
+the names; where none does, answer from the skill descriptions you were given and, when one fits, its own contract:
+`${CLAUDE_PLUGIN_ROOT}/skills/<name>/SKILL.md`, with `<name>` taken from those descriptions.
 
 If a better skill is identified, suggest it: "這個問題更適合 `/X`，要改用嗎？" — do not auto-redirect.
 
@@ -133,8 +141,8 @@ git rebase | git merge | git checkout -- | git restore | git clean
 
 | Control | Rule |
 |---------|------|
-| Repo boundary | All Read/Glob within repo root (`git rev-parse --show-toplevel`) |
-| Traversal rejection | Reject `..` path segments, absolute paths outside repo, symlinks out of repo |
+| Repo boundary | All Read/Glob of project data within repo root (`git rev-parse --show-toplevel`). The one exception is the plugin that ships this skill: its own bundled `references/`, and a sibling skill's `SKILL.md` named by § 1c |
+| Traversal rejection | Reject `..` path segments, absolute paths outside repo (other than those bundled files), symlinks out of repo |
 | Secret skip | Do not read `.env`, `credentials.*`, `*secret*` files |
 | Output redaction | High-confidence secret patterns → `[REDACTED]`; medium-confidence → mask with 4 chars visible |
 
@@ -173,6 +181,7 @@ Every claim must have at least one source evidence. Answer < 500 words unless us
 
 - `references/intent-patterns.md` — Detailed intent examples and edge cases (read when classifying ambiguous questions)
 - `references/routing-table.md` — Full skill routing decision table (read when checking if another skill is better)
+- `references/close-skills.md` — One question per group of close skills (read when a request fits several, or asks which skill to use)
 
 ## Examples
 
