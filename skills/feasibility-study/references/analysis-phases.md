@@ -63,6 +63,53 @@ Each solution needs:
 ## Phase 6: Comparative Decision
 
 - Side-by-side comparison table (all dimensions)
-- Recommended solution and rationale
+- Filter (below): hard constraints, then supported dominance, keeping evidence gaps
+- Recommended solution, the trade-off it accepts, and the condition that flips it to the backup
 - Backup solution and applicable scenarios
-- Open questions (items needing further confirmation)
+- Open questions (items needing further confirmation, including every evidence gap)
+
+### Filter
+
+The inputs already exist: the Phase 2 constraint inventory and the evaluation dimensions above.
+
+| Step | Rule | Recorded as |
+| ---- | ---- | ----------- |
+| 1. Hard constraints | A constraint with Flexibility `None` is hard. An option that breaks one is infeasible | `Excluded: breaks <constraint>` |
+| 2. Supported dominance | Option X dominates Y only if X is at least as good on every dimension and strictly better on at least one, and each comparison has evidence behind it | `Excluded: dominated by X` + the evidence |
+| 3. Evidence gaps | A dimension with no measurement, or a comparison that rests only on a shared bin, cannot support step 2 | `Retained — evidence gap` + an open question |
+
+What counts as support for a comparison:
+
+| Situation | Supports "at least as good"? | Supports "strictly better"? |
+| --------- | ---------------------------- | --------------------------- |
+| Both values measured or estimated (5d vs 10d) | Yes | Yes, when they differ |
+| Different bins (🟢 vs 🔴) | Yes, for the better bin | Yes |
+| Same bin, underlying values known (3d vs 10d, both 🟡) | Use the values, not the bin | Use the values, not the bin |
+| Same bin, no underlying values | **No** — evidence gap | No |
+| One value missing | **No** — evidence gap | No |
+
+A shared bin or a missing measurement is never recorded as "equal". Equal needs evidence too.
+
+### How many options are left
+
+| Retained after the filter | Recommendation | Backup and flip condition |
+| ------------------------- | -------------- | ------------------------- |
+| Two or more | One of them | A retained option as backup, with its flip condition |
+| Exactly one | That one | `None — no other retained option`; no flip condition. Never name an excluded option as backup |
+| None | **No option qualifies** — list each option with the hard constraint it breaks | None. Say what would have to change: a constraint's flexibility, or a new option |
+
+### Trade-off and flip condition
+
+Applies when two or more options are retained.
+
+| Element | Requirement | Example |
+| ------- | ----------- | ------- |
+| Trade-off | What the recommendation gives up and gets, in the dimensions' own terms | "A costs 5 fewer person-days; B is easier to extend to multi-tenant" |
+| Flip condition | A concrete, observable condition that makes the backup the recommendation | "If a second tenant is committed before the release, choose B" |
+| Not a flip condition | A condition nobody could observe or check | "If requirements change", "if needed later" |
+
+The backup is the retained option the flip condition points to — the one that becomes the better
+choice when that condition holds — not simply the runner-up on today's numbers.
+
+When an evidence gap could reverse the recommendation, closing that gap is the flip condition —
+state the measurement and the result that would flip it.

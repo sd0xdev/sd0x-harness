@@ -114,22 +114,43 @@
 | Extensibility         |   🟡    |   🟢    | ... |
 | Maintenance Cost      |   🟢    |   🟢    | ... |
 
+Give the underlying value beside a rating wherever one exists (`🟡 5d`). A shared rating without
+values is an evidence gap, not a tie.
+
+### 6.1 Filter
+
+One row per option, each with one of these statuses. The rows must agree with the table above:
+compare pairwise, and mark an option dominated only when some one feasible option is supported as
+at least as good on every dimension and strictly better on one. Against that option, a dimension
+where the candidate is better, or shares a bin with no values, means it is not dominated by it.
+
+| Option | Status | Basis (evidence) |
+| ------ | ------ | ---------------- |
+| [W] | Retained | Not dominated |
+| [X] | Excluded: dominated by [W] | [per dimension, the evidence that W is at least as good]; strictly better on [dimension] ([value] vs [value]) |
+| [Y] | Excluded: breaks [hard constraint] | [constraint, Flexibility None] |
+| [Z] | Retained — evidence gap | [dimension] not measured; see Open Questions |
+
 ## 7. Recommendation
 
-**Recommended**: Option X
+**Recommended**: [a retained option]
 **Rationale**:
 
 - Meets constraints: [list]
-- Balance point: [trade-off explanation]
+- Trade-off: [what the recommendation gives up, and what it gets, against the backup] — `n/a` when no other option was retained
 - Codex viewpoint: [agreement/additions]
 
-**Backup**: Option Y
-**Applicable scenario**: If [condition], choose Y
+**Backup**: [another retained option] — write `None — no other retained option` when the filter left only one
+**Flips to backup when**: [concrete, observable condition — a threshold, an event or a measured result]; omit when there is no backup
+
+If the filter left no option at all, replace this section with: **No option qualifies** — [each
+option and the hard constraint it breaks] — and name what would have to change (a constraint's
+flexibility, or a new option) in Open Questions.
 
 ## 8. Open Questions
 
 - [ ] Question 1
-- [ ] Question 2
+- [ ] Evidence gap: [option] — [dimension] unknown — [measurement that would close it] — [what the result could change]
 
 ## 9. Next Steps
 

@@ -124,7 +124,25 @@ See `references/codex-discussion-guide.md` for full rules and examples.
 
 ### Phase 6: Comparative Decision
 
-Side-by-side comparison → recommendation + backup + open questions.
+Side-by-side comparison → filter → recommendation + backup + open questions. The filter uses what
+the earlier phases already produced — Phase 2's constraints and § Evaluation Dimensions — and adds
+no new scoring. Full rules: `references/analysis-phases.md` § Phase 6.
+
+| Step | Rule |
+|------|------|
+| 1. Hard constraints | An option that breaks a constraint with Flexibility `None` is infeasible: exclude it and name the constraint |
+| 2. Supported dominance | Exclude an option only when another feasible option is at least as good on **every** dimension and strictly better on **at least one**, and evidence (a measurement, cited code, a stated estimate) supports each of those comparisons |
+| 3. Evidence gaps | A missing measurement, or two options that share an ordinal bin with no underlying values, is a gap — not a tie and not a loss. The option stays; the gap goes to Open Questions with the measurement that would close it |
+| 4. Trade-off | Among the options left, say what the recommendation gives up and what it gets, in the dimensions' own terms |
+| 5. Flip condition | Name the **concrete, observable condition** under which the backup becomes the recommendation — a threshold, an event, a measured result |
+
+Steps 4–5 need a second retained option. With one option left, recommend it and report that no
+other option was retained; with none, report that no option qualifies and which hard constraints block — never promote
+an excluded option to fill the slot.
+
+**Ordinal bins and missing measurements do not prove equivalence.** Two options rated 🟡 on Effort
+may be 3 and 10 person-days. Compare the underlying values when they exist; when only the bin is
+known, record a gap. Different bins do support an ordering (🟢 is better than 🔴).
 
 ## Evaluation Dimensions
 
@@ -144,8 +162,13 @@ Side-by-side comparison → recommendation + backup + open questions.
 | Criterion | Option A | Option B | Option C |
 |-----------|----------|----------|----------|
 
+### Filter
+| Option | Status | Basis |
+|--------|--------|-------|
+<Retained / Excluded: breaks <hard constraint> / Excluded: dominated by <option> / Retained — evidence gap>
+
 ### Recommendation
-<selected option with rationale>
+<selected option, the trade-off it accepts, and the concrete condition that flips it to the backup>
 ```
 
 ## Verification
@@ -156,6 +179,9 @@ Side-by-side comparison → recommendation + backup + open questions.
 - [ ] 2-3+ solutions explored with quantified assessment
 - [ ] Codex discussion documented (unless `--no-codex`)
 - [ ] Comparison table + recommendation + open questions
+- [ ] Every excluded option names the hard constraint it breaks or the option that dominates it, with the evidence
+- [ ] Evidence gaps retained as open questions — no shared bin or missing measurement treated as equal
+- [ ] Recommendation states its trade-off and the concrete condition that flips it to the backup — or says that no other option was retained, or that none qualifies
 
 ## References
 
