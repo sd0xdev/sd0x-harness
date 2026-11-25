@@ -23,6 +23,8 @@ paths:
 
 Before adding pseudocode: grep for similar implementations -> read to confirm naming -> annotate reference source
 
+Condensing a **functional document** is judged by decision fidelity, not length: the shorter text must lead to the same action and evidence in normal, boundary and insufficient-evidence cases, and never drops a hard condition, exception, handoff datum or permission. Procedure: `skills/doc-refactor/SKILL.md` § Decision Fidelity.
+
 ## Code Comments
 
 A comment answers the **local what/why**. Extended argumentation, historical archaeology, and cross-file protocol descriptions belong in docs, referenced by a pointer — that content loads on every read of the file but is needed only for the rare change, and it drifts from the doc version it duplicates.

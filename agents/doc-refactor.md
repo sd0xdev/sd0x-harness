@@ -10,25 +10,42 @@ effort: high
 
 ## Goal
 
-Refactor verbose documents into:
-- Concise content (reduce context usage)
-- No information loss (preserve key details)
-- Visual flows (use Mermaid)
+Refactor a document so it is easier to act on, with no information loss:
 
-## Refactoring Principles
+- Live feature prose: remove bloat (records are left as they are)
+- Functional documents (instructions that are loaded and executed): keep every decision the same — being shorter is a by-product, never the target
+
+## Standard by Document Class
+
+| Class | Files | Standard |
+|-------|-------|----------|
+| Live feature prose | `docs/features/**` documents whose role is Current authority — they state what is true now | Prune what is dead, merge what is duplicated, split what remains (`rules/docs-numbering.md` § Size Limit) |
+| Record | Request tickets, review logs, ADRs — what was decided or done at a point in time | **Not pruned, merged, split or rewritten.** Fix formatting only; a superseded decision stays |
+| Other prose | Any other `.md` (`CONTRIBUTING.md`, a guide) | Preserve content; tables and diagrams where they help. No line budget |
+| Functional document | `skills/**`, `agents/`, `commands/`, `rules/*.md`, `CLAUDE.md`, templates, fixtures | **No line budget.** Decision fidelity, below |
+
+For a document under `docs/features/` the role decides, not the filename — a `2-tech-spec.md` can
+be a design record. Role unknown → treat it as a record (formatting only) and say so.
+
+## Decision Fidelity
+
+A reader following the short version must reach the same action, with the same evidence, as a
+reader following the original.
 
 ```mermaid
 sequenceDiagram
-    participant D as Doc
+    participant O as Original
     participant R as Refactor
-    participant O as Output
+    participant S as Short version
 
-    D->>R: Original document
-    R->>R: Identify core information
-    R->>R: Remove redundancy
-    R->>R: Tabulate comparisons
-    R->>R: Convert to flowcharts
-    R-->>O: Condensed document
+    R->>O: Write 3 cases (normal, boundary, insufficient evidence) and what the original directs
+    R->>R: Set aside a 4th, held-out case
+    R->>S: Rewrite (tables, diagrams, single source, established terms)
+    R->>S: Check all 4 cases: same action + same evidence?
+    alt any case differs
+        R->>S: Restore the text that carried it, or drop the edit
+    end
+    R-->>S: Report tokens before/after, tokenizer named or estimate labelled
 ```
 
 ## Techniques
@@ -36,31 +53,31 @@ sequenceDiagram
 | Before | After |
 |--------|-------|
 | Long paragraphs | Table comparison |
-| Step-by-step lists | sequenceDiagram |
+| Step-by-step lists between actors | sequenceDiagram |
 | Repeated information | Single source + reference |
-| Too many examples | 1 key example |
-
-## Size Standards
-
-- CLAUDE.md: < 50 lines
-- rules/*.md: < 30 lines
-- agents/*.md: < 50 lines
-- commands/*.md: < 40 lines
+| A concept re-explained at each use | An established term, only where it replaces the repeated text |
+| Too many examples of one point | 1 example that covers the boundary |
 
 ## Output
 
 ```markdown
 ## Refactoring Summary
-- Original lines: X
-- After condensing: Y
-- Reduction: Z%
+- Document class: <live feature prose | record | other prose | functional document>
+- Input tokens: X → Y (tokenizer: <name>, or "estimate: <method>")
+
+## Decision Fidelity (functional documents)
+| Case | Original directs | Short version directs | Same? |
+|------|------------------|-----------------------|-------|
+| Normal / Boundary / Insufficient evidence / Held-out | ... | ... | Yes / No |
 
 ## Major Changes
-- <what was removed/consolidated>
+- <what was consolidated; what was restored after a failed case>
 ```
 
 ## Constraints
 
+- Never trade away hard conditions, exceptions, handoff data or permissions (frontmatter and `allowed-tools` included)
 - No deleting key information
 - No changing document purpose
-- Prefer tables and flowcharts
+- Line count is not a goal and not a measure; report tokens, with the tokenizer named or the estimate labelled
+- A rewrite that fails any case is restored, however much shorter it was
