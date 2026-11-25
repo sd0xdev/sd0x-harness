@@ -5,6 +5,7 @@
 > **Updated**: 2026-11-25
 > **Tier**: standard
 > **Intent**: [intent-review-coverage-visibility.md](./intent-review-coverage-visibility.md)
+> **Tech Spec**: [2-tech-spec.md](./2-tech-spec.md)
 
 Baseline for every "today" statement: sd0x-dev-flow 5.2.1 at `b214212`. Statements marked **[V]** were
 read in the source or exercised by an existing test; **[H]** is a hypothesis nobody has measured.
@@ -224,6 +225,9 @@ only. One reader shows whether the wording can work, not how often it helps.
 | **Then, usefulness** (only with correctness met): in UC-2 or UC-4 the reader's answer about what is known is more accurate than with today's text, and UC-1 and UC-3 prompt no review the reader judges needless. Choosing the same action still counts | Proceed to a tech spec for the first slice |
 | Correct, but no answer is more accurate than with today's text | Stop; keep current behavior |
 | The owner says their pushes usually follow a new conversation | Stop; the first slice cannot answer them, and stored coverage is a re-decision |
+
+The owner decided on 2026-11-25 to build the first slice before this check. That is a decision, not reader
+evidence; the check is still open.
 
 After a first slice: stop and remove it if any false "asked about" or "covered" is found, or if the owner reports the
 statement only prompted reviews they judged needless.
