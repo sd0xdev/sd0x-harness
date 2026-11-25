@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart hook: inject namespace guidance + drift sentinel into Claude context
-echo "Plugin sd0x-dev-flow: all /command references should be invoked as /sd0x-dev-flow:command"
-echo "Plugin scripts: use 'bash scripts/run-skill.sh <skill> <script> [args]' for execution"
+echo "Plugin sd0x-dev-flow: invoke its skills as /sd0x-dev-flow:<skill>; host commands keep their names"
 
 # Plugin root: the resident contract triggers name contracts as skills/… paths, which exist only
 # inside the plugin install — this line is how a session in any project resolves them.
@@ -9,6 +8,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)}"
 echo "Plugin root: $PLUGIN_ROOT"
 echo "Contract paths (skills/…) named in CLAUDE.md and .claude/rules/ resolve under it"
+
+# The runner is printed as a runnable, single-quoted path: a project that installed the plugin has no
+# scripts/run-skill.sh of its own, and an install path may hold a space or a quote.
+RUNNER=$(printf '%s' "$PLUGIN_ROOT/scripts/run-skill.sh" | sed "s/'/'\\\\''/g")
+echo "Plugin scripts: bash '$RUNNER' <skill> <script> [args]"
+echo "Where a skill says scripts/run-skill.sh, use that path and keep the interpreter the skill names"
 
 # --- Drift sentinel (< 50ms budget) ---
 # Detects plugin version mismatch with installed manifest and warns user.

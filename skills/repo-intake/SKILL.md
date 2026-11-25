@@ -29,8 +29,12 @@ Docs -> Entrypoints -> Tests Map -> Next Steps
 
 ## Usage
 
+`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's directory (Claude Code fills it in when it loads the
+skill). Working in the plugin's own source checkout without the plugin loaded, use `scripts/run-skill.sh`
+at the repository root instead.
+
 ```bash
-bash scripts/run-skill.sh repo-intake intake_cached.js --mode auto --top 10
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-skill.sh" repo-intake intake_cached.js --mode auto --top 10
 ```
 
 ## Manifest Map（宣告依賴地圖）
@@ -42,10 +46,10 @@ coverage `skipped`；已進入 Go/TOML recognizer 的相關不支援 construct �
 `partial`。絕不產生猜測邊。
 
 ```bash
-bash scripts/run-skill.sh repo-intake manifest_map.js                      # overview (md)
-bash scripts/run-skill.sh repo-intake manifest_map.js --format json        # 完整 envelope
-bash scripts/run-skill.sh repo-intake manifest_map.js --reverse <selector> # 誰宣告依賴它
-bash scripts/run-skill.sh repo-intake manifest_map.js --cycles             # 宣告環偵測
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-skill.sh" repo-intake manifest_map.js                      # overview (md)
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-skill.sh" repo-intake manifest_map.js --format json        # 完整 envelope
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-skill.sh" repo-intake manifest_map.js --reverse <selector> # 誰宣告依賴它
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-skill.sh" repo-intake manifest_map.js --cycles             # 宣告環偵測
 ```
 
 | Flag | 說明 |

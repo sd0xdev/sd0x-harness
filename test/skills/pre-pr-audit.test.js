@@ -176,7 +176,7 @@ test('pre-pr-audit --base → one resolved ref measures the change everywhere', 
   assert.match(auditSkill, /a `base` other than `<base>` → `\/risk-assess` is unavailable/);
   assert.match(auditSkill, /\| Risk input \| Module Selection used its line-count fallback: `\/risk-assess` did not run, failed, or returned a different `base` \|/);
   const risk = readFileSync(resolve(root, 'skills/risk-assess/SKILL.md'), 'utf8');
-  assert.match(risk, /When the caller gave `--base <ref>`, append `--base <ref>` \(the script defaults to `HEAD`\)/);
+  assert.match(risk, /When the caller gave `--base <ref>` or `--mode <fast\|deep>`, append it \(the script defaults to `HEAD` and `fast`\)/);
   assert.match(auditSkill.replace(/\s+/g, ' '), /resolved once at the start \(default `HEAD`\) and used everywhere the change is measured/);
 });
 

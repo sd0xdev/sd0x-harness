@@ -72,3 +72,27 @@ test('stale counts when scanned → no leftover pre-change claim survives anywhe
     assert.ok(!p.test(setup), `stale count survives in project-setup: ${p}`);
   }
 });
+
+test('hook claims when read → no dedup promise for the source repo, and the formatter is named as a writer', () => {
+  const flat = setup.replace(/\s+/g, ' ');
+  assert.match(flat, /plugin hooks and installed hooks may both run: the runtime arbitration [^.]*deliberately off in the source repo/);
+  assert.doesNotMatch(flat, /Runtime arbitration handles dedup automatically/);
+  const row = setup.split('\n').find((l) => l.includes('`post-edit-format.sh` | PostToolUse'));
+  assert.match(row, /Best-effort `prettier --write` on the edited file/);
+  assert.doesNotMatch(row, /reminder/);
+});
+
+// Both tell the user to run the script themselves, so the path must exist in the user's project.
+for (const s of ['project-audit', 'risk-assess']) {
+  test(`/${s} when its script is named → the plugin's own runner, never a path the project lacks`, () => {
+    const text = readFileSync(resolve(root, `skills/${s}/SKILL.md`), 'utf8');
+    assert.equal((text.match(/bash "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/run-skill\.sh"/g) || []).length, 2);
+    assert.doesNotMatch(text, /bash scripts\/run-skill\.sh/);
+  });
+}
+
+test('/risk-assess when the caller asked for a base or a mode → both are forwarded and checked', () => {
+  const flat = readFileSync(resolve(root, 'skills/risk-assess/SKILL.md'), 'utf8').replace(/\s+/g, ' ');
+  assert.match(flat, /When the caller gave `--base <ref>` or `--mode <fast\|deep>`, append it/);
+  assert.match(flat, /base and mode \(must be what was asked for\)/);
+});

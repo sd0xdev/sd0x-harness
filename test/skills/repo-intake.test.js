@@ -22,7 +22,9 @@ describe('repo-intake SKILL.md manifest-map surface', () => {
   });
 
   test('SKILL.md documents manifest_map.js via run-skill.sh with all query modes', () => {
-    assert.match(skillText, /run-skill\.sh repo-intake manifest_map\.js/);
+    // Forked skill: the session's printed runner path may not reach it, so it names the plugin root.
+    assert.match(skillText, /bash "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/run-skill\.sh" repo-intake manifest_map\.js/);
+    assert.doesNotMatch(skillText, /bash scripts\/run-skill\.sh/, 'a consumer project has no such file');
     assert.match(skillText, /--reverse/);
     assert.match(skillText, /--cycles/);
     assert.match(skillText, /--include-candidates/);

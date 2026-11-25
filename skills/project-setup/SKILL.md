@@ -286,7 +286,7 @@ Same 3-level fallback as Phase 5.1, but search for `hooks/pre-edit-guard.sh`:
    |------|-------|---------|---------|
    | `pre-edit-guard.sh` | PreToolUse | Edit\|Write\|NotebookEdit | Block editing .env/.git |
    | `pre-bash-codex-launch-guard.sh` | PreToolUse | Bash | Block a Codex dispatch launched with its progress redirected away from the task panel |
-   | `post-edit-format.sh` | PostToolUse | Edit\|Write\|NotebookEdit | Auto-format reminder |
+   | `post-edit-format.sh` | PostToolUse | Edit\|Write\|NotebookEdit | Best-effort `prettier --write` on the edited file, when the project has prettier and the type is eligible |
    | `post-skill-auto-loop.sh` | PostToolUse | Skill | Post-review reminder (next gate) |
    | `stop-guard.sh` | Stop | — | Reminder: open gates at stop (markdown, exit 0) |
    | `user-prompt-review-guard.sh` | UserPromptSubmit | — | Per-prompt `[AUTO_LOOP_STATE]` fact line |
@@ -331,7 +331,7 @@ Merge strategy:
 - Read existing settings file (create `{}` if not exists)
 - **Legacy migration**: scan for bare `.claude/hooks/<name>.sh` paths → upgrade to `"$CLAUDE_PROJECT_DIR"/.claude/hooks/<name>.sh`
 - For each event: append-only merge (skip if same command path exists)
-- **Coexistence detection**: if `hooks/hooks.json` exists at repo root (= plugin source repo), warn that plugin hooks and installed hooks may coexist. Runtime arbitration handles dedup automatically
+- **Coexistence detection**: if `hooks/hooks.json` exists at repo root (= plugin source repo), warn that plugin hooks and installed hooks may both run: the runtime arbitration that defers the plugin copy to an installed one is deliberately off in the source repo, so nothing deduplicates them there. In any other project the arbitration applies
 - Write updated settings back (hook definitions only — env vars deferred to Phase 6.7)
 
 ### 6.4 Output Hooks Report
