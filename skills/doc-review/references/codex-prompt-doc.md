@@ -70,7 +70,9 @@ target** resolves, so do not spend a pass on those. A dead heading fragment is s
 — nothing here checked one. `failures: []` with `unresolved > 0` settles nothing on its own — that many link shapes
 went unchecked, and if link correctness matters to a document in this batch, check those yourself.
 The scanner is deliberately incomplete (this repository ships no CommonMark parser) and reports its
-own coverage rather than implying it.
+own coverage rather than implying it. It read the work-tree text only: where a file's staged text
+differs (`git diff --cached -- <path>` and `git diff -- <path>` both show hunks), the links in the staged
+text are yours to check.
 
 ## ⚠️ Important: You must independently read and research the project ⚠️
 
@@ -83,6 +85,9 @@ scope covers and verifying its accuracy.
 1. Read each file in the batch to the extent its profile's **Read** column covers
 2. For a section-scoped profile: `grep -n "^## " <path>` to locate the sections, then read those ranges
 3. For `full-design`, or any file marked new: read it whole
+4. Where a file's staged text differs from its work tree (`git diff --cached -- <path>` shows hunks that the
+   work tree no longer holds), it is two texts: apply its profile to the changed content of both. The staged
+   copy is `git show :<path>` — the readable one when the work tree has since been restored or deleted
 
 ### Code-Documentation Consistency Research
 

@@ -366,11 +366,14 @@ Output the standard gate sentinel:
 Out-of-scope findings that are not critical never block Ready: they are listed in the report's "Out-of-Scope Findings" section and recorded as `[OUT_OF_SCOPE_DEFERRED]` lines (`skills/codex-code-review/references/scope-contract.md` § Records). An in-scope finding whose obligation derived to `deferred` likewise never blocks Ready — at or above the blocking severity it is recorded as `[OPPORTUNISTIC_DEFERRED]` (same section); below it, a non-admitted finding keeps `[NIT_DEFERRED]` exactly as before (one record per finding, chosen by severity and obligation together) — and, when it is the only blocking-severity finding, the derived pair is `✅ Ready × NONE`.
 
 Then **self-note the verdict** — this is the declared-provenance record the reminder hooks read
-(hook-lightweighting § 3.2), and it is behaviour-layer: an attestation the conversation can audit,
-not a gate anything blocks on. Installed copy first:
+(hook-lightweighting § 3.2), and it is behaviour-layer: an attestation the conversation can audit.
+No hook blocks on it, but the commit and push offer, Auto commit and Goal publish read it. Installed
+copy first:
 
 ```bash
-CHECKER=".claude/scripts/review-state.js"; [ -f "$CHECKER" ] || CHECKER="scripts/review-state.js"
+CHECKER=".claude/scripts/review-state.js"                                            # installed copy
+[ -f "$CHECKER" ] || CHECKER="${CLAUDE_PLUGIN_ROOT}/scripts/review-state.js"          # the plugin's own
+[ -f "$CHECKER" ] || CHECKER="scripts/review-state.js"                                # source checkout, plugin not loaded
 node "$CHECKER" note code_review pass   # on ✅ Ready
 node "$CHECKER" note code_review fail   # on ⛔ Blocked — increments the rounds count
 ```
@@ -378,8 +381,9 @@ node "$CHECKER" note code_review fail   # on ⛔ Blocked — increments the roun
 Note after **every** round's verdict, not only the terminal one: a `fail` note is what keeps the
 `rounds` fact honest across the fix → re-review loop, and a `pass` note resets it. The note binds
 to the current tree digest, so any later edit re-opens the plane by construction — there is no
-verdict to clear. A failed or unavailable note never fails the review: the checks are the job, the
-note is a courtesy for the reminders, and the missing-note cost is one redundant reminder line.
+verdict to clear. Record a verdict only after the gate has run and its result has been established for
+the current change. If recording fails, the report still stands; reminders, Git offers, and automatic
+commit or publish checks may continue to show the gate as open.
 
 ## Shared Definitions
 

@@ -39,7 +39,7 @@ review from memory.
 Target set → Deterministic checks → Resolve profiles + batches → Codex review per batch → Rating table + Gate → Loop
 ```
 
-**All changed `.md` in one change are one review plan.** The plan is the unit; it holds one or more
+**All changed documents (`.md` and `.mdx`) in one change are one review plan.** The plan is the unit; it holds one or more
 physical batches, and within the budget it is exactly one batch and therefore one dispatch. Reviewing
 file-by-file is what this workflow replaced — it multiplied a three-file change into three whole-
 document reviews.
@@ -49,17 +49,30 @@ document reviews.
 | Condition | Action |
 |-----------|--------|
 | Paths specified | Use them — all of them, as one plan |
-| No path | `git diff --name-only HEAD` and untracked, filtered to `.md` |
+| No path | Every path `git status --porcelain=v1 -z --untracked-files=all --no-renames` reports — staged, unstaged and untracked, both sides of a rename — filtered to the doc plane: the `.md` and `.mdx` suffixes, case-sensitive, as `planeOf` in `scripts/lib/tree-digest.js` decides. A status that fails is not an empty set: stop and report it |
 | Nothing changed | Report it and stop; there is no document to review |
 
 Never narrow a multi-file change to one file, and never ask the user to pick one. A file the plan
-drops is a file nothing reviewed.
+drops is a file nothing reviewed. A path staged in one version and left in another (status `MM`, `AM`,
+`MD`, …) is two texts: the dispatch names it and the reviewer reads both `git diff --cached -- <path>` and
+`git diff -- <path>`, because `git diff HEAD` shows only the work tree's.
 
 ### Step 2: Deterministic Checks First
 
+The scripts this workflow names are the plugin's own, whatever the project keeps under `scripts/`: run
+them from the plugin root (`"${CLAUDE_PLUGIN_ROOT}/scripts/…"`; `scripts/…` only in the plugin's source
+checkout without the plugin loaded), with `--root` at the project. Two differ: the Step 5 checker takes
+its installed copy first, then the plugin's, and `scripts/lib/review-dispatch.js` (Step 4) is a module —
+`require` it from the plugin root and call `decide(...)`; run as a command it prints nothing.
+
 ```bash
-node scripts/check-doc-links.js --root "$(git rev-parse --show-toplevel)" <changed .md paths>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/check-doc-links.js" --root "$(git rev-parse --show-toplevel)" ./<changed document path> …
 ```
+
+Run it from that root. The `./` matters: an argument that starts with `--` is dropped as an option. Before
+treating links as settled, `checked` must equal the number of paths passed. It reads the work tree, so for
+a path with two texts (Step 1) its result says nothing about the staged one: the dispatch says which paths
+those are, and the reviewer checks their staged links.
 
 Resolves the repo-local **file links** it can classify, prints the ones that do not resolve, and
 prints `unresolved` — how many link shapes it declined to classify. **Heading fragments are out of
@@ -67,7 +80,7 @@ scope**: `[x](#frag)` is dropped uncounted the way an external URL is, and `[x](
 checked as a link to `a.md` alone. A dead `#fragment` is therefore not a finding this step
 establishes, and the reviewer is free to raise one.
 
-**Scan only the paths that exist in the working tree.** A deleted `.md` (the resolver reports it
+**Scan only the paths that exist in the working tree.** A deleted document (the resolver reports it
 `deleted: true`) is **omitted from this scan** — passing it produces an `unreadable` failure that
 hands the reviewer a defect when the deletion *is* the change. Its review copy is
 `git show HEAD:<path>`, and the prompt says so per file.
@@ -91,12 +104,13 @@ one.
 ### Step 3: Resolve Profiles and Batches
 
 ```bash
-node scripts/resolve-review-profile.js --tier <effective tier> --files <a.md,b.md> --root "$(git rev-parse --show-toplevel)"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/resolve-review-profile.js" --plan <plan.json|-> --root "$(git rev-parse --show-toplevel)"
 ```
 
-Emits a per-file profile with the reasons it is not shallower, plus the batch plan. Richer inputs —
-the `##` sections a shallow profile is confined to, and whether code landed with the change — go in
-via `--plan <file|->`, a JSON document of the same shape the resolver prints:
+Give it every collected path as one `{"path": …}` entry: the `--files a.md,b.md` form splits on commas and
+trims each name, so it can send the reviewer to another file. Emits a per-file profile with the reasons it
+is not shallower, plus the batch plan. The `##` sections a shallow profile is confined to, and whether code
+landed with the change, go in the same JSON document, of the same shape the resolver prints:
 
 ```json
 { "tier": "standard", "code_changed": false,
@@ -140,14 +154,25 @@ only when the **latest** dispatch of every batch passed — never because the fi
 happened to. Then self-note the plan's verdict once, not per batch:
 
 ```bash
-CHECKER=".claude/scripts/review-state.js"; [ -f "$CHECKER" ] || CHECKER="scripts/review-state.js"
+CHECKER=".claude/scripts/review-state.js"                                            # installed copy
+[ -f "$CHECKER" ] || CHECKER="${CLAUDE_PLUGIN_ROOT}/scripts/review-state.js"          # the plugin's own
+[ -f "$CHECKER" ] || CHECKER="scripts/review-state.js"                                # source checkout, plugin not loaded
 node "$CHECKER" note doc_review pass   # every batch's latest dispatch passed
 node "$CHECKER" note doc_review fail   # any batch still blocked — increments the rounds count
 ```
 
-The note is the declared-provenance record the reminder hooks read; it is advisory, binds to the
-current tree digest (a later `.md` edit re-opens the plane by construction), and a failed note
-never fails the review — the cost is one redundant reminder line.
+The note is the declared-provenance record the reminder hooks read; it is advisory and binds to the
+current tree digest (a later doc edit re-opens the plane by construction). Record a verdict only after the gate has run and its result has been established for
+the current change. If recording fails, the report still stands; reminders, Git offers, and automatic
+commit or publish checks may continue to show the gate as open.
+
+**A plane pass needs the whole scope.** A passing review of named files settles those files. Record a
+new `doc_review pass` only when every doc-plane path it would vouch for was covered — the uncommitted
+ones and those in commits a push would publish — by this plan, or by an earlier passing review of the
+same content. A clean tree is not an empty scope: with two documents ahead, reviewing one covers one.
+When the coverage is not complete, or not known, report the result for the files reviewed and leave
+the slot alone; a pass already recorded at the same digest stays valid. This narrows `pass` only — a
+blocking finding is noted `fail` as above.
 
 ## Review Profiles
 

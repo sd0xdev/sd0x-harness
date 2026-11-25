@@ -168,7 +168,9 @@ If no path is given, auto-detect: git-modified `2-*.md` under `docs/features/` �
 | `⛔ Needs revision` | 🔴 items present — fix, then re-review on the same thread |
 
 These are the doc-plane sentinels (`@rules/auto-loop.md` § Gate Sentinels). **No hook parses them** —
-the verdict is behaviour-layer and `review-state.js` records only an explicit `note`. One thing does
+the verdict is behaviour-layer and `review-state.js` records only an explicit `note`. One spec is not
+the plane: a pass here is noted as `doc_review pass` only under `@skills/doc-review/SKILL.md` § Step 5
+(*A plane pass needs the whole scope*). One thing does
 read them mechanically, and it is not a hook: `scripts/validate-family-sentinel.js doc` validates a
 **fallback carrier's** raw report before its verdict may be adopted. That is why the shape is fixed
 in both directions — a paraphrase reads as no verdict to a human, and fails the validator outright

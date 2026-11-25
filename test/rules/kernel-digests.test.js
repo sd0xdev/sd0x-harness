@@ -43,7 +43,7 @@ const PINS = {
     "Sub-Threshold Findings": "dfd7e7f0ff797186a8fb4d88900a02581720fce2299f12cc5195ded78966b0e2",
     "Gate Sentinels (behaviour-layer, emit verbatim)": "0199a0974d7cea1e9015a3c4a66d622b933c73377318bc4ae084dfa391b56ced",
     "Override Contract": "826a4de220dc1d4d050032c9c8e8dba1245875561b4be106300aa2881adf5c59",
-    "Enforcement": "8ad8e1b552497116b7d926ffff981f92f3abe24b72e26001eaaae6383dcf7b11",
+    "Enforcement": "1de40f31e0ce6a2f11c6df6205a48ca3f545223828aba1d81cc41a5590bed489",
   },
   "rules/codex-invocation.md": {
     "(preamble)": "ef09acb5a8a71bb2880a6edc14bcdf8f04bcc5631fe00087b942cd8c91ef3d9f",

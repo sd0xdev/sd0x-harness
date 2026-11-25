@@ -70,7 +70,7 @@ function ungrantedBinaries(content) {
 function instructedScripts(content) {
   const found = new Set();
   for (const block of shellBlocks(splitFrontmatter(content).body)) {
-    for (const m of block.matchAll(/\bnode\s+((?:scripts|skills)\/[\w./-]+\.js)/g)) found.add(m[1]);
+    for (const m of block.matchAll(/\bnode\s+(?:"\$\{CLAUDE_PLUGIN_ROOT\}\/)?((?:scripts|skills)\/[\w./-]+\.js)/g)) found.add(m[1]);
   }
   return [...found];
 }
@@ -140,8 +140,8 @@ test('every script the workflow instructs exists in this checkout', () => {
 // ── Workflow ordering ──────────────────────────────────────────────────────
 
 test('deterministic checks are instructed before the Codex dispatch, not after', () => {
-  const links = SKILL.indexOf('node scripts/check-doc-links.js');
-  const resolver = SKILL.indexOf('node scripts/resolve-review-profile.js');
+  const links = SKILL.indexOf('node "${CLAUDE_PLUGIN_ROOT}/scripts/check-doc-links.js"');
+  const resolver = SKILL.indexOf('node "${CLAUDE_PLUGIN_ROOT}/scripts/resolve-review-profile.js"');
   const dispatch = SKILL.indexOf('### Step 4');
 
   assert.ok(links > 0 && resolver > 0 && dispatch > 0, 'all three steps must be present');
@@ -161,7 +161,7 @@ test('the profile is stated to narrow reading, never whether review runs', () =>
 // ── The plan, not the file, is the review unit ─────────────────────────────
 
 test('the review unit is the plan: no step dispatches per file', () => {
-  assert.match(SKILL, /All changed `\.md` in one change are one review plan/);
+  assert.match(SKILL, /All changed documents \(`\.md` and `\.mdx`\) in one change are one review plan/);
   assert.match(SKILL, /One Dispatch Per Batch/,
     'the dispatch unit is the batch the resolver produced');
   assert.doesNotMatch(SKILL, /per updated file|file-by-file review|one dispatch per file/i,
@@ -172,6 +172,151 @@ test('the target set may not be narrowed, and an over-budget plan splits loudly'
   assert.match(SKILL, /Never narrow a multi-file change to one file, and never ask the user to pick one/);
   assert.match(SKILL, /Never claim one dispatch you did not make, and never drop a file to fit/,
     'silently dropping a file to fit the budget reads as coverage it never had');
+});
+
+// ── The default target set is the doc plane ────────────────────────────────
+
+test('the plugin\'s scripts → run from the plugin root, and the dispatch module is loaded, not run', () => {
+  const flat = SKILL.replace(/\s+/g, ' ');
+  assert.match(flat, /The scripts this workflow names are the plugin's own, whatever the project keeps under `scripts\/`/);
+  assert.match(flat, /`scripts\/lib\/review-dispatch\.js` \(Step 4\) is a module — `require` it from the plugin root and call `decide\(\.\.\.\)`/);
+  assert.equal(typeof require('../../scripts/lib/review-dispatch.js').decide, 'function');
+  for (const b of shellBlocks(splitFrontmatter(SKILL).body)) {
+    assert.doesNotMatch(b, /node scripts\//, 'a project file of the same name must not be run in its place');
+  }
+});
+
+test('a collected path → reaches the batch whole, whatever characters it holds', () => {
+  assert.match(SKILL.replace(/\s+/g, ' '), /Give it every collected path as one `\{"path": …\}` entry/);
+  assert.match(SKILL, /resolve-review-profile\.js" --plan <plan\.json\|->/);
+  for (const b of shellBlocks(splitFrontmatter(SKILL).body)) assert.doesNotMatch(b, /--files/);
+  const { execFileSync } = require('node:child_process');
+  const paths = ['docs/api,v2.mdx', ' edge .md', '\tguide.mdx', '--review.mdx', 'plain.md'];
+  const plan = JSON.parse(execFileSync('node', [resolve(repoRoot, 'scripts/resolve-review-profile.js'), '--plan', '-', '--root', repoRoot],
+    { input: JSON.stringify({ tier: 'standard', files: paths.map((p) => ({ path: p })) }), encoding: 'utf8' }));
+  assert.deepEqual(plan.batches.flatMap((b) => b.files).sort(), [...paths].sort());
+});
+
+test('a document whose name looks like an option → is scanned as the skill spells it, and a dropped one shows in `checked`', () => {
+  const { execFileSync } = require('node:child_process');
+  const { mkdtempSync, writeFileSync, rmSync } = require('node:fs');
+  const { join } = require('node:path');
+  assert.match(SKILL, /check-doc-links\.js" --root [^\n]* \.\/<changed document path> …/);
+  assert.match(SKILL.replace(/\s+/g, ' '), /`checked` must equal the number of paths passed/);
+  const dir = mkdtempSync(join(require('node:os').tmpdir(), 'doc-links-'));
+  const scan = (p) => JSON.parse(execFileSync('node', [resolve(repoRoot, 'scripts/check-doc-links.js'), '--root', dir, p], { cwd: dir, encoding: 'utf8' }));
+  try {
+    writeFileSync(join(dir, '--review.mdx'), '[x](./missing.md)\n');
+    const asSpelled = scan('./--review.mdx');
+    assert.deepEqual([asSpelled.checked, asSpelled.failures.length], [1, 1]);
+    assert.equal(scan('--review.mdx').checked, 0, 'the case the comparison exists for');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a path with two texts → the link scan is said to cover the work tree only, in the skill and the prompt', () => {
+  const prompt = readFileSync(resolve(repoRoot, 'skills/doc-review/references/codex-prompt-doc.md'), 'utf8').replace(/\s+/g, ' ');
+  assert.match(SKILL.replace(/\s+/g, ' '), /its result says nothing about the staged one: the dispatch says which paths those are, and the reviewer checks their staged links/);
+  assert.match(prompt, /it is two texts: apply its profile to the changed content of both\. The staged copy is `git show :<path>`/);
+  assert.match(prompt, /It read the work-tree text only: where a file's staged text differs .* the links in the staged text are yours to check/);
+});
+
+for (const [name, files, want] of [
+  ['an installed copy', ['.claude/scripts', 'PLUGIN/scripts', 'scripts'], '.claude/scripts/review-state.js'],
+  ['no installed copy', ['PLUGIN/scripts', 'scripts'], 'PLUGIN/scripts/review-state.js'],
+  ['a source checkout without the plugin', ['scripts'], 'scripts/review-state.js'],
+]) {
+  test(`the documented checker lookup with ${name} → ${want}, in both review skills`, () => {
+    const { execFileSync } = require('node:child_process');
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('node:fs');
+    const { join } = require('node:path');
+    const base = mkdtempSync(join(require('node:os').tmpdir(), 'plug in-'));
+    try {
+      for (const d of files) { mkdirSync(join(base, d), { recursive: true }); writeFileSync(join(base, d, 'review-state.js'), ''); }
+      for (const p of ['skills/doc-review/SKILL.md', 'skills/codex-code-review/SKILL.md']) {
+        const lines = readFileSync(resolve(repoRoot, p), 'utf8').split('\n').filter((l) => /CHECKER=/.test(l));
+        assert.equal(lines.length, 3, p);
+        // What the host does with ${CLAUDE_PLUGIN_ROOT} in a plugin skill: the path is written in its place.
+        const script = `${lines.join('\n').replaceAll('${CLAUDE_PLUGIN_ROOT}', join(base, 'PLUGIN'))}\nprintf %s "$CHECKER"`;
+        const got = execFileSync('sh', ['-c', script], { cwd: base, encoding: 'utf8' });
+        assert.equal(got.replace(`${base}/`, ''), want, p);
+      }
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+}
+
+test('default collection → the doc plane the classifier defines, not a .md filter of its own', () => {
+  const row = SKILL.split('\n').find((l) => l.startsWith('| No path |'));
+  assert.match(row, /Every path `git status --porcelain=v1 -z --untracked-files=all --no-renames` reports/);
+  assert.match(row, /A status that fails is not an empty set: stop and report it/);
+  assert.match(SKILL.replace(/\s+/g, ' '), /is two texts: the dispatch names it and the reviewer reads both `git diff --cached -- <path>` and `git diff -- <path>`/);
+  assert.match(row, /the `\.md` and `\.mdx` suffixes, case-sensitive, as `planeOf` in `scripts\/lib\/tree-digest\.js` decides/);
+});
+
+for (const [name, files, want, how] of [
+  ['a document renamed out of the plane', ['guide.mdx'], ['guide.mdx'], 'guide.txt'],
+  ['a document renamed within the plane', ['guide.md'], ['guide.md', 'guide.mdx'], 'guide.mdx'],
+  ['a staged edit whose work tree matches HEAD', ['guide.mdx'], ['guide.mdx'], 'STAGED-THEN-RESTORED'],
+  ['a staged deletion', ['gone.md'], ['gone.md'], 'DELETED'],
+  ['an .mdx-only change', ['a.mdx'], ['a.mdx']],
+  ['a mixed change', ['a.mdx', 'b.md', 'c.js', 'UPPER.MD', 'with space.mdx'], ['a.mdx', 'b.md', 'with space.mdx']],
+  ['a code-only change', ['c.js', 'UPPER.MD'], []],
+]) {
+  test(`the documented collection over ${name} → exactly the paths the digest calls doc`, () => {
+    const { execFileSync } = require('node:child_process');
+    const { mkdtempSync, writeFileSync, rmSync } = require('node:fs');
+    const { join } = require('node:path');
+    const { computeTreeState, planeOf } = require('../../scripts/lib/tree-digest.js');
+    const repo = mkdtempSync(join(require('node:os').tmpdir(), 'doc-collect-'));
+    const git = (...a) => execFileSync('git', ['-C', repo, '-c', 'user.name=T', '-c', 'user.email=t@e.x', ...a], { encoding: 'utf8' });
+    try {
+      git('init', '-q', '-b', 'main');
+      writeFileSync(join(repo, files[0]), 'old\n');
+      git('add', '-A');
+      git('commit', '-q', '-m', 'init');
+      if (how === 'STAGED-THEN-RESTORED') {
+        writeFileSync(join(repo, files[0]), 'staged\n');
+        git('add', files[0]);
+        writeFileSync(join(repo, files[0]), 'old\n'); // the work tree matches HEAD again; the index does not
+      } else if (how === 'DELETED') git('rm', '-q', files[0]);
+      else if (how) git('mv', files[0], how);
+      else for (const f of files) writeFileSync(join(repo, f), 'new\n'); // one tracked change, the rest untracked
+      const listed = git('status', '--porcelain=v1', '-z', '--untracked-files=all', '--no-renames')
+        .split('\0').filter(Boolean).map((r) => r.slice(3));
+      const collected = [...new Set(listed)].filter((p) => planeOf(p) === 'doc').sort();
+      assert.deepEqual(collected, [...want].sort());
+      assert.deepEqual(collected, computeTreeState(repo).planes.doc.dirty, 'what is reviewed is what the plane owes');
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+}
+
+// ── A plane pass needs the whole scope ─────────────────────────────────────
+
+test('a targeted pass → never a new plane pass without full scope; an existing pass and every fail stand', () => {
+  const flat = SKILL.replace(/\s+/g, ' ');
+  assert.match(flat, /\*\*A plane pass needs the whole scope\.\*\* A passing review of named files settles those files\./);
+  assert.match(flat, /only when every doc-plane path it would vouch for was covered — the uncommitted ones and those in commits a push would publish — by this plan, or by an earlier passing review of the same content/);
+  assert.match(flat, /A clean tree is not an empty scope: with two documents ahead, reviewing one covers one\./);
+  assert.match(flat, /When the coverage is not complete, or not known, report the result for the files reviewed and leave the slot alone; a pass already recorded at the same digest stays valid\./);
+  assert.match(flat, /This narrows `pass` only — a blocking finding is noted `fail` as above\./);
+  assert.match(flat, /self-note the plan's verdict once, not per batch/, 'a complete multi-batch plan still settles in one note');
+  const spec = readFileSync(resolve(repoRoot, 'skills/review-spec/SKILL.md'), 'utf8').replace(/\s+/g, ' ');
+  assert.match(spec, /noted as `doc_review pass` only under `@skills\/doc-review\/SKILL\.md` § Step 5/);
+});
+
+test('what a missing note costs → stated the same way for code and docs, with the automation that reads it', () => {
+  const sentence = 'Record a verdict only after the gate has run and its result has been established for the current change. If recording fails, the report still stands; reminders, Git offers, and automatic commit or publish checks may continue to show the gate as open.';
+  for (const p of ['skills/doc-review/SKILL.md', 'skills/codex-code-review/SKILL.md']) {
+    const flat = readFileSync(resolve(repoRoot, p), 'utf8').replace(/\s+/g, ' ');
+    assert.ok(flat.includes(sentence), p);
+    assert.doesNotMatch(flat, /one redundant reminder line/, p);
+  }
+  assert.doesNotMatch(readFileSync(resolve(repoRoot, 'rules/auto-loop.md'), 'utf8'), /it just keeps its reminder alive/);
 });
 
 test('the link checker is described as advisory, not as a gate', () => {
