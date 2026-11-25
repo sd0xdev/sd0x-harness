@@ -9,7 +9,7 @@ context: fork
 
 ## Trigger
 
-- Keywords: health check, .claude check, config audit, lint .claude, claude health, plugin sync, version drift, upgrade check, doctor
+- Keywords: health check, .claude check, config audit, lint .claude, claude health, plugin sync, version drift, upgrade check, doctor, reminder check, are the reminders useful, 提醒有沒有用
 
 ## When NOT to Use
 
@@ -24,6 +24,8 @@ context: fork
 | `--scope hygiene` | Only run C1-C7 hygiene checks |
 | `--scope sync` | Only run S1-S3 sync checks and the S4 plugin-copies inventory |
 | `--scope budget` | Only run the Instruction Budget Module (B1-B3) |
+| `--scope reminders` | Only run the Reminder Check (R1), on request — never part of `--scope all` |
+| *(no scope, but the request is about the reminders: "reminder check", "are the reminders useful", 提醒有沒有用)* | Same as `--scope reminders` |
 | `--scope all` | Run every module — hygiene, sync and budget (**default**) |
 
 ## Workflow
@@ -273,6 +275,29 @@ case "$(cd "$PR" 2>/dev/null && pwd -P)/" in "$(cd "$REPO_ROOT" && pwd -P)/"*|/)
 The script is read-only; it never edits or moves a file. A missing script skips the module with a
 note rather than guessing a total.
 
+### Reminder Check (R1)
+
+Runs only under `--scope reminders`, or on a request about the reminders (see Scope). It answers whether the reminder hooks print what is needed, when it
+is needed, and keeps that apart from whether anyone received, noticed or acted on it. It changes no hook,
+rule or setting, and reads no transcript.
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/skills/claude-health/scripts/reminder-check.js"
+```
+
+The script runs the loaded plugin's own hooks — the ones the host already runs — on synthetic cases in a
+throwaway project with its own `HOME`. (In the plugin's source checkout without the plugin loaded:
+`skills/claude-health/scripts/reminder-check.js`.)
+
+1. Show its report as printed. A missing needed reminder (exit 1) comes first and is a defect to report; a
+   repeat is not.
+2. *Seen by you* is the user's to answer. Ask at most once, for `Stop` only, whether they see its lines, and
+   pass `--seen stop=yes|no|unknown`. Never fill it in yourself. *Acted on* stays unknown.
+3. Do not conclude that a reminder is useless from a count, from silence, or from a delivery that is not
+   documented, and do not propose removing one on repetition alone.
+4. `--formatter <path to prettier>`, only when the user asks about edit delay: timed in its own section,
+   never an argument about reminders.
+
 ### Plugin Copies (S4)
 
 Runs with the Sync module (`--scope sync` and `--scope all`). Report-only: it lists where copies of
@@ -307,6 +332,8 @@ plugin's content are handled by owner:
 | `*-project.md` overrides and the project's own `CLAUDE.md` | The user's call — these files are user-owned |
 
 ## Output
+
+`--scope reminders` prints the script's own report instead of the one below.
 
 ```markdown
 # .claude/ Health Check Report
