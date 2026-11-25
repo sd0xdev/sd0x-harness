@@ -324,7 +324,7 @@ flowchart TD
 | PR レビューコメントの対応 | `/load-pr-review` → 修正 → `/codex-review-fast` → `/push-ci` | [→](docs/cookbook/pr-review-comments.md) |
 | マージ前のセキュリティチェック | `/codex-security` → `/dep-audit` → `/risk-assess` → `/pre-pr-audit` | [→](docs/cookbook/security-pre-merge.md) |
 | **注目コンボ：** 方向性の検証 | `/deep-research` → `/best-practices` → `/feasibility-study` → `/codex-brainstorm` | [→](docs/cookbook/validate-direction.md) |
-| **注目コンボ：** 敵対的設計 | `/codex-brainstorm`（ナッシュ均衡ディベート）→ `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
+| **注目コンボ：** 敵対的設計 | `/codex-brainstorm`（敵対的ディベート）→ `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
 
 [全 10 シナリオを見る →](docs/cookbook/)
 
@@ -363,7 +363,7 @@ flowchart TD
 | `/verify` | フル検証チェーンの実行 |
 | `/precommit` | precommit 品質ゲート（lint + build + test） |
 | `/precommit-fast` | 高速 precommit（lint + test、build なし） |
-| `/codex-brainstorm` | 対立型ブレスト（ナッシュ均衡） |
+| `/codex-brainstorm` | 対立型ブレスト（新たな反論が出なくなるか、ラウンド上限に達するまで討論） |
 | `/tech-spec` | 技術仕様書の作成 |
 | `/pr-review` | マージ前の PR セルフレビュー |
 <!-- END:ESSENTIAL-SKILLS -->

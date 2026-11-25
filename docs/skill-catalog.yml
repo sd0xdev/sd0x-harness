@@ -305,7 +305,7 @@ skills:
   - command: /codex-brainstorm
     category: planning
     featured: true
-    use_when: "Adversarial brainstorming (Nash equilibrium)"
+    use_when: "Adversarial brainstorming (debate until no new objections, or the round limit)"
     public: true
   - command: /feasibility-study
     category: planning

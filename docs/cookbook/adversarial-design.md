@@ -8,7 +8,7 @@ You face a design decision with strong trade-offs (performance vs. simplicity, c
 
 | Skill | Role |
 |-------|------|
-| `/codex-brainstorm` | Multi-round adversarial debate with Nash equilibrium |
+| `/codex-brainstorm` | Multi-round adversarial debate that stops when a round raises no new objection |
 | `/codex-architect` | Architecture advice grounded in the codebase |
 | `/deep-research` | Research prior art and industry patterns |
 | `/feasibility-study` | Quantitative evaluation of alternatives |
@@ -17,8 +17,8 @@ You face a design decision with strong trade-offs (performance vs. simplicity, c
 
 1. Frame the decision: define the trade-off axes (e.g., "monolith vs. microservice for auth")
 2. `/deep-research <topic>` — gather how others solved similar problems
-3. `/codex-brainstorm <decision>` — adversarial debate: pro vs. con perspectives argue until reaching Nash equilibrium (neither side can improve without the other changing)
-4. Review equilibrium output: the converged recommendation with acknowledged trade-offs
+3. `/codex-brainstorm <decision>` — adversarial debate: pro vs. con perspectives argue until a round raises no new objection (or the round limit is hit)
+4. Review the report: which options the evidence leaves standing, with their trade-offs and evidence gaps — decide from that — and, separately, the debate status (converged, agreed trade-off, or diverged), which tells you what the two sides agreed on or left open
 5. If architecture is involved: `/codex-architect` — validate against the existing codebase
 6. `/feasibility-study` — if multiple viable approaches survived the debate, quantify them
 
@@ -29,7 +29,7 @@ Round 1: Advocate A argues for Option X
          Advocate B argues for Option Y
 Round 2: Each responds to the other's strongest points
          ...
-Round N: Nash equilibrium — converged recommendation
+Round N: no new objections — debate status + retained options
          with clear trade-off acknowledgment
 ```
 
@@ -39,10 +39,10 @@ The debate isn't about "winning" — it's about finding blind spots that a singl
 
 | Situation | Choice |
 |-----------|--------|
-| Debate reaches clear consensus? | Adopt the recommendation; proceed to spec |
 | Debate reveals a third option? | Add it to the debate; run another round |
-| Equilibrium favors current approach? | Confidence boost — proceed with documented rationale |
-| No equilibrium after multiple rounds? | Both options viable; pick by constraint priority |
+| One option retained, no evidence gap? | Proceed with it and document the rationale — whatever the debate status |
+| Several options retained? | Pick by constraint priority, using the trade-off the report states; close any evidence gap it lists first |
+| Debate `Diverged`? | Read the open objections: they say what is unresolved, not which options stand — the retained set does that |
 | Need codebase-specific validation? | `/codex-architect` to check feasibility in existing code |
 
 ## Gates

@@ -324,7 +324,7 @@ flowchart TD
 | PR 리뷰 코멘트 반영 | `/load-pr-review` → 수정 → `/codex-review-fast` → `/push-ci` | [→](docs/cookbook/pr-review-comments.md) |
 | 머지 전 보안 점검 | `/codex-security` → `/dep-audit` → `/risk-assess` → `/pre-pr-audit` | [→](docs/cookbook/security-pre-merge.md) |
 | **주요 콤보:** 방향성 검증 | `/deep-research` → `/best-practices` → `/feasibility-study` → `/codex-brainstorm` | [→](docs/cookbook/validate-direction.md) |
-| **주요 콤보:** 적대적 설계 | `/codex-brainstorm` (내쉬 균형 토론) → `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
+| **주요 콤보:** 적대적 설계 | `/codex-brainstorm` (적대적 토론) → `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
 
 [전체 10개 시나리오 →](docs/cookbook/)
 
@@ -363,7 +363,7 @@ flowchart TD
 | `/verify` | 전체 테스트 검증 체인 실행 시 |
 | `/precommit` | Pre-commit 품질 게이트 (lint + build + test) |
 | `/precommit-fast` | 빠른 pre-commit (lint + test, 빌드 제외) |
-| `/codex-brainstorm` | 대립형 브레인스토밍 (내시 균형) |
+| `/codex-brainstorm` | 대립형 브레인스토밍 (새로운 반론이 없거나 라운드 한도에 이를 때까지 토론) |
 | `/tech-spec` | 기술 스펙 작성 시 |
 | `/pr-review` | 머지 전 PR 셀프 리뷰 시 |
 <!-- END:ESSENTIAL-SKILLS -->

@@ -18,7 +18,7 @@ You have a vague idea or stakeholder request and need to turn it into a concrete
 
 1. `/req-analyze` — decompose the request into structured requirements (produces `1-requirements.md`)
 2. `/feasibility-study` — evaluate 2-3 solution approaches with trade-off analysis
-3. `/codex-brainstorm` — adversarial debate on key design decisions (Nash equilibrium)
+3. `/codex-brainstorm` — adversarial debate on key design decisions (stops when no new objections remain)
 4. `/tech-spec` — generate the full technical spec (produces `2-tech-spec.md`)
 5. `/review-spec` — review for completeness, feasibility, and risk coverage
 6. `/create-request` — create a trackable request doc with acceptance criteria

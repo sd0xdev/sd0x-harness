@@ -324,7 +324,7 @@ flowchart TD
 | 处理 PR 审查意见 | `/load-pr-review` → 修复 → `/codex-review-fast` → `/push-ci` | [→](docs/cookbook/pr-review-comments.md) |
 | 合并前安全检查 | `/codex-security` → `/dep-audit` → `/risk-assess` → `/pre-pr-audit` | [→](docs/cookbook/security-pre-merge.md) |
 | **精选组合：** 验证方向 | `/deep-research` → `/best-practices` → `/feasibility-study` → `/codex-brainstorm` | [→](docs/cookbook/validate-direction.md) |
-| **精选组合：** 对抗式设计 | `/codex-brainstorm`（纳什均衡式辩论）→ `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
+| **精选组合：** 对抗式设计 | `/codex-brainstorm`（对抗式辩论）→ `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
 
 [全部 10 个场景 →](docs/cookbook/)
 
@@ -363,7 +363,7 @@ flowchart TD
 | `/verify` | 运行完整验证链 |
 | `/precommit` | 提交前质量关卡（lint + build + test） |
 | `/precommit-fast` | 快速提交前检查（lint + test，跳过 build） |
-| `/codex-brainstorm` | 对抗式头脑风暴（纳什均衡） |
+| `/codex-brainstorm` | 对抗式头脑风暴（辩到没有新的反对意见，或达到轮数上限） |
 | `/tech-spec` | 编写技术规格书 |
 | `/pr-review` | 合并前 PR 自查 |
 <!-- END:ESSENTIAL-SKILLS -->

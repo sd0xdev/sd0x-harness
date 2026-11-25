@@ -324,7 +324,7 @@ Escenarios reales que muestran qué habilidades combinar y en qué orden.
 | Resolver comentarios de review de PR | `/load-pr-review` → corregir → `/codex-review-fast` → `/push-ci` | [→](docs/cookbook/pr-review-comments.md) |
 | Revisión de seguridad pre-merge | `/codex-security` → `/dep-audit` → `/risk-assess` → `/pre-pr-audit` | [→](docs/cookbook/security-pre-merge.md) |
 | **Destacado:** Validar dirección | `/deep-research` → `/best-practices` → `/feasibility-study` → `/codex-brainstorm` | [→](docs/cookbook/validate-direction.md) |
-| **Destacado:** Diseño adversarial | `/codex-brainstorm` (debate de equilibrio de Nash) → `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
+| **Destacado:** Diseño adversarial | `/codex-brainstorm` (debate adversarial) → `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
 
 [Los 10 escenarios →](docs/cookbook/)
 
@@ -363,7 +363,7 @@ Para medir tu propio proyecto — tu `CLAUDE.md`, tus overrides y la parte del p
 | `/verify` | Ejecutar la cadena de verificación completa |
 | `/precommit` | Quality gate pre-commit (lint + build + test) |
 | `/precommit-fast` | precommit rápido (lint + test, sin build) |
-| `/codex-brainstorm` | Brainstorming adversarial (equilibrio de Nash) |
+| `/codex-brainstorm` | Brainstorming adversarial (debate hasta que no haya objeciones nuevas o se alcance el límite de rondas) |
 | `/tech-spec` | Escribir especificaciones técnicas |
 | `/pr-review` | Self-review de PR antes de merge |
 <!-- END:ESSENTIAL-SKILLS -->

@@ -324,7 +324,7 @@ flowchart TD
 | 處理 PR 審查意見 | `/load-pr-review` → 修正 → `/codex-review-fast` → `/push-ci` | [→](docs/cookbook/pr-review-comments.md) |
 | 合併前安全審查 | `/codex-security` → `/dep-audit` → `/risk-assess` → `/pre-pr-audit` | [→](docs/cookbook/security-pre-merge.md) |
 | **精選組合：** 驗證方向 | `/deep-research` → `/best-practices` → `/feasibility-study` → `/codex-brainstorm` | [→](docs/cookbook/validate-direction.md) |
-| **精選組合：** 對抗式設計 | `/codex-brainstorm`（Nash 均衡辯論）→ `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
+| **精選組合：** 對抗式設計 | `/codex-brainstorm`（對抗式辯論）→ `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
 
 [全部 10 個情境 →](docs/cookbook/)
 
@@ -363,7 +363,7 @@ flowchart TD
 | `/verify` | 執行完整測試驗證鏈 |
 | `/precommit` | Pre-commit 品質關卡（lint + build + test） |
 | `/precommit-fast` | 快速 pre-commit（lint + test，跳過 build） |
-| `/codex-brainstorm` | 對抗式 brainstorming（Nash 均衡） |
+| `/codex-brainstorm` | 對抗式 brainstorming（辯到沒有新的反對意見，或達到輪數上限） |
 | `/tech-spec` | 撰寫技術規格 |
 | `/pr-review` | 合併前 PR self-review |
 <!-- END:ESSENTIAL-SKILLS -->

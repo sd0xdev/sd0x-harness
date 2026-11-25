@@ -350,7 +350,7 @@ Real-world scenarios showing which skills to combine and in what order.
 | Resolve PR review comments | `/load-pr-review` → fix → `/codex-review-fast` → `/push-ci` | [→](docs/cookbook/pr-review-comments.md) |
 | Security pre-merge pass | `/codex-security` → `/dep-audit` → `/risk-assess` → `/pre-pr-audit` | [→](docs/cookbook/security-pre-merge.md) |
 | **Showcase:** Validate direction | `/deep-research` → `/best-practices` → `/feasibility-study` → `/codex-brainstorm` | [→](docs/cookbook/validate-direction.md) |
-| **Showcase:** Adversarial design | `/codex-brainstorm` (Nash equilibrium debate) → `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
+| **Showcase:** Adversarial design | `/codex-brainstorm` (adversarial debate) → `/codex-architect` | [→](docs/cookbook/adversarial-design.md) |
 
 [All 10 scenarios →](docs/cookbook/)
 
@@ -389,7 +389,7 @@ To measure your own project — your `CLAUDE.md`, your overrides and the plugin'
 | `/verify` | Running full test verification chain |
 | `/precommit` | Pre-commit quality gate (lint + build + test) |
 | `/precommit-fast` | Quick pre-commit (lint + test, no build) |
-| `/codex-brainstorm` | Adversarial brainstorming (Nash equilibrium) |
+| `/codex-brainstorm` | Adversarial brainstorming (debate until no new objections, or the round limit) |
 | `/tech-spec` | Writing technical specifications |
 | `/pr-review` | PR self-review before merge |
 <!-- END:ESSENTIAL-SKILLS -->
