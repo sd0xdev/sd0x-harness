@@ -90,3 +90,102 @@ test('pre-pr-audit hard-fail overrides when read → cite the exception rules wh
   assert.doesNotMatch(references, /`@rules\/testing\.md` — Evidence model \+ exception policy/);
   assert.doesNotMatch(audit, /\| `@rules\/testing\.md` \|/, 'no row cites the rule for procedure that moved');
 });
+
+// --- Summary integrity: a high raw score never outruns its evidence ---
+
+const scoringModel = readFileSync(resolve(root, 'skills/pre-pr-audit/references/scoring-model.md'), 'utf8');
+const outputTemplate = readFileSync(resolve(root, 'skills/pre-pr-audit/references/output-template.md'), 'utf8');
+const auditSkill = readFileSync(resolve(root, 'skills/pre-pr-audit/SKILL.md'), 'utf8');
+
+// The gate as the scoring model defines it: hard-fail → missing-evidence ceiling → score.
+function gateFor({ final, missing, hardFail }) {
+  if (hardFail !== 'none') return '⛔ PR-Blocked (hard-fail)';
+  const byScore = final >= 85 ? '✅ PR-Ready' : final >= 60 ? '⚠️ PR-Caution' : '⛔ PR-Blocked';
+  return missing !== 'none' && byScore === '✅ PR-Ready' ? '⚠️ PR-Caution' : byScore;
+}
+function workedExamples() {
+  const block = scoringModel.slice(scoringModel.indexOf('### Worked Examples'), scoringModel.indexOf('## Diagnostic Mapping'));
+  return [...block.matchAll(/^\| ([^|]+) \| (\d+) \| ([\d.]+) \| (\d+) \| ([^|]+) \| ([^|]+) \| `([^`]+)` \|$/gm)].map((m) => ({
+    name: m[1].trim(), raw: Number(m[2]), cap: Number(m[3]), final: Number(m[4]), missing: m[5].trim(), hardFail: m[6].trim(), gate: m[7],
+  }));
+}
+
+test('pre-pr-audit worked examples → final index and gate follow from raw, cap, missing evidence and hard-fails', () => {
+  const examples = workedExamples();
+
+  assert.equal(examples.length, 5);
+  for (const e of examples) {
+    assert.equal(Math.round(e.raw * e.cap), e.final, `${e.name}: final = round(raw × cap)`);
+    assert.equal(gateFor(e), e.gate, `${e.name}: gate`);
+  }
+});
+
+test('pre-pr-audit high raw score with a changed output or consumer path untested → never PR-Ready', () => {
+  const byName = Object.fromEntries(workedExamples().map((e) => [e.name, e]));
+  const output = byName['High raw score, changed output path untested'];
+  const consumer = byName['High raw score, changed consumer path untested'];
+
+  assert.ok(output.raw >= 85 && output.final >= 85, 'the score alone would read as ready');
+  assert.equal(output.gate, '⚠️ PR-Caution');
+  assert.equal(consumer.gate, '⚠️ PR-Caution');
+  assert.equal(gateFor({ ...output, missing: 'none' }), '✅ PR-Ready', 'the ceiling, not the score, is what holds it back');
+});
+
+test('pre-pr-audit high raw score with no test execution or a hard-fail → blocked whatever the raw score', () => {
+  const byName = Object.fromEntries(workedExamples().map((e) => [e.name, e]));
+
+  assert.equal(byName['High raw score, no test execution data'].gate, '⛔ PR-Blocked');
+  assert.equal(byName['High raw score, precommit stale'].gate, '⛔ PR-Blocked (hard-fail)');
+  assert.equal(byName['Everything present'].gate, '✅ PR-Ready', 'full evidence still passes');
+});
+
+test('pre-pr-audit summary → final index, cap, hard-fails and missing key evidence all stay visible', () => {
+  const integrity = auditSkill.slice(auditSkill.indexOf('### Summary Integrity'), auditSkill.indexOf('### Key Evidence'));
+
+  assert.match(integrity, /\| Final, not raw \| The headline number is `final_index` \(raw × cap\)\. The raw score appears only beside its cap/);
+  assert.match(integrity, /\| Hard-fails stay on top \|/);
+  assert.match(integrity, /\| No readiness without key evidence \| With any key evidence missing, the gate is at most `⚠️ PR-Caution`, whatever the index \|/);
+  assert.match(outputTemplate, /\*\*Hard-fails\*\*: <none \| each triggered override by name>/);
+  assert.match(outputTemplate, /\*\*Not Verified \(key evidence missing\)\*\*:/);
+  assert.match(outputTemplate, /the raw score is never shown without its cap/);
+});
+
+test('pre-pr-audit key evidence → names consumer and output paths; missing evidence is not N/A', () => {
+  const key = auditSkill.slice(auditSkill.indexOf('### Key Evidence'), auditSkill.indexOf('## 5 Dimensions'));
+
+  assert.match(key, /\| Consumer paths \| A changed function, export, schema or CLI flag has callers or readers, and no test exercises the change through one of them \|/);
+  assert.match(key, /\| Output paths \| The change alters something the system emits — a file, report, API response, event, exit code — and no test asserts on that output \|/);
+  assert.match(scoringModel, /\*\*N\/A means "does not apply", never "could not be obtained"\.\*\*/);
+  assert.match(outputTemplate, /"missing_evidence": \[/);
+  assert.match(outputTemplate, /"raw_score": 91,/);
+});
+
+test('pre-pr-audit existing gates → thresholds, caps and hard-fail precedence unchanged', () => {
+  assert.match(scoringModel, /\| >=85 \| ✅ Ready \| `✅ PR-Ready` \|/);
+  assert.match(scoringModel, /\| Static-only \| No test execution data \(Execution Integrity N\/A\) \| 0\.6 \|/);
+  assert.match(scoringModel, /Any hard-fail forces `⛔ PR-Blocked` regardless of final_index\./);
+  assert.match(scoringModel, /Order of precedence: hard-fail → missing-evidence ceiling → score\./);
+});
+
+test('pre-pr-audit --base → one resolved ref measures the change everywhere', () => {
+  assert.match(auditSkill, /`bash "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/run-skill\.sh" risk-assess risk-analyze\.js --json --mode fast --base <base>`, run from the audited repository/);
+  assert.match(auditSkill, /\*\*Change inventory\*\* = `git diff --name-only <base>` ∪ `git ls-files --others --exclude-standard`/);
+  assert.match(auditSkill, /4\. Deep supplement: change-inventory files/);
+  assert.match(auditSkill, /5\. Fallback: if `\/risk-assess` is unavailable, the change inventory sorted by lines changed/);
+  assert.match(auditSkill, /PA->>RA: \[Foreground — blocking\] risk-analyze\.js --json --base <base>/);
+  assert.match(auditSkill, /a `base` other than `<base>` → `\/risk-assess` is unavailable/);
+  assert.match(auditSkill, /\| Risk input \| Module Selection used its line-count fallback: `\/risk-assess` did not run, failed, or returned a different `base` \|/);
+  const risk = readFileSync(resolve(root, 'skills/risk-assess/SKILL.md'), 'utf8');
+  assert.match(risk, /When the caller gave `--base <ref>`, append `--base <ref>` \(the script defaults to `HEAD`\)/);
+  assert.match(auditSkill.replace(/\s+/g, ' '), /resolved once at the start \(default `HEAD`\) and used everywhere the change is measured/);
+});
+
+test('pre-pr-audit JSON example → dimension score and confidence follow the published formulas', () => {
+  const block = outputTemplate.slice(outputTemplate.indexOf('"name": "Execution Integrity"'), outputTemplate.indexOf('"hard_fails"'));
+  const values = [...block.matchAll(/"value": ("N\/A"|[\d.]+)/g)].map((m) => m[1]);
+  const applicable = values.filter((v) => v !== '"N/A"').map(Number);
+
+  assert.equal(values.length, 4);
+  assert.equal(Number(block.match(/"score": (\d+)/)[1]), (applicable.reduce((a, b) => a + b, 0) / applicable.length) * 100);
+  assert.equal(Number(block.match(/"confidence": (\d+)/)[1]), (applicable.length / values.length) * 100);
+});

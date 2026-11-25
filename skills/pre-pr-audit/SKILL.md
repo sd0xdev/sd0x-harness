@@ -58,7 +58,7 @@ sequenceDiagram
 
     par Phase A: Collect
         PA->>ST: [Background Agent] Read precommit/verify state (freshness)
-        PA->>RA: [Foreground — blocking] /risk-assess --mode fast
+        PA->>RA: [Foreground — blocking] risk-analyze.js --json --base <base>
         PA->>PA: [Background Agent] Detect changed files + map to tests
     end
 
@@ -79,8 +79,16 @@ sequenceDiagram
 | Step | Dispatch | Action | Source |
 |------|----------|--------|--------|
 | A1 | Background Agent | Read precommit gate state | `node scripts/review-state.js check --format=json`（installed copy first: `.claude/scripts/review-state.js`）— `precommit.passed` is content-addressed, so no separate freshness check; checker absent → report "no verdict source", never a pass |
-| A2 | **Foreground** (blocking) | Invoke `/risk-assess --mode fast` | Skill tool — get risk_level, top_affected, overall_score |
-| A3 | Background Agent | Detect changed files + map to test files | `git diff --name-only HEAD` → match against `test/` patterns |
+| A2 | **Foreground** (blocking) | Run the `/risk-assess` analyzer for `<base>` | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-skill.sh" risk-assess risk-analyze.js --json --mode fast --base <base>`, run from the audited repository (the runner is the plugin's, so its path is never repo-relative) — the JSON itself, not the skill's report, which omits fields needed here: `base`, `risk_level`, `overall_score`, `dimensions.blast_radius.top_affected`. Exit 1 (High) and 2 (Critical) are results, not failures. No parseable JSON, or a `base` other than `<base>` → `/risk-assess` is unavailable (Module Selection step 5) |
+| A3 | Background Agent | Map the change inventory to test files | Inventory → match against `test/` patterns |
+
+**Change inventory** = `git diff --name-only <base>` ∪ `git ls-files --others --exclude-standard`. An
+untracked module is part of the change; a plain `git diff` never lists it.
+
+`<base>` is the `--base` ref, resolved once at the start (default `HEAD`) and used everywhere the
+change is measured — A2, A3, Module Selection's supplement and its fallback. Measuring one of them
+against `HEAD` while the audit was asked for `--base main` hides committed changes, and with them
+the consumer and output paths § Key Evidence is about.
 
 **A2 MUST stay foreground**: Phase B Module Selection depends on `top_affected` from `/risk-assess` output. A1 and A3 dispatch as background Agents and run in parallel with A2.
 
@@ -96,11 +104,11 @@ sequenceDiagram
 
 ### Module Selection (deterministic)
 
-1. Source: `/risk-assess` JSON `top_affected` array (each: `file` + `dependent_count`)
+1. Source: A2's JSON `dimensions.blast_radius.top_affected` array (each: `file` + `dependent_count`)
 2. Sort: `dependent_count` descending, tie-break `file` ascending (stable sort)
 3. Select: N=3 (`fast`) or N=10 (`deep`)
-4. Deep supplement: `git diff --name-only` for files beyond top_affected cap
-5. Fallback: if `/risk-assess` unavailable, `git diff --stat` sorted by lines-changed descending
+4. Deep supplement: change-inventory files beyond the top_affected cap
+5. Fallback: if `/risk-assess` is unavailable, the change inventory sorted by lines changed, descending — `git diff --numstat <base>` (added + deleted), and for an untracked file its whole line count
 
 ### Phase C: Aggregate
 
@@ -112,11 +120,33 @@ sequenceDiagram
 ### Phase D: Output
 
 Output report per `references/output-template.md`. Include:
-- Confidence index (0-100) + gate sentinel
+- Confidence index (0-100) + gate sentinel — the **final** (capped) index; § Summary Integrity
 - Per-dimension score table
 - Hard-fail check results
 - Findings (prioritized)
 - Next actions
+
+### Summary Integrity
+
+The user-facing summary is what most readers see. It never reads better than the evidence:
+
+| Rule | Detail |
+|------|--------|
+| Final, not raw | The headline number is `final_index` (raw × cap). The raw score appears only beside its cap — `raw 92 × cap 0.6 = 55` — never alone |
+| Hard-fails stay on top | Any triggered hard-fail is named in the first lines of the summary with `⛔ PR-Blocked (hard-fail)`, whatever the score |
+| Missing key evidence is listed | Every item of § Key Evidence that is missing appears under **Not Verified**, in the summary itself — not only in the findings |
+| No readiness without key evidence | With any key evidence missing, the gate is at most `⚠️ PR-Caution`, whatever the index |
+| N/A is not a pass | A check is N/A only when it does not apply to this change. A consumer-path or output-path check that applies but has no evidence is **missing**: scored as a fail, not excluded. Missing test execution keeps the scoring model's own treatment (Static-only cap 0.6) and is listed as missing too |
+| Short forms too | A one-line or `--json` summary carries the gate, the final index, the cap, the triggered hard-fails and the missing-evidence count (`missing_evidence.length` in `--json`) |
+
+### Key Evidence
+
+| Key evidence | Missing when |
+|--------------|--------------|
+| Test execution | No test run data for the current tree (Execution Integrity has nothing to read) |
+| Consumer paths | A changed function, export, schema or CLI flag has callers or readers, and no test exercises the change through one of them |
+| Output paths | The change alters something the system emits — a file, report, API response, event, exit code — and no test asserts on that output |
+| Risk input | Module Selection used its line-count fallback: `/risk-assess` did not run, failed, or returned a different `base` |
 
 ## 5 Dimensions
 
@@ -165,12 +195,14 @@ See `references/scoring-model.md` for formulas. Summary:
 - Raw: weighted average (N/A dimensions excluded, weights renormalized)
 - Cap: evidence confidence (1.0 / 0.9 / 0.75 / 0.6)
 - Final: `round(raw × cap)`
+- Gate ceiling: missing key evidence → at most `⚠️ PR-Caution` (§ Summary Integrity)
 
 ## Verification
 
 - [ ] All 5 dimensions scored (or N/A with reason)
 - [ ] Hard-fail checks evaluated
-- [ ] Gate sentinel output matches score
+- [ ] Gate sentinel output matches score, hard-fails and the missing-evidence ceiling
+- [ ] Summary shows the final index (raw only beside its cap), every triggered hard-fail and every missing key evidence item
 - [ ] No git add/commit/push executed
 - [ ] Findings include file:line references
 
@@ -190,6 +222,9 @@ Action: fast mode → collect state + risk → test-review top-3 → aggregate �
 
 Input: /pre-pr-audit --mode deep
 Action: deep mode → collect + risk → test-review top-10 + coverage + AC trace → aggregate → 72/100 ⚠️ PR-Caution
+
+Input: /pre-pr-audit   (all present checks pass; the changed exporter's output file has no test)
+Action: raw 96 × cap 1.0 = 96, but output-path evidence is missing → ⚠️ PR-Caution, "Not Verified: output path of exportReport()"
 
 Input: /pre-pr-audit --strict
 Action: fast mode → score 55 → ⛔ PR-Blocked → exit code 1

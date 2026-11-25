@@ -145,7 +145,6 @@ const KNOWN_UNJUSTIFIED = [
   'orchestrate: git log',
   'pr-review: git',
   'pr-summary: git',
-  'pre-pr-audit: bash',
   'precommit: mypy',
   'precommit: npx',
   'precommit: pnpm',

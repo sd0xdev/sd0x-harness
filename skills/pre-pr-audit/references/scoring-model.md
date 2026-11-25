@@ -9,6 +9,13 @@
 | Fail | 0.0 | Check not met |
 | N/A | excluded | Check not applicable (e.g., no request doc for AC trace) |
 
+**N/A means "does not apply", never "could not be obtained".** A check that applies to this change
+but has no evidence — no test through a changed consumer path, nothing asserting on a changed output
+— is a **Fail (0.0)** and is listed as missing key evidence (`../SKILL.md` § Key Evidence). Excluding
+it would renormalize the weights around the gap and raise the score because evidence is absent.
+The one existing exception stays as it is: with no test execution data at all, Execution Integrity
+is N/A under the Static-only cap (0.6) below — and that too is listed as missing key evidence.
+
 ## Dimension Score
 
 ```
@@ -64,6 +71,25 @@ Clamped to 0-100.
 | 60-84 | ⚠️ Needs attention | `⚠️ PR-Caution` |
 | <60 | ⛔ Not ready | `⛔ PR-Blocked` |
 
+### Missing-Evidence Ceiling
+
+Applied after the score maps to a gate, and before hard-fails:
+
+| Missing key evidence (`../SKILL.md` § Key Evidence) | Gate |
+|------------------------------------------------------|------|
+| None | As mapped above |
+| One or more items | At most `⚠️ PR-Caution` — a score ≥ 85 does not yield `✅ PR-Ready` |
+
+### Worked Examples
+
+| Case | Raw | Cap | Final | Missing key evidence | Hard-fail | Gate |
+|------|-----|-----|-------|----------------------|-----------|------|
+| Everything present | 92 | 1.0 | 92 | none | none | `✅ PR-Ready` |
+| High raw score, no test execution data | 92 | 0.6 | 55 | test execution | none | `⛔ PR-Blocked` |
+| High raw score, changed output path untested | 96 | 1.0 | 96 | output path | none | `⚠️ PR-Caution` |
+| High raw score, changed consumer path untested | 90 | 0.9 | 81 | consumer path | none | `⚠️ PR-Caution` |
+| High raw score, precommit stale | 95 | 1.0 | 95 | none | precommit stale | `⛔ PR-Blocked (hard-fail)` |
+
 ## Diagnostic Mapping (report body)
 
 | Score | Diagnostic |
@@ -76,6 +102,9 @@ Clamped to 0-100.
 ## Hard-Fail Precedence
 
 Hard-fail overrides are evaluated **before** score-based gating. Any hard-fail forces `⛔ PR-Blocked` regardless of final_index.
+
+Order of precedence: hard-fail → missing-evidence ceiling → score. The summary reports all three
+when they apply; a higher layer never hides a lower one's finding.
 
 ## Strict Mode Exit Codes
 

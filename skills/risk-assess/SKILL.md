@@ -13,8 +13,8 @@ description: "Uncommitted code risk assessment with breaking change detection, b
 
 ## Procedure
 
-1. Run `bash scripts/run-skill.sh risk-assess risk-analyze.js --json` to collect deterministic scores
-2. Parse the JSON output — overall_score, risk_level, dimensions, flags, gate, next_actions
+1. Run `bash scripts/run-skill.sh risk-assess risk-analyze.js --json` to collect deterministic scores. When the caller gave `--base <ref>`, append `--base <ref>` (the script defaults to `HEAD`)
+2. Parse the JSON output — base (must be the ref that was asked for), overall_score, risk_level, dimensions, flags, gate, next_actions
 3. **If risk_level = Critical** (score 75-100) — highlight all breaking signals, recommend splitting PRs
 4. **If risk_level = High** (score 50-74) — auto-escalate to `--mode deep`, detail blast radius
 5. **If risk_level = Medium** (score 30-49) — summarize dimensions, note areas of concern
@@ -53,10 +53,10 @@ The script analyzes 3 dimensions + 2 conditional flags:
 
 ### Script Failure Fallback
 
-If the script fails, report the error and suggest running manually:
+If the script fails, report the error and suggest running manually — keeping the caller's base (`main` here; omit `--base main` for the default, `HEAD`), and checking that the returned `base` is that ref:
 
 ```bash
-bash scripts/run-skill.sh risk-assess risk-analyze.js --json
+bash scripts/run-skill.sh risk-assess risk-analyze.js --json --base main
 ```
 
 ## Output Format
