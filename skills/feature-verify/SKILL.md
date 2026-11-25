@@ -206,6 +206,37 @@ Record what **cannot** be observed through black-box testing. List in report for
 | **Medium** | L2-API (API-only) or L2-OBS (observation-only) or partial agreement |
 | **Low** | L1 (no runtime) or Claude and Codex diverge |
 
+### Observation vs Improvement Claim
+
+A verdict is about **what was observed**: the deployed version, the responses, the logs, a metric's
+value. That is all normal verification needs, and it stays as light as the tables above.
+
+Only when the report is going to say the change **caused** something — "reduced latency",
+"fixed the error rate", "improved conversion" — does it need more, because a number read after a
+deploy does not say why it has that value.
+
+| Statement | Example | Needs |
+|-----------|---------|-------|
+| Observation | "After deploy, p95 latency reads 180 ms" · "the metric is emitted with the right labels" | Nothing beyond P3/P4 |
+| Before/after difference | "p95 read 240 ms before the deploy and 180 ms after" | A **comparator**: the same metric, query and window definition from before the deploy, or from a concurrent instance without the change |
+| Causal improvement claim | "The change reduced p95 latency" | The comparator **and** concurrent-change evidence: what else changed in the window — other deploys, config or flag changes, traffic volume or mix, time-of-day pattern — each checked and listed, **and none of them left standing as a plausible explanation** |
+
+| Evidence in hand | What the report may say |
+|------------------|-------------------------|
+| No comparator | The observation only |
+| Comparator; concurrent changes not checked | The difference, with **"attribution not established"** |
+| Comparator; a concurrent change was found that could explain the difference | The difference, with **"attribution not established"** — checking and listing it is not ruling it out |
+| Comparator; concurrent changes checked and none found, or each ruled out with a stated reason | The causal claim |
+
+Never write that the change improved something on less than the last row. A causal claim that falls
+short is removed from the report, not softened.
+
+Collect a comparator only when one is needed: the user asked how a value differs before and after,
+or the report is going to state a difference or a cause. When the question is about a cause, also
+check the concurrent changes listed above — unchecked, they cap the wording at "attribution not
+established". Record what was found in the report's Improvement Claim block. A standalone observation needs none, and
+Pass / Warn / Blocked never depend on one.
+
 ### Dual Verification (Claude + Codex)
 
 1. **Claude analysis**: Form independent conclusion from P3 + P4 evidence
@@ -250,6 +281,7 @@ Generate report using [output-template.md](references/output-template.md).
 - [ ] P5: Claude analysis formed independently
 - [ ] P5: Codex review completed independently
 - [ ] P5: Integrated verdict with confidence level
+- [ ] P5: Any statement that the change *caused* an improvement has a comparator and concurrent changes checked with none left as a plausible explanation — otherwise it is worded as an observation, or as a difference with "attribution not established"
 - [ ] Report follows `references/output-template.md` format
 
 ## References
@@ -285,6 +317,13 @@ Action: P0(staging, L3) → P1(diff → cron changes) → P2(L3 passive only)
 Input: /feature-verify "Cache optimization" (no env configured)
 Action: P0(no config → L1) → P1(diff → cache service) → P2(code review only)
         → P3(skip) → P4(skip) → P5(verdict: Inconclusive, Low — recommend configuring references/environments.md)
+```
+
+```
+Input: /feature-verify "Cache optimization" --env staging   (user asks: "did it make the API faster?")
+Action: P0–P4 as usual → latency observed after deploy. Pre-deploy value for the same query and window
+        available → difference reported. A config change shipped in the same window → "attribution not
+        established"; verdict Pass (the feature works), no claim that the change made it faster
 ```
 
 ```

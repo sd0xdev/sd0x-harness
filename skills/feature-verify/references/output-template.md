@@ -92,6 +92,21 @@
 | ---- | ------ | ----- | --------------- | ----- | ------ |
 | M1-1 | [name] | [query] | [labels] | N | ✅/❌ |
 
+### Improvement Claim (include when a difference or a cause was asked about or is stated)
+
+| Field | Value |
+| ----- | ----- |
+| Claim | [what is said to have improved] |
+| Comparator | [same metric, query and window from before the deploy, or a concurrent instance without the change] / none |
+| Before → After | [value] → [value] |
+| Concurrent changes checked | [other deploys / config or flag changes / traffic volume or mix / time-of-day pattern — each: none found; or what was found and either why it cannot explain the difference, or "could explain it"] |
+| Wording allowed | Observation only / Difference, attribution not established / Causal claim |
+
+Omit this section for a normal verification — a standalone observation. No comparator → "Observation only". Comparator but a
+concurrent change left unchecked, or found and still a plausible explanation → "Difference,
+attribution not established". "Causal claim" only when every one is "none found" or ruled out with
+its reason written in the row above.
+
 ### Blind Spots
 
 | Blind Spot | Description | Recommended Coverage |
