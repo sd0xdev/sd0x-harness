@@ -5,7 +5,8 @@
 
 import { MAX_HASHED_PATHS, TIMEOUT_MS, commands as FP, digest, fold, parseStatus } from '../lib/fingerprint.js'
 import { handoff } from '../lib/handoff.js'
-import { decideNotices, parseTaskNotification } from '../lib/notices.js'
+import { isOpen, statusKind } from '../lib/background.js'
+import { decideNotices, parseTaskStatus } from '../lib/notices.js'
 import { HARD_FORBIDDEN, classify, taskRecord, validateTask } from '../lib/policy.js'
 import { acceptedRecord, digestMatches, previewLines, proposalDigest, proposalPath, readProposal } from '../lib/proposal.js'
 import { checkArgv, copy, draftingRequest, helpText, languageOf, nextForTask, parseCommand, suggestionWhileWaiting } from '../lib/firstrun.js'
@@ -51,6 +52,8 @@ async function buildContext($) {
     // tool end); unknown until then, and unknown never enables needs-user.
     permissionMode: null,
     startedAt: saved?.startedAt ?? now,
+    // This load of the session: not saved, so a record from an earlier load can be told apart.
+    contextAt: now,
     state: saved?.state ?? initialState(now),
     decisions: saved?.decisions ?? [],
     evidence: saved?.evidence ?? {},
@@ -204,6 +207,7 @@ async function model($, c) {
   return {
     now,
     task,
+    contextAt: c.contextAt,
     state: c.state,
     health: c.writer.health.value,
     gate: c.gate,
@@ -235,7 +239,7 @@ function evidenceFor(evidence, task) {
 }
 
 async function observe($, c, observation, taskId) {
-  c.state = reduce(c.state, observation)
+  c.state = reduce(c.state, { ...observation, ctx: c.contextAt })
   const now = await $.clock.now()
   const { toSend, sent } = decideNotices(c.state.interventions, c.notices, now)
   c.notices = sent
@@ -256,18 +260,49 @@ async function saveHandoff($, c) {
   return { text, saved: ok, reason: ok ? null : 'store-error' }
 }
 
-async function closeBackground($, c, id, status, isError) {
+// One host report about a background id, whichever path it came by.
+async function hostReport($, c, id, word, via, isError) {
+  const kind = statusKind(word)
+  if (kind === 'end') return closeBackground($, c, id, word, isError)
+  const type = kind === 'working' ? 'background.working' : 'background.unknown-word'
   const task = await boundTask($, c)
-  await observe($, c, { type: 'background.terminal', id, status, at: await $.clock.now() }, task?.id)
+  await observe($, c, { type, id, via, word: sanitize(word, 40), at: await $.clock.now() }, task?.id)
+  reopenEvidence(c)
+  persist(c, task?.id)
+}
+
+// A check the host names again after its reported end is not a finished pass any more. Only a pass is
+// reopened: a failure already observed is never turned back into a question.
+function reopenEvidence(c) {
   for (const ev of Object.values(c.evidence)) {
-    if (ev.backgroundId && ev.backgroundId === id && ev.outcome === 'backgrounded') {
-      ev.outcome = status === 'completed' ? (isError ? 'error' : 'ok') : status === 'failed' ? 'error' : 'cancelled'
+    const rec = ev.backgroundId === undefined ? undefined : c.state.background[ev.backgroundId]
+    if (rec?.seenAgainAt !== undefined && ev.outcome === 'ok') { ev.outcome = 'backgrounded'; ev.after = null }
+  }
+}
+
+async function closeBackground($, c, id, word, isError) {
+  const task = await boundTask($, c)
+  // A task query can report a completed call that ended in an error: that is a failed end.
+  const status = word === 'completed' && isError ? 'failed' : word
+  await observe($, c, { type: 'background.terminal', id, status, at: await $.clock.now() }, task?.id)
+  await settleEvidence($, c, id)
+  persist(c, task?.id)
+}
+
+// Brings a check's evidence to the end its background record holds, if it holds one.
+async function settleEvidence($, c, id) {
+  const rec = c.state.background[id]
+  if (!rec || isOpen(rec)) return
+  for (const ev of Object.values(c.evidence)) {
+    if (rec.conflict !== undefined && ev.backgroundId && ev.backgroundId === id) {
+      ev.outcome = 'conflicting ends'
+    } else if (ev.backgroundId && ev.backgroundId === id && ev.outcome === 'backgrounded') {
+      ev.outcome = rec.status === 'completed' ? 'ok' : rec.status === 'failed' ? 'error' : 'cancelled'
       ev.after = await readFingerprint($, c.cwd)
       ev.coverage = worstCoverage(ev.before, ev.after)
       ev.note = 'after-reading taken when the terminal result was observed, not at completion'
     }
   }
-  persist(c, task?.id)
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────────────────────────
@@ -556,8 +591,12 @@ export function register(on) {
 
   on('classic.Stop', async ($, e, next) => {
     const c = await context($)
-    const ids = (e.background_tasks ?? []).map((b) => b.id)
-    await observe($, c, { type: 'background.inflight', ids, at: await $.clock.now() }, (await boundTask($, c))?.id)
+    // A missing list is not an empty one: only a supplied list says what was, and was not, in it.
+    const list = Array.isArray(e.background_tasks) ? { type: 'background.inflight', ids: e.background_tasks.map((b) => b?.id).filter(Boolean).map(String) } : { type: 'background.list-missing' }
+    const task = await boundTask($, c)
+    await observe($, c, { ...list, at: await $.clock.now() }, task?.id)
+    reopenEvidence(c)
+    persist(c, task?.id)
     return next(e)
   })
 
@@ -621,6 +660,8 @@ export function register(on) {
       // An opaque key: executor arguments never become a stored identifier in plaintext.
       const key = checkKey(v.executor.argv)
       c.evidence = { ...c.evidence, [key]: { checkKey: key, taskId: task?.id ?? null, policyVersion: task?.policyVersion ?? null, requested, outcome, before, after, coverage: worstCoverage(before, after), at: endAt, backgroundId } }
+      // The end can have been observed before this start was.
+      if (backgroundId !== undefined) await settleEvidence($, c, backgroundId)
       persist(c, task?.id)
     }
     return r
@@ -629,8 +670,8 @@ export function register(on) {
   // A background job's notification is the host's own terminal report: observe it, pass it on.
   on('prompt.submit', async ($, e, next) => {
     if (e.origin?.kind === 'task-notification') {
-      const n = parseTaskNotification(e.text)
-      if (n) await closeBackground($, await context($), n.id, n.status, undefined)
+      const n = parseTaskStatus(e.text)
+      if (n) await hostReport($, await context($), n.id, n.status, 'notification')
     }
     return next(e)
   })
@@ -640,7 +681,7 @@ export function register(on) {
     const r = await next(e)
     const c = await context($)
     const st = r && r.result && typeof r.result === 'object' ? r.result.status : undefined
-    if (st && st !== 'working') await closeBackground($, c, r.result.taskId ?? e.taskId, st, r.result.result?.isError)
+    if (st) await hostReport($, c, String(r.result.taskId ?? e.taskId), String(st), 'task query', r.result.result?.isError)
     return r
   }).catch(($, e, next) => next(e))
 

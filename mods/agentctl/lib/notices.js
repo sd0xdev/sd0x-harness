@@ -2,6 +2,8 @@
 // and what was already notified, decide what to say now. One notice per blocking reason; repeated
 // only when the reason cleared and came back, or its severity rose; never twice within the cool-down.
 
+import { statusKind } from './background.js'
+
 export const COOLDOWN_MS = 10 * 60 * 1000
 const RANK = { info: 0, warn: 1, critical: 2 }
 
@@ -30,10 +32,14 @@ export function decideNotices(interventions, sent, now, cooldownMs = COOLDOWN_MS
 // carries `<task-id>` and `<status>` elements (found live on 2.1.288). Anything else, or a status that
 // is not terminal, is not a completion.
 export function parseTaskNotification(text) {
+  const n = parseTaskStatus(text)
+  return n && statusKind(n.status) === 'end' ? n : null
+}
+
+// The same two elements whatever the word is: a word that is not an end is still host evidence.
+export function parseTaskStatus(text) {
   const s = String(text ?? '')
   const id = /<task-id>([^<]{1,200})<\/task-id>/.exec(s)?.[1]?.trim()
   const status = /<status>([^<]{1,40})<\/status>/.exec(s)?.[1]?.trim()
-  if (!id || !status) return null
-  if (!['completed', 'failed', 'killed', 'cancelled'].includes(status)) return null
-  return { id, status }
+  return id && status ? { id, status } : null
 }

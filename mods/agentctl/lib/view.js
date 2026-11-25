@@ -2,8 +2,10 @@
 // FR-23; tech spec § 3.3). Pure: every input arrives as data, every line names its source and age,
 // and a field whose source did not answer says so instead of showing a value.
 
+import { compactLines, detailLines } from './background.js'
 import { checkLine } from './firstrun.js'
 import { digest } from './fingerprint.js'
+import { IDLE_STALL_MS } from './reducer.js'
 import { sanitize } from './sanitize.js'
 
 // The opaque key evidence for a declared check is stored under: arguments never become a stored
@@ -110,8 +112,9 @@ export function statusText(m, { details = false } = {}) {
   const ev = evidenceLines(m.evidence, m.fingerprint, now)
   lines.push(ev.length ? 'Execution evidence (not a review verdict):' : 'Execution evidence: no declared check has run')
   lines.push(...ev)
-  const bg = Object.entries(state.background ?? {}).filter(([, b]) => b.status === 'started' || b.status === 'in-flight')
-  if (bg.length) lines.push(`Background in flight: ${bg.length} (${bg.map(([id]) => id).join(', ')})`)
+  const quiet = now - (state.lastEventAt ?? now) >= IDLE_STALL_MS
+  lines.push(...compactLines(state, now, m.contextAt, quiet))
+  if (details) lines.push(...detailLines(state, now, m.contextAt))
   if (!details) {
     lines.push('More: /agentctl status --details · /agentctl help')
     return lines.join('\n')

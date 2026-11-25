@@ -3,6 +3,7 @@
 // what tools observed (operations, evidence), and what Claude only claimed (never stored as a fact,
 // so the hand-over says plainly that nothing claimed is shown as verified).
 
+import { backgroundItems, describeItem } from './background.js'
 import { CAPS, sanitize } from './sanitize.js'
 import { HARD_FORBIDDEN } from './policy.js'
 import { evidenceCurrent } from './view.js'
@@ -30,7 +31,9 @@ function assemble(head, sections, cap) {
   return out.join('\n')
 }
 
-export function handoff({ task, state, evidence, fingerprint, decisions, now, sessionId }) {
+const iso = (at) => (at === undefined ? 'at an unknown time' : `at ${new Date(at).toISOString()}`)
+
+export function handoff({ task, state, evidence, fingerprint, decisions, now, sessionId, contextAt }) {
   // When the last tree reading was taken: the hand-over starts no process, so it never re-reads.
   const seenAt = typeof fingerprint?.at === 'number' ? ` as of ${new Date(fingerprint.at).toISOString()}` : ''
   const head = [
@@ -70,10 +73,9 @@ export function handoff({ task, state, evidence, fingerprint, decisions, now, se
   })
   sec.push({ heading: '## 5. Not verified', items: notVerified, fixed: ['- Anything Claude stated as done, passing or fixed without an evidence record above is only its own judgement.'] })
   const open = ops.filter(([, o]) => o.endedAt === undefined && o.outcome !== 'refused')
-  const bg = Object.entries(state.background ?? {}).filter(([, b]) => b.status === 'started' || b.status === 'in-flight')
   const running = [
     ...open.map(([id, o]) => `- ${s(o.requested)} (${o.tool}, ${o.outcome}) — ${id}`),
-    ...bg.map(([id, b]) => `- background ${s(id, 60)} — ${b.status}${b.asOf ? ` as of ${new Date(b.asOf).toISOString()}` : ''}`),
+    ...backgroundItems(state, contextAt).map((i) => `- background ${s(i.id, 60)} — ${describeItem(i, iso)}${i.requested ? ` · ${s(i.requested, 120)}` : ''}`),
   ]
   sec.push({ heading: '## 6. Still running or unknown', items: running, fixed: running.length ? [] : ['- Nothing observed as still running. Untracked processes cannot be confirmed either way.'] })
   const iv = Object.keys(state.interventions ?? {})

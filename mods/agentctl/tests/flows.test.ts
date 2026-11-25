@@ -378,6 +378,149 @@ test('a prompt that merely looks like a notification but is typed by the user cl
   expect(await status($)).toMatch(/started, completion unobserved/)
 })
 
+const BG = (id) => ({ coreResult: () => ({ result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: id } }) })
+const notify = ($, id, word) => $.prompt.submit({ text: `<task-notification>\n<task-id>${id}</task-id>\n<status>${word}</status>\n</task-notification>`, origin: { kind: 'task-notification' }, wait: false })
+
+test('background: a Stop without the list field changes no record; an empty list is a supplied list', async ($, on) => {
+  on('classic.Stop', () => ({}))
+  const { clock } = await setup($, on, BG('bgA'))
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
+  await settle()
+  await $.classic.Stop({ background_tasks: [{ id: 'bgA' }] })
+  await settle()
+  expect(await status($)).toMatch(/Background named by the host/)
+  await clock.advance(1000)
+  await $.classic.Stop({ stop_hook_active: false })
+  await settle()
+  let t = (await $.command.run({ command: 'agentctl', args: 'status --details' })).text
+  expect(t).toMatch(/whether it was listed since is unknown/)
+  await clock.advance(1000)
+  await $.classic.Stop({ background_tasks: [] })
+  await settle()
+  t = (await $.command.run({ command: 'agentctl', args: 'status --details' })).text
+  expect(t).toMatch(/not in the host list of \d+s ago; completion unobserved/)
+})
+
+test('background: a status word this version does not know closes nothing on either path', async ($, on) => {
+  await setup($, on, { coreResult: (e) => (e.tool === 'GetTask' ? { result: { taskId: 'bgB', status: 'input_required' } } : { result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'bgB' } }) })
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
+  await settle()
+  await notify($, 'bgB', 'paused')
+  await settle()
+  expect(await status($)).toMatch(/npm test: backgrounded · started, completion unobserved/)
+  await $.tool.call({ tool: 'GetTask', taskId: 'bgB', tool_use_id: 'u2' })
+  await settle()
+  const t = (await $.command.run({ command: 'agentctl', args: 'status --details' })).text
+  expect(t).toMatch(/npm test: backgrounded · started, completion unobserved/)
+  expect(t).toMatch(/host status word not known here: "input_required"/)
+})
+
+test('background: an end delivered before its start still settles the check', async ($, on) => {
+  let held
+  await setup($, on, { coreResult: async () => { held = true; await notify($, 'bgC', 'failed'); await settle(); return { result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'bgC' } } } })
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
+  await settle()
+  expect(held).toBe(true)
+  const t = await status($)
+  expect(t).toMatch(/npm test: error/)
+  expect(t).not.toMatch(/completion unobserved/)
+})
+
+test('background: conflicting ends leave the check unverified and say so', async ($, on) => {
+  await setup($, on, BG('bgD'))
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
+  await settle()
+  await notify($, 'bgD', 'completed')
+  await settle()
+  expect(await status($)).toMatch(/npm test: no error reported/)
+  await notify($, 'bgD', 'completed')
+  await settle()
+  expect(await status($)).toMatch(/npm test: no error reported/)
+  await notify($, 'bgD', 'failed')
+  await settle()
+  const t = await status($)
+  expect(t).toMatch(/npm test: conflicting ends/)
+  expect(t).toMatch(/1 with conflicting ends/)
+})
+
+test('background: a check the host names again after its pass is not verified, and a later failure stands', async ($, on) => {
+  on('classic.Stop', () => ({}))
+  const { clock } = await setup($, on, BG('bgE'))
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
+  await settle()
+  await notify($, 'bgE', 'completed')
+  await settle()
+  expect(await status($)).toMatch(/npm test: no error reported · current/)
+  await clock.advance(1000)
+  await $.classic.Stop({ background_tasks: [{ id: 'bgE' }] })
+  await settle()
+  expect(await status($)).toMatch(/npm test: backgrounded · started, completion unobserved/)
+  await clock.advance(1000)
+  await notify($, 'bgE', 'failed')
+  await settle()
+  expect(await status($)).toMatch(/npm test: error/)
+  const h = (await $.command.run({ command: 'agentctl', args: 'handoff' })).text
+  expect(h).toMatch(/## 4\. Verified[^#]*Nothing\./)
+  expect(h).toMatch(/## 5\. Not verified[^#]*npm test — outcome error/)
+})
+
+test('background: a late Bash result keeps a check open when the host named it again after its end', async ($, on) => {
+  on('classic.Stop', () => ({}))
+  await setup($, on, {
+    coreResult: async () => {
+      await notify($, 'bgLate', 'completed')
+      await settle()
+      await $.classic.Stop({ background_tasks: [{ id: 'bgLate' }] })
+      await settle()
+      return { result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'bgLate' } }
+    },
+  })
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
+  await settle()
+  expect(await status($)).toMatch(/npm test: backgrounded · started, completion unobserved/)
+  expect((await $.command.run({ command: 'agentctl', args: 'handoff' })).text).toMatch(/## 4\. Verified[^#]*Nothing\./)
+  await notify($, 'bgLate', 'failed')
+  await settle()
+  expect(await status($)).toMatch(/npm test: error/)
+})
+
+test('background: a failed check named again and then completed does not become a pass', async ($, on) => {
+  on('classic.Stop', () => ({}))
+  await setup($, on, BG('bgF'))
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
+  await settle()
+  await notify($, 'bgF', 'failed')
+  await settle()
+  await $.classic.Stop({ background_tasks: [{ id: 'bgF' }] })
+  await settle()
+  await notify($, 'bgF', 'completed')
+  await settle()
+  expect(await status($)).toMatch(/npm test: error/)
+})
+
+test('background: a completed task query that carries an error cannot verify the check', async ($, on) => {
+  await setup($, on, { coreResult: (e) => (e.tool === 'GetTask' ? { result: { taskId: 'bgG', status: 'completed', result: { isError: true } } } : { result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'bgG' } }) })
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
+  await settle()
+  await $.tool.call({ tool: 'GetTask', taskId: 'bgG', tool_use_id: 'q1' })
+  await settle()
+  expect(await status($)).toMatch(/npm test: error/)
+  expect((await $.command.run({ command: 'agentctl', args: 'handoff' })).text).toMatch(/## 4\. Verified[^#]*Nothing\./)
+})
+
+test('background: working is shown with the path it came by', async ($, on) => {
+  await setup($, on, { coreResult: (e) => (e.tool === 'GetTask' ? { result: { taskId: 'bgH', status: 'working' } } : { result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'bgH' } }) })
+  await $.tool.call({ tool: 'Bash', command: 'npm test', tool_use_id: 'u1' })
+  await settle()
+  const line = async () => [(await $.command.run({ command: 'agentctl', args: 'status --details' })).text, (await $.command.run({ command: 'agentctl', args: 'handoff' })).text].map((t) => t.split('\n').find((l) => l.includes('bgH') && l.includes('working')))
+  await notify($, 'bgH', 'working')
+  await settle()
+  for (const l of await line()) { expect(l).toMatch(/\(notification\)/); expect(l).not.toMatch(/task query/) }
+  await $.tool.call({ tool: 'GetTask', taskId: 'bgH', tool_use_id: 'q1' })
+  await settle()
+  for (const l of await line()) expect(l).toMatch(/\(task query\)/)
+})
+
 test('live finding: ToolSearch passes while a task is bound (it only loads schemas)', async ($, on) => {
   const { world } = await setup($, on)
   const before = world.core
