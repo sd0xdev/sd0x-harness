@@ -158,6 +158,19 @@ and Scope sections); what it must never do is appear inside a command the review
 
 The frozen baseline is task-scoped and immutable: the initial reviewer, the inline secondary, `--continue`, and every same-task re-dispatch reuse the same list — no path recomputes it. The only growth is the user-named monotonic union of `skills/codex-code-review/references/scope-contract.md` § Scope Baseline; ordinary fix edits during a round never write back into it.
 
+**What this review is asked about (read-only, never a gate).** The reader reads the whole tree, so it speaks
+only for a dispatch whose file list names every code-plane path changed there; when the tree holds a changed
+code path outside that list, skip it and its sentences for the round. Otherwise, once the tree is settled and
+again before each re-dispatch whose tree changed, run the plugin's own reader (`scripts/…` in the plugin's source
+checkout without the plugin loaded):
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/review-scope.js" asked   # Branch variant: add --base <MERGE_BASE>
+```
+
+Keep its `[REVIEW_REQUEST]` line in the conversation for the push plan; nothing stores it and it never
+enters a reviewer prompt. A run that fails is skipped without comment and changes nothing about the review.
+
 ### Step 1.1: Resolve the tier (required before dispatch)
 
 The gate is tier-derived, and the **reviewer** has to be told which severities block — otherwise it emits `✅ Ready` / `⛔ Blocked` against its own assumption, and that is the verdict you note in Step 4.5. Resolve the tier first, then bind `TIER` and `BLOCKING` into the prompt:
@@ -350,6 +363,11 @@ Output format keeps the merged scope fields and adds the source tag:
 Output the standard gate sentinel:
 - `✅ Ready` — if READY (no blocking finding on either axis)
 - `⛔ Blocked` — if BLOCKED
+
+With the verdict, unless the user asked in this conversation not to see them, report once the sentences Step 1's `review-scope.js asked` printed: what was requested,
+and any commit it names as outside the request. Say no more than they do — *asked about* is not *read*,
+*outside* is not *unreviewed*, and neither moves the gate, calls for another review, or is repeated for
+the same content.
 
 **Route on derived values, never declarations.** Before acting on the reviewer's sentinel, normalize all findings fail-closed (`references/review-common.md § Scope Fields`), **derive each finding's `fix_obligation`** (`references/scope-contract.md § Opportunistic Envelope` — `mandatory` unless the finding is a proven opportunistic candidate; `admitted` or `deferred` per the envelope), then **derive** the expected sentinel × `gate_reason`; the reviewer's declared pair is an unverified claim. A finding whose obligation is `deferred` is recorded and does not block; one that is `admitted` blocks at **any** severity for the fix phase it was admitted into — that phase does not re-dispatch while it is unfixed; the verifying re-review derives it afresh. Four canonical recalculations: a declared `Ready × NONE` wrapping a real in-scope blocking finding routes as `Blocked × IN_SCOPE_BLOCKING` — a reviewer cannot wrap a real blocking finding in a lawful pairing; a declared `Ready × NONE` wrapping an out-of-scope critical finding with no valid `[USER_SKIPPED]` routes as `Blocked × OUT_OF_SCOPE_CRITICAL`; both classes present under a single declared reason derives `Blocked × BOTH`; a declared `Blocked` with no blocking finding on either axis routes as `Ready × NONE`. Findings too incomplete to derive → conservatively `Blocked × BOTH`. "Breaker triggered" is the model's own fix-phase state (`skills/codex-code-review/references/scope-contract.md` § Circuit Breaker), not a reviewer field — check it before routing. The matrix indexes on the **derived** pair:
 
