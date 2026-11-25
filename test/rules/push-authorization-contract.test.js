@@ -58,10 +58,11 @@ test('the first-instruction checker when the Read is moved or its stop removed �
 });
 
 // The digest of § Proactive Offer as r3 moved it (identical to the pre-move section of
-// rules/git-workflow.md; re-pinned 2026-11-16 for git-autonomy R8's two credentials). A later
+// rules/git-workflow.md; re-pinned 2026-11-16 for git-autonomy R8's two credentials, and 2026-11-25 for the custom-flow line:
+// its delivery is not promised and asking is a "may", as FR-9 says). A later
 // Default-tier edit updates this value through review; an edit that
 // changes a step — a menu option, the revalidation, the offer-shown ordering — cannot pass unseen.
-const PROACTIVE_OFFER_SHA256 = 'f7eb71b5a8a3321cccf9903a0f5c1df7a711b85d8626253ea315158928ef95e1';
+const PROACTIVE_OFFER_SHA256 = 'f3fb635f3b0f87d1b9c248d2dcc2868f60991d23f08d578f3daedb042966fcaa';
 const sha = (s) => createHash('sha256').update(s).digest('hex');
 // It ends where § Task autonomy (git-autonomy R8, 2026-11-16) begins: that section has its own pins.
 const proactiveOffer = (text) => text.slice(text.indexOf('## Proactive Offer\n'), text.indexOf('\n## Task autonomy\n')).replace(/\n+$/, '');

@@ -1,6 +1,6 @@
 'use strict';
 // The four reminder hooks: md out, exit 0 on every path, state check first,
-// one git fallback with the ignore-if-done sentence. Contract:
+// one git fallback with the cannot-tell sentence. Contract:
 // docs/features/hook-lightweighting/2-tech-spec.md §3.2, §6.
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -112,7 +112,7 @@ test('stop: state-driven — owed planes print, a noted-pass unchanged tree is s
   assert.equal(r.stdout, '', 'a shown offer is not repeated at the same digest');
 });
 
-test('stop: checker missing → git fallback prints plane lines with the ignore-if-done sentence', () => {
+test('stop: checker missing → git fallback prints plane lines and says git cannot tell whether the gates passed', () => {
   const repo = makeRepo();
   const home = tmp('rh-home-');
   writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
@@ -124,8 +124,96 @@ test('stop: checker missing → git fallback prints plane lines with the ignore-
   });
   assert.equal(r.status, 0);
   assert.match(r.stdout, /code 平面有未提交變更/);
-  assert.match(r.stdout, /若本輪已完成對應 review gate，忽略此行即可/);
+  assert.match(r.stdout, /\/codex-review-fast → \/precommit（git 狀態看不出這兩個 gate 是否已在最後一次編輯後通過/);
+  assert.doesNotMatch(r.stdout, /忽略此行/, 'a finished review alone must not excuse the owed precommit');
   assert.doesNotMatch(r.stdout, /doc 平面/, 'clean doc plane earns no line');
+});
+
+test('post-compact: checker missing → the same cannot-tell sentence, for both planes', () => {
+  const repo = makeRepo();
+  const home = tmp('rh-home-');
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  writeFileSync(join(repo, 'readme.md'), '# doc v2\n');
+  const r = runHook(fallbackCopy('post-compact-auto-loop'), repo, home);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /\/precommit（git 狀態看不出這兩個 gate/);
+  assert.match(r.stdout, /\/codex-review-doc（git 狀態看不出這個 gate/);
+  assert.doesNotMatch(r.stdout, /忽略此行/);
+});
+
+// --- a tree git cannot read is neither clean nor changed ----------------------------------------
+
+/** A repository whose `git status` fails while `rev-parse` still works: an unreadable index. */
+function brokenIndexRepo() {
+  const repo = makeRepo();
+  writeFileSync(join(repo, '.git', 'index'), 'garbage');
+  return repo;
+}
+
+test('user-prompt fallback: git status fails → silent; a successful empty status → change=none', () => {
+  const home = tmp('rh-home-');
+  const hook = fallbackCopy('user-prompt-review-guard');
+  const broken = runHook(hook, brokenIndexRepo(), home);
+  assert.deepEqual([broken.status, broken.stdout], [0, '']);
+  assert.match(runHook(hook, makeRepo(), home).stdout, /^\[AUTO_LOOP_STATE\] change=none source=git_status/);
+});
+
+test('user-prompt fallback: a file named ok, and a rename involving it, are ordinary records', () => {
+  const home = tmp('rh-home-');
+  const hook = fallbackCopy('user-prompt-review-guard');
+  const repo = makeRepo();
+  writeFileSync(join(repo, 'ok'), 'x\n');
+  assert.match(runHook(hook, repo, home).stdout, /^\[AUTO_LOOP_STATE\] change=code source=git_status/);
+  git(repo, 'add', '-A');
+  git(repo, 'commit', '-q', '-m', 'ok');
+  git(repo, 'mv', 'ok', 'ok.md');
+  assert.match(runHook(hook, repo, home).stdout, /^\[AUTO_LOOP_STATE\] change=code,doc source=git_status/);
+});
+
+test('state path: git status fails → change=unknown, and the owed lines say the read was incomplete', () => {
+  const home = tmp('rh-home-');
+  const repo = brokenIndexRepo();
+  assert.match(runHook(HOOKS.prompt, repo, home).stdout, /^\[AUTO_LOOP_STATE\] change=unknown unverified=code,doc reviews=/);
+  for (const hook of [HOOKS.stop, HOOKS.compact]) {
+    const out = runHook(hook, repo, home).stdout;
+    assert.equal((out.match(/平面讀取不完整，無法判斷是否有變更或是否已通過/g) || []).length, 3, 'all three planes stay owed');
+    assert.doesNotMatch(out, /有未提交變更且/, 'a change nobody read is not asserted');
+  }
+});
+
+test('a git status that fails after printing a record → no fallback asserts that record\'s plane', () => {
+  const home = tmp('rh-home-');
+  const bin = tmp('rh-bin-');
+  const real = execFileSync('sh', ['-c', 'command -v git']).toString().trim();
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\nfor a in "$@"; do if [ "$a" = status ]; then case " $* " in *" -z "*) printf '?? partial.md\\0';; *) echo '?? partial.md';; esac; exit 1; fi; done\nexec ${real} "$@"\n`);
+  chmodSync(join(bin, 'git'), 0o755);
+  const repo = makeRepo();
+  for (const name of ['stop-guard', 'post-compact-auto-loop', 'user-prompt-review-guard']) {
+    const r = spawnSync('bash', [fallbackCopy(name)], { cwd: repo, input: '{}', encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: home, CLAUDE_PROJECT_DIR: '', CLAUDE_PLUGIN_ROOT: '' } });
+    assert.equal(r.status, 0, name);
+    assert.doesNotMatch(r.stdout, /平面有未提交變更|change=|partial\.md/, name);
+  }
+});
+
+test('post-compact: git status fails → says so instead of showing an empty list', () => {
+  const home = tmp('rh-home-');
+  const out = runHook(HOOKS.compact, brokenIndexRepo(), home).stdout;
+  assert.match(out, /未提交變更：git status 讀取失敗，無法判斷/);
+  assert.doesNotMatch(out, /前 20 筆/);
+  const clean = runHook(HOOKS.compact, makeRepo(), home).stdout;
+  assert.doesNotMatch(clean, /未提交變更/, 'a clean tree that was read prints no list and no failure');
+});
+
+test('post-compact: 3000 untracked files → the branch and exactly the first 20 records', () => {
+  const repo = makeRepo();
+  const home = tmp('rh-home-');
+  for (let i = 0; i < 3000; i += 1) writeFileSync(join(repo, `file-with-a-reasonably-long-name-for-status-${String(i).padStart(4, '0')}.txt`), '');
+  const status = execFileSync('git', ['-C', repo, 'status', '--porcelain=v1', '-uall']).toString();
+  assert.ok(status.length > 65536, 'fixture premise: the listing is larger than a pipe buffer');
+  const out = runHook(HOOKS.compact, repo, home).stdout;
+  assert.match(out, /branch=master/);
+  assert.deepEqual(out.split('\n').filter((l) => l.startsWith('?? ')), status.split('\n').slice(0, 20));
 });
 
 test('fallback classifier: .md/.mdx doc, .MD code, rename dirties both planes, spaces survive -z', () => {

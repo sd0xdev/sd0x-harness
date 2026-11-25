@@ -89,7 +89,9 @@ asks its own approval.
 - **Custom flow**: the Stop hook runs `review-state.js flow-detect` and prints a `🧭` line, at most
   once per session, when the project has no git override and a script or CI file merges into a
   release/protected branch, a script triggers a pipeline, or the current branch name falls outside
-  the default convention. When that line appears, ask once with AskUserQuestion: Scaffold · Not now
+  the default convention. Printing is what the once-per-session mark records; Stop output is not
+  guaranteed to reach the model or the user, so a session without the line proves nothing. When the
+  line does reach you, you may ask once with AskUserQuestion: Scaffold · Not now
   · Never for this repo. Scaffold invokes `/install-rules --customize git-workflow --reset`, which
   creates `git-workflow-project.md` from the template; Never runs `review-state.js flow-answer never`.
   Nothing writes the override except the scaffold the user picked.

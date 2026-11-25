@@ -110,16 +110,19 @@ fi
 
 # Git fallback: one plain read (-z so spaces, quoting and rename records parse
 # without heuristics). Without state it cannot know what was already reviewed,
-# so the reminder carries the ignore-if-done sentence. Unreadable git → silent.
+# so the reminder says it cannot tell. Unreadable git → silent.
 _git_clean() ( for v in $(env | sed -n 's/^\(GIT_[A-Za-z0-9_]*\)=.*/\1/p'); do unset "$v"; done; git -C "$PWD" "$@" )
-_CODE_DIRTY=false; _DOC_DIRTY=false
+_CODE_DIRTY=false; _DOC_DIRTY=false; _STATUS_OK=false
 _classify() { case "$1" in *.md|*.mdx) _DOC_DIRTY=true ;; *) _CODE_DIRTY=true ;; esac; }
 while IFS= read -r -d '' _rec; do
   [[ -n "$_rec" ]] || continue
+  [[ "$_rec" == "ok" ]] && { _STATUS_OK=true; continue; }
   _classify "${_rec:3}"
   case "${_rec:0:1}" in R|C) IFS= read -r -d '' _orig && _classify "$_orig" ;; esac
-done < <(_git_clean status --porcelain=v1 -z -uall 2>/dev/null || true)
+done < <(_git_clean status --porcelain=v1 -z -uall 2>/dev/null && printf 'ok\0' || true)
+# No `ok` record: git status failed, and the records before it failed are no reading either.
+[[ "$_STATUS_OK" == "true" ]] || exit 0
 
-[[ "$_CODE_DIRTY" == "true" ]] && printf '%s\n' "📋 code 平面有未提交變更 → /codex-review-fast → /precommit（若本輪已完成對應 review gate，忽略此行即可；規則見 rules/auto-loop.md）"
-[[ "$_DOC_DIRTY" == "true" ]] && printf '%s\n' "📋 doc 平面有未提交變更 → /codex-review-doc（若本輪已完成對應 review gate，忽略此行即可；規則見 rules/auto-loop.md）"
+[[ "$_CODE_DIRTY" == "true" ]] && printf '%s\n' "📋 code 平面有未提交變更 → /codex-review-fast → /precommit（git 狀態看不出這兩個 gate 是否已在最後一次編輯後通過；規則見 rules/auto-loop.md）"
+[[ "$_DOC_DIRTY" == "true" ]] && printf '%s\n' "📋 doc 平面有未提交變更 → /codex-review-doc（git 狀態看不出這個 gate 是否已在最後一次編輯後通過；規則見 rules/auto-loop.md）"
 exit 0

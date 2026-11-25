@@ -93,16 +93,20 @@ fi
 
 # Git fallback: change classes only, no verdict claims — source=git_status.
 # Unreadable git → print nothing (a fact line over an unread tree would be a
-# claim, and this hook only states facts); still exit 0.
+# claim, and this hook only states facts); still exit 0. A status that fails
+# midway is unreadable too: the `ok` record is written only after it succeeded
+# (status records carry a space at offset 2, so no record can spell it).
 _git_clean() ( for v in $(env | sed -n 's/^\(GIT_[A-Za-z0-9_]*\)=.*/\1/p'); do unset "$v"; done; git -C "$PWD" "$@" )
 _git_clean rev-parse --git-dir >/dev/null 2>&1 || exit 0
-_CODE_DIRTY=false; _DOC_DIRTY=false
+_CODE_DIRTY=false; _DOC_DIRTY=false; _STATUS_OK=false
 _classify() { case "$1" in *.md|*.mdx) _DOC_DIRTY=true ;; *) _CODE_DIRTY=true ;; esac; }
 while IFS= read -r -d '' _rec; do
   [[ -n "$_rec" ]] || continue
+  [[ "$_rec" == "ok" ]] && { _STATUS_OK=true; continue; }
   _classify "${_rec:3}"
   case "${_rec:0:1}" in R|C) IFS= read -r -d '' _orig && _classify "$_orig" ;; esac
-done < <(_git_clean status --porcelain=v1 -z -uall 2>/dev/null || true)
+done < <(_git_clean status --porcelain=v1 -z -uall 2>/dev/null && printf 'ok\0' || true)
+[[ "$_STATUS_OK" == "true" ]] || exit 0
 
 _CHANGE="none"
 if [[ "$_CODE_DIRTY" == "true" && "$_DOC_DIRTY" == "true" ]]; then _CHANGE="code,doc"

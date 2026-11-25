@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/namespace-hint.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/namespace-hint.sh"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-compact-auto-loop.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/post-compact-auto-loop.sh"
           }
         ]
       }
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-guard.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/pre-edit-guard.sh"
           }
         ]
       },
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash-codex-launch-guard.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/pre-bash-codex-launch-guard.sh"
           }
         ]
       }
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-format.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/post-edit-format.sh"
           }
         ]
       },
@@ -55,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-skill-auto-loop.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/post-skill-auto-loop.sh"
           }
         ]
       }
@@ -66,7 +66,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/stop-guard.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/stop-guard.sh"
           }
         ]
       }
@@ -77,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/user-prompt-review-guard.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/user-prompt-review-guard.sh"
           }
         ]
       }

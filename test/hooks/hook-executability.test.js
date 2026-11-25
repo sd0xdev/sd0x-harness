@@ -23,10 +23,11 @@ test('every hooks/*.sh is executable (owner+group+other x bits)', () => {
 
 test('every hook command referenced in hooks.json resolves to an executable file', () => {
   const config = JSON.parse(fs.readFileSync(path.join(HOOKS_DIR, 'hooks.json'), 'utf8'));
-  const commands = JSON.stringify(config).match(/[^"\s]*hooks\/[\w-]+\.sh/g) || [];
-  assert.ok(commands.length > 0, 'hooks.json should reference at least one hook script');
+  const commands = Object.values(config.hooks).flat().flatMap((e) => e.hooks.map((h) => h.command));
+  assert.equal(commands.length, 8, 'the registry declares eight entries');
   for (const cmd of new Set(commands)) {
-    const rel = cmd.replace(/^\$\{?CLAUDE_PLUGIN_ROOT\}?\//, '');
+    const rel = cmd.replace(/^"\$\{CLAUDE_PLUGIN_ROOT\}"\//, '');
+    assert.notEqual(rel, cmd, `${cmd} does not start with the quoted plugin root`);
     const abs = path.join(ROOT, rel);
     assert.ok(fs.existsSync(abs), `${rel} referenced by hooks.json does not exist`);
     assert.equal(fs.statSync(abs).mode & 0o111, 0o111, `${rel} is not executable`);

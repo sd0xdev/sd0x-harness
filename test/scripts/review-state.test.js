@@ -238,6 +238,37 @@ test('md is silent ⇔ fact/json report no owed plane (silence-ambiguity pinned)
   assert.equal(Object.values(json).some(p => p.owed), false);
 });
 
+test('an incomplete read → no change is asserted, the planes stay owed, and json is unchanged in shape', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  passAll(repo, home);
+  writeFileSync(join(repo, '.git', 'index'), 'garbage');
+  const fact = run(repo, home, ['check', '--format=fact']).stdout;
+  assert.match(fact, /^\[AUTO_LOOP_STATE\] change=unknown unverified=code,doc reviews=code_review:stale,doc_review:stale,precommit:stale source=state\n$/);
+  const md = run(repo, home, ['check', '--format=md']).stdout.trim().split('\n');
+  assert.equal(md.length, 3);
+  for (const l of md) assert.match(l, /平面讀取不完整，無法判斷是否有變更或是否已通過 → \//);
+  const json = checkJson(repo, home);
+  for (const name of ['code_review', 'doc_review', 'precommit']) {
+    assert.deepEqual(json[name], { noted: true, dirty: true, digest_match: false, verdict: 'pass', rounds: 0, passed: false, owed: true }, name);
+  }
+});
+
+test('a plane that was seen to change is still named, beside one whose read was incomplete', () => {
+  const repo = makeRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'readme.md'), '# doc v2\n');
+  // An uninitialised submodule: the code plane cannot be digested, yet nothing in it changed.
+  git(repo, 'update-index', '--add', '--cacheinfo', `160000,${'1'.repeat(40)},sub`);
+  git(repo, 'commit', '-q', '-m', 'gitlink');
+  mkdirSync(join(repo, 'sub'));
+  const fact = run(repo, home, ['check', '--format=fact']).stdout;
+  assert.match(fact, /^\[AUTO_LOOP_STATE\] change=doc unverified=code reviews=/, fact);
+  const md = run(repo, home, ['check', '--format=md']).stdout;
+  assert.match(md, /code_review：code 平面讀取不完整/);
+  assert.match(md, /doc_review：doc 平面有未提交變更且無有效記錄/);
+});
+
 test('per-plane files: notes to two planes both survive', () => {
   const repo = makeRepo();
   const home = tmp('rs-home-');
@@ -792,6 +823,23 @@ test('offer when ahead commits change a doc and revert it → the doc gate is st
   note(repo, home, 'precommit', 'pass');
   const after = offerJson(repo, home);
   assert.deepEqual([after.offer, after.kind], [true, 'push'], 'a push-only menu once the gates pass');
+});
+
+test('two ahead docs on a clean tree → no reminder is owed, yet the push offer stays closed until a pass is noted', () => {
+  // The state doc-review's scope rule is about: an unnoted targeted review leaves the offer closed, and
+  // a pass recorded for the whole scope keeps standing while the digest stands.
+  const repo = makeRemoteRepo();
+  const home = tmp('rs-home-');
+  writeFileSync(join(repo, 'one.md'), '# one\n');
+  writeFileSync(join(repo, 'two.mdx'), '# two\n');
+  git(repo, 'add', '-A');
+  git(repo, 'commit', '-q', '-m', 'two docs');
+  assert.equal(run(repo, home, ['check', '--format=md']).stdout, '', 'clean tree: nothing owed, no reminder line');
+  assert.deepEqual([offerJson(repo, home).offer, offerJson(repo, home).reason], [false, 'gates-open']);
+  note(repo, home, 'doc_review', 'pass');
+  assert.deepEqual([offerJson(repo, home).offer, offerJson(repo, home).kind], [true, 'push']);
+  const slot = checkJson(repo, home).doc_review;
+  assert.deepEqual([slot.passed, slot.digest_match], [true, true], 'an existing pass at this digest stays valid');
 });
 
 test('offer when an ahead commit renames a doc into code → both classes are required', () => {

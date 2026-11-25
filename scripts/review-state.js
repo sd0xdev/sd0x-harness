@@ -91,7 +91,6 @@ function computeCheck(opts = {}) {
   }
   return {
     planes,
-    change: ['code', 'doc'].filter(p => tree.planes[p].partial || tree.planes[p].dirty.length > 0),
     dirtyPaths: [...tree.planes.code.dirty, ...tree.planes.doc.dirty],
     root,
     tree,
@@ -170,14 +169,26 @@ function statusToken(p) {
   return p.verdict;
 }
 
+// What the tree read established, for the two prose renderings: a partial plane with no dirty path
+// was not seen to change, and one whose `git status` failed was not seen at all. Owed stays as
+// computeCheck decides it (a partial plane is owed); only the wording stops claiming a change.
+function readFacts(tree) {
+  const statusFailed = tree.partialReasons.some((r) => r.path === null && /^git-failed/.test(r.reason));
+  const contents = Object.keys(tree.planes);
+  const dirty = contents.filter((c) => tree.planes[c].dirty.length > 0);
+  const unverified = contents.filter((c) => tree.planes[c].partial && tree.planes[c].dirty.length === 0);
+  return { change: statusFailed ? 'unknown' : dirty.join(',') || 'none', unverified };
+}
+
 // One computation, three renderings (§3.2). md is the only rendering allowed
 // to be silent; fact and json always answer.
 function check(format) {
-  const { planes, change, dirtyPaths, root } = computeCheck();
+  const { planes, dirtyPaths, root, tree } = computeCheck();
   if (format === 'json') {
     process.stdout.write(`${JSON.stringify(planes)}\n`);
     return;
   }
+  const { change, unverified } = readFacts(tree);
   if (format === 'fact') {
     const reviews = Object.entries(planes)
       .map(([name, p]) => `${name}:${statusToken(p)}${p.rounds > 0 ? `(r${p.rounds})` : ''}`)
@@ -186,14 +197,17 @@ function check(format) {
     const hintField = hints.length ? ` intent_hint=${hints.join(',')}` : '';
     const procedures = procedureHints(root, planes, dirtyPaths);
     const procField = procedures.length ? ` procedure_hint=${procedures.join(',')}` : '';
-    process.stdout.write(`[AUTO_LOOP_STATE] change=${change.length ? change.join(',') : 'none'} reviews=${reviews}${hintField}${procField} source=state\n`);
+    process.stdout.write(`[AUTO_LOOP_STATE] change=${change}${unverified.length ? ` unverified=${unverified.join(',')}` : ''} reviews=${reviews}${hintField}${procField} source=state\n`);
     return;
   }
   for (const [name, p] of Object.entries(planes)) {
     if (!p.owed) continue;
     const why = p.noted ? (p.digest_match ? `最後記錄為 ${p.verdict}` : '記錄的 digest 已過期') : '無有效記錄';
+    const state = unverified.includes(PLANES[name])
+      ? '平面讀取不完整，無法判斷是否有變更或是否已通過'
+      : `平面有未提交變更且${why}`;
     const roundsNote = p.rounds > 0 ? `｜已 ${p.rounds} 輪未過` : '';
-    process.stdout.write(`📋 ${name}：${PLANES[name]} 平面有未提交變更且${why} → ${GATES[name]}${roundsNote}（規則見 rules/auto-loop.md）\n`);
+    process.stdout.write(`📋 ${name}：${PLANES[name]} ${state} → ${GATES[name]}${roundsNote}（規則見 rules/auto-loop.md）\n`);
   }
 }
 
@@ -1053,7 +1067,7 @@ function flowDetect(format, session) {
     // Print only if this call is the one that marked the session: a concurrent Stop hook that got
     // there first has already printed it.
     if (session !== undefined && !markSession(dir, session)) return;
-    process.stdout.write(`🧭 偵測到自訂 git 流程（${r.signals.map((x) => x.signal).join(', ')}）且沒有 git-workflow-project.md → 用 AskUserQuestion 問一次是否建立（規則見 rules/git-workflow.md § Proactive Offer）\n`);
+    process.stdout.write(`🧭 偵測到自訂 git 流程（${r.signals.map((x) => x.signal).join(', ')}）且沒有 git-workflow-project.md → 可用 AskUserQuestion 問一次是否建立（規則見 rules/git-workflow.md § Proactive Offer）\n`);
     return;
   }
   process.stdout.write(`[FLOW] ask=${r.ask} reason=${r.reason || 'none'} signals=${r.signals.map((s) => s.signal).join(',') || 'none'}\n`);

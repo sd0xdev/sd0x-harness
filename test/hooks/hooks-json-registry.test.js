@@ -1,7 +1,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { resolve } = require('node:path');
-const { readFileSync } = require('node:fs');
+const { resolve, join, dirname } = require('node:path');
+const { readFileSync, mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { spawnSync } = require('node:child_process');
 
 const hooksJsonPath = resolve(__dirname, '../../hooks/hooks.json');
 const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
@@ -105,4 +107,58 @@ test('every registered command is a direct script invocation, not an inline shel
       }
     }
   }
+});
+
+// --- every entry survives the plugin root it is installed under ---------------------------------
+//
+// A shell-form command runs through `sh -c`, so an unquoted ${CLAUDE_PLUGIN_ROOT} splits at a space
+// and the entry — guards included — fails with 127 instead of running. Inert stubs stand in for the
+// scripts: this pins which file each decoded command starts, not what the real script does.
+
+const REGISTERED = Object.entries(hooksConfig.hooks).flatMap(([event, entries]) => entries.flatMap(
+  (e) => e.hooks.map((h) => ({ event, matcher: e.matcher, command: h.command }))));
+const EXPECTED = [
+  ['SessionStart', 'startup|clear|compact', 'scripts/namespace-hint.sh'],
+  ['SessionStart', 'compact', 'hooks/post-compact-auto-loop.sh'],
+  ['PreToolUse', 'Edit|Write|NotebookEdit', 'hooks/pre-edit-guard.sh'],
+  ['PreToolUse', 'Bash', 'hooks/pre-bash-codex-launch-guard.sh'],
+  ['PostToolUse', 'Edit|Write|NotebookEdit', 'hooks/post-edit-format.sh'],
+  ['PostToolUse', 'Skill', 'hooks/post-skill-auto-loop.sh'],
+  ['Stop', '', 'hooks/stop-guard.sh'],
+  ['UserPromptSubmit', '', 'hooks/user-prompt-review-guard.sh'],
+];
+
+/** Runs each command under a stub plugin root and reports which stub it started, with what args. */
+function dispatch(rootName, commands) {
+  const base = mkdtempSync(join(tmpdir(), 'hooks-root-'));
+  const root = join(base, rootName);
+  try {
+    for (const [, , rel] of EXPECTED) {
+      mkdirSync(dirname(join(root, rel)), { recursive: true });
+      writeFileSync(join(root, rel), `#!/bin/sh\nprintf '%s|%s' '${rel}' "$#"\n`);
+      chmodSync(join(root, rel), 0o755);
+    }
+    return commands.map((c) => {
+      const r = spawnSync('sh', ['-c', c], { cwd: base, encoding: 'utf8', env: { PATH: process.env.PATH, CLAUDE_PLUGIN_ROOT: root } });
+      return r.status === 0 ? r.stdout : `exit ${r.status}`;
+    });
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+}
+
+test('the registry lists exactly the eight entries, each with its event, matcher and script', () => {
+  assert.deepEqual(REGISTERED.map((r) => [r.event, r.matcher]), EXPECTED.map(([e, m]) => [e, m]));
+});
+
+for (const rootName of ['plugin', 'plug in', "pl'ug  (x) $HOME&in"]) {
+  test(`every registered command under a plugin root named ${JSON.stringify(rootName)} → starts its own script`, () => {
+    assert.deepEqual(dispatch(rootName, REGISTERED.map((r) => r.command)), EXPECTED.map(([, , rel]) => `${rel}|0`));
+  });
+}
+
+test('the same dispatch over the unquoted spelling → fails under a space, works without one (negative control)', () => {
+  const unquoted = REGISTERED.map((r) => r.command.replaceAll('"', ''));
+  assert.deepEqual(dispatch('plugin', unquoted), EXPECTED.map(([, , rel]) => `${rel}|0`));
+  assert.deepEqual(dispatch('plug in', unquoted), EXPECTED.map(() => 'exit 127'));
 });

@@ -9,6 +9,14 @@
 > simple state is fine when it prevents duplicate reviews and stuck loops). The third decision
 > sets the final shape: **single-slot per-plane state + the self-note CLI**, everything heavier
 > deleted.
+>
+> **Outcome note (2026-11-25)** — the text below stays as decided; three facts have moved since:
+> (1) the git fallback of `stop-guard.sh` and `post-compact-auto-loop.sh` (§ 3.1, § 3.2) now says git
+> status cannot tell whether the named gates passed — the earlier sentence let a finished review excuse
+> an owed precommit; (2) a plane whose read was incomplete and showed no dirty path is rendered as such
+> (`unverified=`, and `change=unknown` when git status itself failed) instead of as changed — `owed` is
+> unchanged; (3) "Nothing downstream decides on it" (§ 4) held until git-autonomy R4–R8: the commit and
+> push offer, Auto commit and Goal publish read the slots. The hooks still only remind.
 
 ## 1. Requirement Summary
 
