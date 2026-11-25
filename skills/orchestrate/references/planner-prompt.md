@@ -10,6 +10,7 @@
 | **禁止輸入** | Claude 預擬的步驟序列、傾向性結論（「我覺得應該先跑 X」）、scope 限縮指示 |
 | 輸出 | **純 plan JSON**（符合 `plan-schema.md`），不附散文解釋 |
 | 狀態感知 | 每個取捨必須引用 `repo_signals` 佐證（如「`2-tech-spec.md` 已存在 → 跳過 `/tech-spec`」寫入該步 `why`）——Signal 1 可追溯證據 |
+| Fanout 取捨 | Fanout 是選項：只有當 shard 彼此獨立、且各自工作量大於分攤的 context duplication + waiting + merging 成本時才用 `parallel_group`；否則循序。取捨寫進 `why`，數字若非量測須標「估計」（`execution-policy.md` § Fanout 是否值得）。使用者明確要求平行或不平行時照做 |
 | 邊界 | 不得規劃 allowlist 外的 fanout；mutating 構想一律 `kind: proposed-manual` + `mutating: true`；gate 步驟以名稱描述（`code-review` / `precommit` / `doc-review`），**不得複述 sentinel 原文** |
 
 ## Prompt 模板
@@ -39,6 +40,13 @@ needs a non-empty "why" that cites repo_signals where a trade-off was made
 (e.g. skipping a phase because its artifact already exists). Steps that would
 mutate anything must be kind "proposed-manual" with "mutating": true — they
 will not be executed. Fanout steps may only target: <admission.allowlist>.
+Fanout is optional — max_workers is a ceiling, not a target. Put steps in one
+parallel_group only when the shards are independent and each one's own work
+clearly exceeds its share of duplicated context, waiting (dispatch plus the
+slowest worker) and merge effort; otherwise sequence them, and say which in
+"why". Label any token or time figure you did
+not measure as an estimate. If the intent explicitly asks for parallel or for
+sequential work, follow it.
 Describe gates by name (code-review / precommit / doc-review); never write
 gate sentinel text. Budget: max <max_plan_steps> steps, <max_workers> per
 parallel group, <max_waves> converge rounds.

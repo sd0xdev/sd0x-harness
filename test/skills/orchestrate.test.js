@@ -577,3 +577,69 @@ test('the baseline doc marks schema_version as hard-validated, not drift-compare
   assert.match(block, /"schema_version"/, 'the baseline block must document schema_version');
   assert.match(block, /不列入 drift 比對/, 'and must say it is not drift-compared');
 });
+
+// --- Optional fanout: transaction costs, inside the existing hard limits ---
+
+const fanoutPolicy = () => {
+  const policy = readFileSync(resolve(skillDir, 'references/execution-policy.md'), 'utf8');
+  return policy.slice(policy.indexOf('## Fanout 是否值得'), policy.indexOf('## 波次與收斂'));
+};
+
+test('orchestrate fanout → optional, weighed against duplication, waiting and merging', () => {
+  const section = fanoutPolicy();
+
+  assert.match(section, /Fanout 是\*\*選項\*\*，不是預設：budget 的 `max_workers` 是上限，不是目標/);
+  for (const cost of ['Context duplication', 'Waiting', 'Merging']) {
+    assert.match(section, new RegExp(`\\| ${cost} \\|`), cost);
+  }
+});
+
+test('orchestrate fanout decision → independent costly shards fan out; small shared shards and doubt stay sequential', () => {
+  const section = fanoutPolicy();
+
+  assert.match(section, /\| Shard 彼此獨立（不共用要讀的材料、不需要彼此的結果），且每個 shard 自己的工作量明顯大於它分攤到的 duplication \+ waiting \+ merging \| Fanout \|/);
+  assert.match(section, /\| Shard 很小、共用同一批材料，或結果需要互相參照才有意義 \| 不 fanout：單一 worker 循序做完 \|/);
+  assert.match(section, /\| 判斷不出來 \| 不 fanout。/);
+});
+
+test('orchestrate fanout → explicit user choices and the hard admission and budget limits are not overridden by cost', () => {
+  const section = fanoutPolicy();
+
+  assert.match(section, /\| 使用者的明確選擇 \| 意圖或 flag 明說要平行／不要平行、`--backend`、`--budget`：照做，不以成本為由覆寫/);
+  assert.match(section, /\| Admission \| `admission-allowlist\.json` deny-by-default 不變：成本再低也不放行名單外的 worker \|/);
+  assert.match(section, /\| B1 上限 \| 單一 `parallel_group` ≤ `max_workers`、`converge\.max_rounds` ≤ `max_waves`：成本再划算也不超過 \|/);
+  assert.match(section, /\| Baseline 時序、人核 \|/);
+});
+
+test('orchestrate fanout → unmeasured figures are labelled estimates and support no speedup claim', () => {
+  const section = fanoutPolicy();
+  const skill = readFileSync(skillPath, 'utf8');
+
+  assert.match(section, /\*\*估計就標示為估計。\*\*/);
+  assert.match(section, /沒有量測就不宣稱 speedup/);
+  assert.match(skill, /未量測的成本數字標示為估計，沒有量測就沒有 speedup 宣稱/);
+});
+
+test('orchestrate planner prompt → carries the fanout trade-off without pre-deciding the plan', () => {
+  const planner = readFileSync(resolve(skillDir, 'references/planner-prompt.md'), 'utf8');
+
+  assert.match(planner, /Fanout is optional — max_workers is a ceiling, not a target\./);
+  assert.match(planner, /Label any token or time figure you did\s+not measure as an estimate\./);
+  assert.match(planner, /If the intent explicitly asks for parallel or for\s+sequential work, follow it\./);
+  assert.match(planner, /\*\*禁止輸入\*\* \| Claude 預擬的步驟序列/, 'the planner still receives no pre-made steps');
+});
+
+test('orchestrate fanout → the validator and allowlist are unchanged by this guidance', () => {
+  const allowlist = JSON.parse(readFileSync(resolve(skillDir, 'references/admission-allowlist.json'), 'utf8'));
+  const schema = readFileSync(resolve(skillDir, 'references/plan-schema.md'), 'utf8');
+
+  assert.equal(allowlist.mode, 'deny-by-default');
+  assert.deepEqual(allowlist.fanout_allowlist.map((entry) => entry.name), ['Explore', 'performance-optimizer']);
+  assert.match(schema, /單一 `parallel_group` 的 fanout 數 ≤ `max_workers`/);
+});
+
+test('orchestrate backend → an explicitly requested but unavailable backend is surfaced, never silently switched', () => {
+  const policy = readFileSync(resolve(skillDir, 'references/execution-policy.md'), 'utf8');
+
+  assert.match(policy, /\| 使用者明確指定 `--backend dw`，但 `Workflow` 工具不可用 \| \*\*不靜默切換\*\*：在 preview 說明/);
+});

@@ -68,6 +68,10 @@ sequenceDiagram
 
 兩次 compare 都**必須**帶 `--baseline-sha256`，值取自 `snapshot` 印在 stderr 的 `baseline_sha256=…`。沒有這個綁定，compare 證明的只是「我拿到的這份檔案與 repo 相符」——而 worker 在改動後重跑一次 `snapshot` 就能造出這樣一份檔案，drift 於是讀成 `ok: true`。digest 由主 session 在**任何派發之前**取得、也由主 session 傳回，worker 全程碰不到，因此能擋住 worker 平面的替換；它**擋不住**已被接管的主 session——該層沒有任何機制能擋，因為兩個參數都由它決定。與 `validate-plan.js --context-sha256` 同一條信任鏈。
 
+### Fanout 是選項（交易成本）
+
+`max_workers` 是上限不是目標。拆成多個 worker 之前，先比較 context duplication、waiting、merging 三項成本與各 shard 自身的工作量：小而共用材料的 shard 循序做，彼此獨立且各自昂貴的 shard 才 fanout。使用者的明確選擇、admission allowlist、B1 上限、baseline 時序與人核都不受這個推理影響；未量測的數字標示為估計，不據以宣稱 speedup。判準與界線見 `references/execution-policy.md` § Fanout 是否值得。
+
 ### Admission（deny-by-default）
 
 Fanout 候選一律比對 `references/admission-allowlist.json`（v1 僅 `Explore` + `performance-optimizer`；`coverage-analyst` / `git-investigator` 為明確排除，理由見檔內）。不在名單 = 拒絕，不論其 `allowed-tools` 宣告——`allowed-tools` 不可信任為 read-only 判據。名單變更必過 review + 重審 `run-verify.js` 驗證面涵蓋性。
@@ -106,6 +110,7 @@ Fanout 候選一律比對 `references/admission-allowlist.json`（v1 僅 `Explor
 - [ ] 計畫經 `validate-plan.js` 全規則通過（A1-A4 / G1-G2 / O1 / B1 / S1 / SCHEMA）
 - [ ] `validate-plan.js` 帶入 `--context-sha256`（值取自 `plan-context.js --out` 摘要的 `sha256`）；**未帶 digest 一律 exit 1，`--context -`（stdin）也不例外**——綁定的是 digest 走過 worker 碰不到的通道，不是 bytes 從哪個 fd 進來
 - [ ] 執行前經 AskUserQuestion 人核
+- [ ] 每個 `parallel_group` 的 `why` 說明為何 fanout（或為何循序）；未量測的成本數字標示為估計，沒有量測就沒有 speedup 宣稱
 - [ ] run 終態正確：drift → `failed`；doc gate 未過 → `needs_human`；Mergeable → `done`
 - [ ] 無任何 git 狀態變更操作（add / commit / push / stash / tag / config / checkout / reset 等——`allowed-tools` 僅開放唯讀 git 指令，mutation 由 `run-verify.js` compare 兜底）
 
@@ -115,7 +120,7 @@ Fanout 候選一律比對 `references/admission-allowlist.json`（v1 僅 `Explor
 |------|---------|
 | [planner-prompt.md](references/planner-prompt.md) | Planner 獨立推導契約（不餵 Claude 預擬步驟） |
 | [plan-schema.md](references/plan-schema.md) | Plan JSON schema 正典（含 lint 規則對照） |
-| [execution-policy.md](references/execution-policy.md) | Backend 選擇、波次、fail-closed 矩陣 |
+| [execution-policy.md](references/execution-policy.md) | Backend 選擇、fanout 取捨（交易成本）、波次、fail-closed 矩陣 |
 | [admission-allowlist.json](references/admission-allowlist.json) | Fanout allowlist（curated + 排除記錄） |
 
 ## Examples
@@ -123,6 +128,11 @@ Fanout 候選一律比對 `references/admission-allowlist.json`（v1 僅 `Explor
 ```
 Input: /orchestrate "audit 全 repo hook 的 fail-open 路徑" --execute
 Action: context → snapshot → planner → lint → preview → 核可 → 3× Explore fanout → compare → 報告 → doc review
+```
+
+```
+Input: /orchestrate "列出 3 個 hook 檔各自的 exit code" --execute
+Action: 三個小查詢共用同一批檔案 → 不 fanout，單一 Explore 循序做完（why 註明：duplication + merging 高於各 shard 工作量，估計）
 ```
 
 ```
