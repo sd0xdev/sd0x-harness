@@ -51,6 +51,19 @@ composition where it reduces coupling) are questions, not quotas: never add an a
 demonstrate design. `/codex-architect` is for genuinely hard trade-offs (cross-module boundaries,
 new public APIs, durable abstractions), not every feature.
 
+**Hard decisions: when to decide.** Only for a decision that is genuinely hard — a trivial feature
+skips this paragraph and records nothing. Weigh two things: the **cost of changing course** later
+(who depends on the choice, and what a reversal would break) and the **value of waiting** (what
+evidence would arrive, when, and what the delay costs). State the outcome where the design is
+already being stated — the reply, or the feature's tech spec when it has one; no separate decision
+log.
+
+| Decision | Timing |
+|----------|--------|
+| Costly to reverse — an external contract others build on: public API, wire or file format, event schema, CLI flags | Address it **early**, before building on it. This is where `/codex-architect` belongs |
+| Cheap to reverse — a private choice behind an interface, such as the storage layout of data only this module reads | **Defer when feasible**: take the simplest shape that keeps the switch cheap, and name the **signal** that would settle it (a measurement, a usage count, a failing test). Decide when that signal arrives |
+| Cannot wait — the work is blocked without it | Decide now with the simplest reversible shape, and still name the signal that would reopen it |
+
 ## agentctl (optional)
 
 At the start, run `node "${CLAUDE_PLUGIN_ROOT}/skills/agentctl-setup/scripts/agentctl-setup.js" status`
@@ -191,6 +204,13 @@ Review → Issues found → Fix → Re-review → ... → ✅ Pass → Next step
 ```
 Input: Implement a fee calculation method
 Action: /codex-architect → /codex-implement → /verify → /codex-test-review → /codex-review-fast → /precommit
+```
+
+```
+Input: Add an export endpoint; unsure about the response schema and about how to store export jobs
+Action: Response schema is an external contract → settle it first (/codex-architect). Job storage is
+        private and reversible → start with the simplest table behind the repository interface, revisit
+        when queue depth stays above 10,000 jobs for a day. Then implement → /verify → ... → /precommit
 ```
 
 ```
