@@ -1,6 +1,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { resolve } = require('node:path');
+const { spawnSync } = require('node:child_process');
+const { mkdtempSync, rmSync, writeFileSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join, resolve } = require('node:path');
 
 const {
   parseNodeTest, parseJest, parseVitest, parsePytest,
@@ -15,6 +18,35 @@ test('parseNodeTest extracts test counts', () => {
   assert.equal(result.failed, 2);
   assert.equal(result.count_level, 'test_case');
 });
+
+test('parseNodeTest reads the spec summary, the piped default on Node 26', () => {
+  const stdout = '✔ passes (0.3ms)\n✖ fails (0.4ms)\n﹣ skipped (0.1ms) # SKIP\nℹ tests 3\nℹ suites 0\nℹ pass 1\nℹ fail 1\nℹ cancelled 0\nℹ skipped 1\n';
+  assert.deepEqual(parseNodeTest(stdout), { total: 3, passed: 1, failed: 1, count_level: 'test_case' });
+  assert.deepEqual(parseTestCount(stdout, 'node:test'), parseNodeTest(stdout));
+});
+
+test('parseNodeTest reads a colored spec summary', () => {
+  const stdout = '\x1b[34mℹ tests 3\x1b[39m\n\x1b[34mℹ pass 1\x1b[39m\n\x1b[34mℹ fail 2\x1b[39m\n';
+  assert.deepEqual(parseNodeTest(stdout), { total: 3, passed: 1, failed: 2, count_level: 'test_case' });
+});
+
+for (const color of ['0', '1']) {
+  test(`parseNodeTest reads what this Node prints when piped, FORCE_COLOR=${color}`, () => {
+    const dir = mkdtempSync(join(tmpdir(), 'count-parser-'));
+    try {
+      // One case per file: the oldest supported runners count files, later ones cases.
+      const file = (name, body) => writeFileSync(join(dir, name), `const { test } = require('node:test');\ntest('${name}', () => {${body}});\n`);
+      file('good.test.js', '');
+      file('bad.test.js', " throw new Error('x'); ");
+      const env = { ...process.env, FORCE_COLOR: color };
+      delete env.NODE_TEST_CONTEXT;
+      const out = spawnSync(process.execPath, ['--test', 'good.test.js', 'bad.test.js'], { cwd: dir, env, encoding: 'utf8' }).stdout;
+      assert.deepEqual(parseNodeTest(out), { total: 2, passed: 1, failed: 1, count_level: 'test_case' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
 
 test('parseNodeTest returns null for non-matching output', () => {
   assert.equal(parseNodeTest('no test output here'), null);

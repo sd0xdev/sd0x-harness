@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 'use strict';
 
+const { stripVTControlCharacters } = require('node:util');
+
 /**
  * count-parser.js
  * Parse test counts from test runner stdout output.
  * Supports: node:test, jest, vitest, pytest, go test, cargo test.
  */
 
+// `#` is the TAP summary and `ℹ` the spec one: piped, Node 22 prints the first and Node 26 the second.
+// The spec one is colored when color is forced.
 function parseNodeTest(stdout) {
-  const tests = stdout.match(/^# tests (\d+)/m);
-  const pass = stdout.match(/^# pass (\d+)/m);
-  const fail = stdout.match(/^# fail (\d+)/m);
+  const text = stripVTControlCharacters(stdout);
+  const tests = text.match(/^[#ℹ] tests (\d+)/m);
+  const pass = text.match(/^[#ℹ] pass (\d+)/m);
+  const fail = text.match(/^[#ℹ] fail (\d+)/m);
   if (!tests) return null;
   return {
     total: parseInt(tests[1], 10),

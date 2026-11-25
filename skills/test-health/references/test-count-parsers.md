@@ -4,7 +4,7 @@
 
 | # | Framework | Output Pattern | Regex | `count_level` |
 |---|-----------|---------------|-------|---------------|
-| 1 | Node.js (`node:test`) | `# tests 47`, `# pass 45`, `# fail 2` | `/^# tests (\d+)/m`, `/^# pass (\d+)/m`, `/^# fail (\d+)/m` | `test_case` |
+| 1 | Node.js (`node:test`) | TAP: `# tests 47`, `# pass 45`, `# fail 2`; spec (piped default on Node 26; TAP on Node 22): `ℹ tests 47`, … | `/^[#ℹ] tests (\d+)/m`, `/^[#ℹ] pass (\d+)/m`, `/^[#ℹ] fail (\d+)/m` | `test_case` |
 | 2 | Jest | `Tests: 2 failed, 45 passed, 47 total` | `/Tests:\s+(?:(\d+) failed,\s+)?(?:(\d+) passed,\s+)?(\d+) total/` | `test_case` |
 | 3 | Vitest | `Tests  47 passed \| 2 failed (49)` | `/Tests\s+(\d+)\s+passed\s+\|\s+(\d+)\s+failed\s+\((\d+)\)/` | `test_case` |
 | 4 | Pytest | `47 passed, 2 failed` | `/(\d+) passed(?:,\s+(\d+) failed)?/` | `test_case` |
