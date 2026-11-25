@@ -52,7 +52,7 @@ flowchart TD
 
 1. **Test Inventory**: Count test files by layer using Glob (see `references/test-count-parsers.md` for layer classification). If `--scope <path>` specified, limit Glob to that directory. If verify-runner cache exists (`.claude/cache/verify/`), read historical logs for test counts.
 2. **Coverage Artifacts**: Scan for existing coverage artifacts (see `references/artifact-formats.md`). If `--scope` specified, scan within scope only. Never execute project commands in quick mode.
-3. **Trend Delta**: Read previous snapshot, compute delta (see `references/trend-schema.md`). Skip if `--no-trend` flag is set.
+3. **Trend Delta**: Read previous snapshot, compute delta (see `references/trend-schema.md`). Skip if `--no-trend` flag is set. A coverage delta marked `comparable: false` is shown with both values and its reason — never as an improvement or a regression.
 4. **Output**: Quick Dashboard.
 
 ## Full Mode Workflow
@@ -131,6 +131,10 @@ Dispatch `/codex-test-review` via Skill tool for 5-dimension quality assessment.
 | Trend direction | Improving |
 ```
 
+`Trend direction` is `Improving` / `Declining` / `Flat` only for comparable deltas. When the coverage
+delta is not comparable, the row reads `Not comparable — <reason>` and the Trend table shows `?` in
+the Delta column.
+
 ## Output: Full Dashboard
 
 ```markdown
@@ -188,6 +192,7 @@ Dispatch `/codex-test-review` via Skill tool for 5-dimension quality assessment.
 | Source transparency | Every metric tagged: `instrumented` / `heuristic` / `missing` |
 | Qualitative coupling | Full mode always runs Phase C even if quantitative metrics are green |
 | Tool change detection | `tool_id` change resets trend line |
+| Population change detection | Same tool, different measured population (scope, include/exclude config, or an unexplained denominator change) → the coverage delta is `not comparable`; no improvement is asserted (`references/trend-schema.md` § Coverage Trend) |
 | Stale detection | Artifact older than HEAD marked `stale` |
 
 ## Gate Policy

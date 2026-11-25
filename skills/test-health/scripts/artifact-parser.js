@@ -111,6 +111,12 @@ function checkFreshness(artifactPath, repoRoot) {
 
 // --- Parsers ---
 
+// `measured: false` = the artifact did not carry this metric; its pct is a placeholder, not a
+// measured value. Trend comparison depends on the difference (references/trend-schema.md).
+function counted(covered, total) {
+  return { covered, total, pct: total > 0 ? round(covered / total * 100) : 0, measured: total > 0 };
+}
+
 function parseLcov(content) {
   let lf = 0, lh = 0, brf = 0, brh = 0;
   for (const line of content.split('\n')) {
@@ -120,8 +126,8 @@ function parseLcov(content) {
     else if (line.startsWith('BRH:')) brh += parseInt(line.slice(4), 10) || 0;
   }
   return {
-    lines: { covered: lh, total: lf, pct: lf > 0 ? round(lh / lf * 100) : 0 },
-    branches: { covered: brh, total: brf, pct: brf > 0 ? round(brh / brf * 100) : 0 },
+    lines: counted(lh, lf),
+    branches: counted(brh, brf),
   };
 }
 
@@ -137,8 +143,8 @@ function parseIstanbulJson(content) {
     }
   }
   return {
-    lines: { covered: sCov, total: sTotal, pct: sTotal > 0 ? round(sCov / sTotal * 100) : 0 },
-    branches: { covered: bCov, total: bTotal, pct: bTotal > 0 ? round(bCov / bTotal * 100) : 0 },
+    lines: counted(sCov, sTotal),
+    branches: counted(bCov, bTotal),
   };
 }
 
@@ -146,19 +152,29 @@ function parseJestSummary(content) {
   const data = JSON.parse(content);
   const t = data.total || {};
   return {
-    lines: { covered: t.lines?.covered || 0, total: t.lines?.total || 0, pct: t.lines?.pct || 0 },
-    branches: { covered: t.branches?.covered || 0, total: t.branches?.total || 0, pct: t.branches?.pct || 0 },
+    lines: { covered: t.lines?.covered || 0, total: t.lines?.total || 0, pct: t.lines?.pct || 0, measured: (t.lines?.total || 0) > 0 },
+    branches: { covered: t.branches?.covered || 0, total: t.branches?.total || 0, pct: t.branches?.pct || 0, measured: (t.branches?.total || 0) > 0 },
   };
 }
 
 function parseCoberturaXml(content) {
-  const lrMatch = content.match(/line-rate="([^"]+)"/);
-  const brMatch = content.match(/branch-rate="([^"]+)"/);
-  const lineRate = lrMatch ? parseFloat(lrMatch[1]) : 0;
-  const branchRate = brMatch ? parseFloat(brMatch[1]) : 0;
+  const root = (content.match(/<coverage\b[^>]*>/) || [content])[0];
+  const attr = name => { const m = root.match(new RegExp(`\\b${name}="([^"]+)"`)); return m ? parseFloat(m[1]) : NaN; };
+  // A rate is a measurement unless the report says there was nothing to measure
+  // (coverage.py without branch coverage writes branch-rate="0" branches-valid="0"). The counts
+  // are kept when the report carries them; total stays 0 for a rate-only report.
+  const metric = (rate, valid, covered) => {
+    const total = valid > 0 ? valid : 0;
+    return {
+      covered: total > 0 ? (Number.isFinite(covered) ? covered : Math.round(rate * total) || 0) : 0,
+      total,
+      pct: Number.isFinite(rate) ? round(rate * 100) : 0,
+      measured: Number.isFinite(rate) && valid !== 0,
+    };
+  };
   return {
-    lines: { covered: 0, total: 0, pct: round(lineRate * 100) },
-    branches: { covered: 0, total: 0, pct: round(branchRate * 100) },
+    lines: metric(attr('line-rate'), attr('lines-valid'), attr('lines-covered')),
+    branches: metric(attr('branch-rate'), attr('branches-valid'), attr('branches-covered')),
   };
 }
 
@@ -173,8 +189,8 @@ function parseGoCoverProfile(content) {
     }
   }
   return {
-    lines: { covered, total, pct: total > 0 ? round(covered / total * 100) : 0 },
-    branches: { covered: 0, total: 0, pct: 0 },
+    lines: counted(covered, total),
+    branches: counted(0, 0),
   };
 }
 
@@ -183,8 +199,8 @@ function parseTarpaulinJson(content) {
   const covered = data.covered || 0;
   const coverable = data.coverable || 0;
   return {
-    lines: { covered, total: coverable, pct: coverable > 0 ? round(covered / coverable * 100) : 0 },
-    branches: { covered: 0, total: 0, pct: 0 },
+    lines: counted(covered, coverable),
+    branches: counted(0, 0),
   };
 }
 
@@ -203,14 +219,14 @@ function parseJacocoXml(content) {
     }
   }
   return {
-    lines: { covered: instrCov, total: instrTotal, pct: instrTotal > 0 ? round(instrCov / instrTotal * 100) : 0 },
-    branches: { covered: brCov, total: brTotal, pct: brTotal > 0 ? round(brCov / brTotal * 100) : 0 },
+    lines: counted(instrCov, instrTotal),
+    branches: counted(brCov, brTotal),
   };
 }
 
 function parseJacocoCsv(content) {
   const lines = content.trim().split('\n');
-  if (lines.length < 2) return { lines: { covered: 0, total: 0, pct: 0 }, branches: { covered: 0, total: 0, pct: 0 } };
+  if (lines.length < 2) return { lines: counted(0, 0), branches: counted(0, 0) };
   const header = lines[0].split(',');
   const instrMissIdx = header.indexOf('INSTRUCTION_MISSED');
   const instrCovIdx = header.indexOf('INSTRUCTION_COVERED');
@@ -233,8 +249,8 @@ function parseJacocoCsv(content) {
     }
   }
   return {
-    lines: { covered: instrCov, total: instrTotal, pct: instrTotal > 0 ? round(instrCov / instrTotal * 100) : 0 },
-    branches: { covered: brCov, total: brTotal, pct: brTotal > 0 ? round(brCov / brTotal * 100) : 0 },
+    lines: counted(instrCov, instrTotal),
+    branches: counted(brCov, brTotal),
   };
 }
 

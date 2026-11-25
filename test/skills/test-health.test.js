@@ -73,3 +73,40 @@ test('docs/skill-catalog.yml registers /test-health', () => {
   const content = readFileSync(resolve(root, 'docs/skill-catalog.yml'), 'utf8');
   assert.match(content, /^ {2}- command: \/test-health$/m, '/test-health must be registered in the skill catalog');
 });
+
+// --- Coverage trend comparability (population / denominator) ---
+
+test('test-health coverage trend → same tool is not enough; population and denominator decide comparability', () => {
+  const skill = readFileSync(skillPath, 'utf8');
+  const schema = readFileSync(resolve(root, 'skills/test-health/references/trend-schema.md'), 'utf8');
+
+  assert.match(schema, /\*\*The same tool can still measure a different population\.\*\*/);
+  assert.match(schema, /\| Recorded, same `scope` \+ `config_sha` \| Any — code may have grown or shrunk \| `comparable: true`, `basis: same_population` \|/);
+  assert.match(schema, /\| Missing on either point \(old snapshots\) \| Recorded on both — a positive count — and equal \| `comparable: true`, `basis: same_denominator` \|/);
+  assert.match(schema, /\| Missing on either point \| Different, missing, or `0` \(a rate-only artifact stores no denominator\) \| `comparable: false` — provenance insufficient \|/);
+  assert.match(schema, /\*\*If a metric's percentage is missing on\s+either point, that metric has no delta\*\*/);
+  assert.match(schema, /\*\*Do not call it an improvement\s+or a regression\*\*/);
+  assert.match(skill, /\| Population change detection \|/);
+  assert.match(skill, /the row reads `Not comparable — <reason>`/);
+});
+
+test('test-health snapshot population → optional, and omitted rather than guessed', () => {
+  const schema = readFileSync(resolve(root, 'skills/test-health/references/trend-schema.md'), 'utf8');
+
+  assert.match(schema, /`code_coverage\.population` is \*\*optional\*\* — snapshots written before it existed do not carry it and\s+stay readable/);
+  assert.match(schema, /Record it only if the producing scope and configuration can be established for that artifact; otherwise \*\*omit it\*\*/);
+  assert.match(schema, /\*\*when it produced the coverage data\*\* — the producing invocation, not this run's search path/);
+  assert.match(schema, /Never guess a value/);
+  assert.match(schema, /\| Different `tool_id` \| — \| Reset trend:/, 'the tool-change reset is unchanged');
+});
+
+test('test-health trend docs → describe what trend.js actually does for the lock and the delta', () => {
+  const schema = readFileSync(resolve(root, 'skills/test-health/references/trend-schema.md'), 'utf8');
+  const trendSource = readFileSync(resolve(root, 'skills/test-health/scripts/trend.js'), 'utf8');
+
+  assert.match(schema, /Otherwise retry about every 100 ms, for up to 5 s/);
+  assert.match(trendSource, /function lock\(cacheDir, timeout = 5, ttl = 60\)/, 'the documented 5 s / 60 s are the code defaults');
+  assert.match(schema, /\*\*Still not acquired after 5 s → the write and the prune proceed without the lock\*\* \(fail-open\)/);
+  assert.match(schema, /no relative percentage is computed/);
+  assert.doesNotMatch(schema, /pct_change/);
+});

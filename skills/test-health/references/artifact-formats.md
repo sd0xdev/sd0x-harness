@@ -40,8 +40,8 @@ Single candidate found → use directly (no scoring).
 
 ```json
 {
-  "lines": { "covered": 1234, "total": 1500, "pct": 82.3 },
-  "branches": { "covered": 456, "total": 600, "pct": 76.0 },
+  "lines": { "covered": 1234, "total": 1500, "pct": 82.3, "measured": true },
+  "branches": { "covered": 456, "total": 600, "pct": 76.0, "measured": true },
   "source_type": "instrumented_artifact",
   "tool_id": "c8",
   "freshness": "current",
@@ -51,7 +51,8 @@ Single candidate found → use directly (no scoring).
 
 | Field | Values | Description |
 |-------|--------|-------------|
+| `measured` (per metric) | `true` / `false` | Whether the artifact carried this metric. `false` → ignore its `pct` whatever the value, and report the metric as unavailable |
 | `source_type` | `instrumented_artifact` / `collected_now` / `heuristic` / `missing` | How data was obtained |
 | `tool_id` | `c8` / `nyc` / `istanbul` / `jest` / `coverage.py` / `go-cover` / `tarpaulin` / `jacoco` / `unknown` | Which tool generated the artifact |
-| `freshness` | `current` / `stale` | Artifact age vs HEAD |
-| `dirty_tree` | `true` / `false` | Uncommitted changes exist |
+| `freshness` | `current` / `stale` / `unknown` | Artifact age vs HEAD; `unknown` when HEAD cannot be read |
+| `dirty_tree` | `true` / `false` | `true`: uncommitted changes exist. `false`: none were seen — which is not "clean" when `freshness` is `unknown` or `git status` failed, since the tree was not checked |
