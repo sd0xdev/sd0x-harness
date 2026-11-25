@@ -10,7 +10,7 @@ Authoritative definition of the 6 dimensions used by `/necessity-audit` Phase A 
 |-------|-------------------|
 | `brief` | 1, 2, 3 (Necessity Now, Abstraction Justification, Extensibility Speculation) |
 | `normal` | 1, 2, 3, 4, 5, 6 (all) |
-| `deep` | 1, 2, 3, 4, 5, 6 (all) + Nash equilibrium required |
+| `deep` | 1, 2, 3, 4, 5, 6 (all) + the debate must end in agreement (`Equilibrium reached`; `Diverged` fails) |
 
 ## The 6 Dimensions
 

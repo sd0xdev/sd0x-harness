@@ -28,7 +28,7 @@ const DIM_NAMES = {
 function buildTopic(preflight) {
   const { absPath, relPath, featureKey, docKind, greenfield, depth, activeDimensions } = preflight;
   const terminationPref = depth === 'deep'
-    ? 'Nash equilibrium REQUIRED (convergence / max-rounds will fail the gate)'
+    ? 'agreement REQUIRED — the debate must end with both sides in agreement (converged, or an agreed trade-off). A debate reported as diverged fails the gate, and so does one that merely went quiet while the sides still disagree'
     : 'any termination accepted';
   const dimBullets = activeDimensions.map(d => `${d}. ${DIM_NAMES[d]}`).join('\n');
   const greenfieldNote = greenfield
@@ -62,14 +62,14 @@ Emit these BEFORE the Conclusion section so the Parser can extract them.
 ${greenfieldNote}
 
 ## Rounds
-This skill does NOT control round count. /codex-brainstorm uses its own ~3-5 round window. Run until equilibrium, convergence, or max-rounds per that skill's termination logic. Report actual rounds.
+This skill does NOT control round count. /codex-brainstorm uses its own ~3-5 round window. Run until that skill's stopping rule (no new objections) or its max-rounds limit. Report actual rounds as "<N> rounds".
 
 ## Coverage requirement
 Each active dimension must receive >=1 challenge-response cycle. Coverage is verified post-hoc via keyword match on the final conclusion + rounds transcript.
 
 ## Output structure
 1. Per-element verdict lines (format above)
-2. "## Conclusion" section describing the Nash equilibrium / convergence state
+2. "## Conclusion" section that starts with a line beginning "Debate Status:" carrying the status value /codex-brainstorm's report defines, then says where the two positions ended
 3. Raw rounds transcript (optional; helps coverage check)
 `;
 }
@@ -89,6 +89,130 @@ function classifyEvidenceLocation(raw) {
   return { type: 'raw', location: s };
 }
 
+// Did the debate report END IN AGREEMENT? Mentioning an equilibrium is not reaching one, and a
+// debate that went quiet with the sides still apart is reported as diverged
+// (skills/codex-brainstorm/references/equilibrium.md § Debate Status). Fail-closed: anything that
+// is not an affirmative statement reads as false.
+//   1. A "Debate Status" field decides. The report states its final status in the Conclusion
+//      and in the summary table; every status field found
+//      in those two places must read as agreement, so any Diverged among them wins. Status
+//      fields elsewhere — loose lines, or tables inside the transcript — are per-round states:
+//      ignored when a final one exists, otherwise the last one is the final state. Only a
+//      field's LEADING value counts.
+//   2. Reports with no status field (legacy) are read from the Conclusion when there is one,
+//      else from the whole report, under a CLOSED contract — § legacyAgrees below.
+// A status FIELD starts its line (list marker, quote or emphasis allowed) or is a table's label
+// cell. The same words inside a sentence are narrative, not a field.
+const STATUS_FIELD_RE = /^[ \t>]*(?:[-*+][ \t]+|\d+\.[ \t]+)?(\|[ \t]*)?[*_`]*debate[ \t]+status[*_`]*[ \t]*[:|][ \t]*([^\n|]*)/gim;
+// A per-round record line, for a report with no final status: the field itself, or
+// "Round 1 — Debate Status: …".
+const ROUND_STATUS_RE = /^[ \t>]*(?:[-*+][ \t]+|\d+\.[ \t]+)?(?:\|[ \t]*)?(?:[*_`]*round[ \t]+\d+[*_`]*[ \t]*[—–:-]+[ \t]*)?[*_`]*debate[ \t]+status[*_`]*[ \t]*[:|][ \t]*([^\n|]*)/gim;
+const LEGACY_TYPE_RE = /^(.*?)equilibrium[ \t]+type\**[ \t]*[:|][ \t]*\**[ \t]*([^\n|]*)/gim;
+// Heading of a per-round record: "## Round 1", "### Rounds transcript", "## Debate Record". Rank 1
+// is the report's own title, never a round.
+const TRANSCRIPT_TITLE_RE = /^(?:rounds?\b|debate[ \t]+record\b|.*\btranscript\b)/i;
+const HEADING_RE = /^(#{1,6})[ \t]+([^\n]*)$/gm;
+// A conclusion heading is the whole heading line: "## Conclusion", "## 結論", "## Final",
+// "## Final Verdict" — not a title that merely starts with the word ("## Final Report").
+const CONCLUSION_TITLE_RE = /^(?:Conclusion|結論|Final(?:[ \t]+(?:Conclusion|Verdict|Stance))?)[ \t]*:?[ \t]*$/i;
+// A closed list of qualifiers that say the debate went quiet. They contain "no" without denying
+// anything, so they are removed before negation is read; alone they state nothing.
+const QUIET_QUALIFIER_RE = /\b(?:with|after|and)?[ \t]*no[ \t]+(?:new|remaining|further|more|outstanding|unresolved|open)[ \t]+(?:objections?|attacks?|arguments?|disagreements?)\b[ \t]*,?/gi;
+const NEGATION_RE = /(?:\b(?:no|not|never|neither|nor|none|without|cannot|unable|fail(?:s|ed|ing)?|unless|until|if|whether|must|should|required?)\b|n['’]t\b)/i;
+// The two canonical ways an older report stated agreement, at the start of a sentence.
+const CANONICAL_RES = [
+  /^(?:nash[ \t]+)?equilibrium[ \t]+(?:(?:was|is|has[ \t]+been)[ \t]+)?reached\b/i,
+  /^(?:both[ \t]+(?:sides|participants|parties)[ \t]+)?reached[ \t]+(?:an?[ \t]+|the[ \t]+)?(?:nash[ \t]+)?equilibrium\b/i,
+];
+
+function headingSections(text) {
+  const heads = [...text.matchAll(HEADING_RE)].map(m => ({ index: m.index, rank: m[1].length, title: m[2], bodyStart: m.index + m[0].length }));
+  return heads.map((h, i) => ({ ...h, end: (heads.slice(i + 1).find(n => n.rank <= h.rank) || { index: text.length }).index }));
+}
+
+// The report without its per-round record: every transcript subtree, at whatever depth it is
+// nested, is blanked in place. What is left is where the report states its FINAL state.
+function withoutTranscript(raw) {
+  let out = raw;
+  for (const h of headingSections(raw)) {
+    if (h.rank >= 2 && TRANSCRIPT_TITLE_RE.test(h.title)) {
+      out = out.slice(0, h.index) + out.slice(h.index, h.end).replace(/[^\n]/g, ' ') + out.slice(h.end);
+    }
+  }
+  return out;
+}
+
+// The report's own conclusion sections, in order. A section keeps its nested subsections and
+// thematic breaks: it ends at the next heading of equal or higher rank, or the end.
+function conclusionSections(finalText) {
+  return headingSections(finalText)
+    .filter(h => h.rank >= 2 && CONCLUSION_TITLE_RE.test(h.title))
+    .map(h => ({ index: h.index, end: h.end, body: finalText.slice(h.bodyStart, h.end) }));
+}
+
+// The leading status value, with list markers and emphasis stripped. What follows the status is
+// explanation ("… converged on X after the sides diverged in round 1") and is not read — except
+// that an unfilled template row listing the alternatives ("… / Diverged") is not a status.
+function statusValueAgrees(value) {
+  const v = value.replace(/^[\s*_`"'>-]+/, '');
+  if (!/^equilibrium\s+reached\b/i.test(v)) return false;
+  return !/\/\s*(?:equilibrium\s+reached|diverged)\b/i.test(v);
+}
+
+// Legacy reports (no status field). This does NOT try to understand prose. The contract is
+// closed, and every doubt is a "no":
+//   - every "Equilibrium Type" field in scope is read: None is a denial, a single named type a
+//     statement;
+//   - the quiet-debate qualifiers (QUIET_QUALIFIER_RE) are dropped, then a sentence is a
+//     statement only in the canonical form: it BEGINS "Equilibrium reached…" / "Nash equilibrium
+//     reached…" / "[Both sides] reached [Nash] equilibrium…", is not a question, and contains
+//     no negation word;
+//   - any other sentence that mentions an equilibrium and contains a negation word is a denial;
+//   - agreement = at least one statement and no denial, in the scope read.
+// A report that needs to say more than the canonical sentence should carry the status field.
+function legacyPolarity(text) {
+  let stated = false;
+  for (const m of text.matchAll(LEGACY_TYPE_RE)) {
+    const value = m[2].trim();
+    if (/^(?:none|no\b)/i.test(value)) return 'denied';
+    if (!value.includes('/') && /\b(?:pure|conditional|mixed|pareto)\b/i.test(value)) stated = true;
+  }
+  for (const raw of text.split(/(?<=[.!?])\s+|\n+/)) {
+    if (!/equilibrium/i.test(raw) || /equilibrium[ \t]+type\b/i.test(raw)) continue;
+    const sentence = raw.replace(QUIET_QUALIFIER_RE, ' ').replace(/^[\s*_`"'>#|,-]+/, '').trim();
+    const negated = NEGATION_RE.test(sentence) || /\?\s*$/.test(sentence)
+      || /\bequilibrium\b[^.!?\n]{0,40}?[:=—-]\s*(?:no|false|none)\b/i.test(sentence);
+    if (negated) return 'denied';
+    if (CANONICAL_RES.some(re => re.test(sentence))) stated = true;
+  }
+  return stated ? 'stated' : 'silent';
+}
+
+function detectAgreement(report) {
+  const raw = report.replace(/\r\n?/g, '\n');
+  const finalText = withoutTranscript(raw);
+  const conclusions = conclusionSections(finalText);
+  const inConclusion = m => conclusions.some(c => m.index >= c.index && m.index < c.end);
+
+  // Conclusion and summary table state the final status; if they disagree, or either
+  // contradicts itself, the report is not an agreement. Everything else is a per-round state.
+  const finals = [...finalText.matchAll(STATUS_FIELD_RE)].filter(m => inConclusion(m) || m[1]);
+  if (finals.length) return finals.every(m => statusValueAgrees(m[2]));
+
+  // The old template put "Equilibrium Type" in the summary table, so it counts beside the Conclusion.
+  const summaryTypes = [...finalText.matchAll(LEGACY_TYPE_RE)]
+    .filter(m => /^\s*\|/.test(m[1]) && !inConclusion(m)).map(m => m[0]);
+  const legacy = legacyPolarity(conclusions.length
+    ? [...summaryTypes, ...conclusions.map(c => c.body)].join('\n')
+    : raw);
+
+  // No final status anywhere: the last status line is the final state — unless the conclusion
+  // denies agreement in prose.
+  const loose = [...raw.matchAll(ROUND_STATUS_RE)].at(-1);
+  if (loose) return statusValueAgrees(loose[1]) && !(conclusions.length && legacy === 'denied');
+  return legacy === 'stated';
+}
+
 function parseDebateResponse(raw) {
   const threadIdMatch = raw.match(/threadId['":\s]+([0-9a-f-]{20,})/i)
     || raw.match(/thread[_ ]?id['":\s]+([0-9a-f-]{20,})/i);
@@ -97,10 +221,10 @@ function parseDebateResponse(raw) {
   const roundsMatch = raw.match(/(\d+)\s+rounds?/i) || raw.match(/rounds?['":\s]+(\d+)/i);
   const rounds = roundsMatch ? parseInt(roundsMatch[1], 10) : 0;
 
-  const equilibriumReached = /nash\s+equilibrium/i.test(raw) || /\bequilibrium\s+reached\b/i.test(raw);
+  const equilibriumReached = detectAgreement(raw);
 
-  const concMatch = raw.match(/##\s*(?:Conclusion|結論|Final)([\s\S]*?)(?:\n##|\n---|$)/i);
-  const conclusion = concMatch ? concMatch[1].trim() : raw.slice(-2000).trim();
+  const section = conclusionSections(withoutTranscript(raw.replace(/\r\n?/g, '\n'))).at(-1);
+  const conclusion = section ? section.body.trim() : raw.slice(-2000).trim();
 
   const perElementVerdicts = [];
   const evidenceTailRanges = [];
@@ -187,4 +311,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { buildTopic, parseDebateResponse, classifyEvidenceLocation, DIM_NAMES, VERDICT_LINE_RE };
+module.exports = { buildTopic, parseDebateResponse, detectAgreement, classifyEvidenceLocation, DIM_NAMES, VERDICT_LINE_RE };

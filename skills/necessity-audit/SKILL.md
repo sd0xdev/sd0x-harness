@@ -45,7 +45,7 @@ allowed-tools: Read, Grep, Glob, Write, Bash(node:*), Bash(mktemp:*), Skill
 | Arg | Required | Default | Purpose |
 |-----|----------|---------|---------|
 | `<path>` | Yes | — | Target lifecycle spec (repo-relative) |
-| `--depth brief\|normal\|deep` | No | `normal` | Dimension coverage + equilibrium strictness |
+| `--depth brief\|normal\|deep` | No | `normal` | Dimension coverage + whether the debate must end in agreement (`deep` only) |
 | `--continue <threadId>` | No | — | Resume Phase C per `@skills/codex-code-review/references/codex-transport.md` § Resume |
 | `--skip-preflight` | No | false | Skip state-read advisory; emits `[PREFLIGHT SKIPPED]` banner |
 | `--include-feasibility` | No | false | Accept `0-feasibility-study.md` (emits override banner) |

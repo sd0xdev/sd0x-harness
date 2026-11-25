@@ -39,7 +39,7 @@ node scripts/skills/necessity-audit/consolidate.js \
 | `has_evidence_citation` | Any element has `codex.evidence.length > 0` |
 | `has_explicit_stance` | `/\b(Challenge\|Defend\|Accept\|Reject\|Concede)\w*/i` matches in conclusion |
 | `has_threadId` | `debate.threadId` non-empty |
-| `equilibrium_required_met` | `depth !== 'deep' \|\| debate.equilibriumReached === true` |
+| `equilibrium_required_met` | `depth !== 'deep' \|\| debate.equilibriumReached === true` — i.e. a `deep` audit needs a debate that ended in agreement; silence without agreement does not meet it |
 | `conclusion_references_rounds` | `/\b(?:round\s+\d+\|R\d+)\b/i` matches in conclusion (SKILL.md Rule #4) |
 
 ## Gate selection
