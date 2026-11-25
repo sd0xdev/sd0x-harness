@@ -64,11 +64,12 @@ Every granted subcommand pushes, two of them with force, and the `pre-push` hook
 | `ALLOW_FORCE_WITH_LEASE` | Set **only** on the single approved `gh stack push` or `gh stack submit --auto` line, in the same phase that obtained the force-form approval — the same shape `/push-ci` uses — and **never on `gh stack link`**, which does not force. Without it the hook refuses the force-form push outright, which is a refusal, not an authorization of anything |
 | Protected branches | A protected branch (`main`/`master`/`develop`/`release/*`, plus the project's additions — Phase 2's resolver) may be the stack's **base** and may never appear as a stack **layer**. Phase 2 hard-aborts if one does |
 
-**Why this skill is model-invocable when `/push-ci` and `/epic-merge` are not.** Both set
+**Why this skill is model-invocable when `/epic-merge` is not.** `/epic-merge` sets
 `disable-model-invocation: true`; this one deliberately does not, because `/create-pr --stack`
-reaches it through the `Skill` tool and that flag would block the delegation the routing depends on.
+reaches it through the `Skill` tool and that flag would block the delegation the routing depends on
+(`/push-ci` leaves it unset too: the commit-and-push menu reaches it the same way).
 The trade is stated rather than silent, and it is a trade rather than an equivalence: the outer stop
-those two get from the flag is **not available here**, and what stands in its place is Phase 3's two
+`/epic-merge` gets from the flag is **not available here**, and what stands in its place is Phase 3's two
 questions — which § Efficacy Boundary's caching weakness still reaches, where the flag would not
 have. What Phase 3 does hold absolutely is that no caller, flag or earlier turn substitutes for the
 question being asked.

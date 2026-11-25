@@ -447,3 +447,12 @@ test('the stack when verified → asked of GitHub by PR, with absence and ignora
   assert.match(delegation, /`unverifiable` is a stop — the caller reports and does not\s+fall back/,
     'the caller contract must forbid falling back on an unverified outcome');
 });
+
+test('what the body says about other skills\' model invocation when compared with their frontmatter → agrees', () => {
+  const flag = (s) => /^disable-model-invocation:\s*true\s*$/m.test(readFileSync(resolve(root, `skills/${s}/SKILL.md`), 'utf8').split('\n---')[0]);
+  assert.deepEqual([flag('gh-stack'), flag('push-ci'), flag('epic-merge')], [false, false, true]);
+  const flat = body.replace(/\s+/g, ' ');
+  assert.match(flat, /model-invocable when `\/epic-merge` is not\.\*\* `\/epic-merge` sets `disable-model-invocation: true`/);
+  assert.match(flat, /`\/push-ci` leaves it unset too/);
+  assert.doesNotMatch(flat, /when `\/push-ci` and `\/epic-merge` are not/);
+});
