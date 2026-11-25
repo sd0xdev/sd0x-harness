@@ -16,20 +16,39 @@ export function memStore(on, mem) {
 }
 
 // The test's own tool.call / tool.check hooks are the bottom of the chain: they stand in for core,
-// so `core.calls` says whether a tool would have run.
+// so `core.calls` says whether a tool would have run. `core.verdict` is the host's answer. A newer
+// host applies that answer to a call the mod delegated (seen on 2.1.332, not on 2.1.289), so under a
+// host deny or ask `core.calls` says what the host did; what the mod did is in its decision record.
 async function setup($, on, { verdict = 'allow', task = TASK, surface = 'terminal' } = {}) {
   mock.clock(on)
   const mem = task ? { [KEY]: task.id, ['task/' + task.id]: task } : {}
   memStore(on, mem)
   on('session.id', () => ({ value: 'S1' }))
   on('session.cwd', () => ({ value: '/w/repo' }))
-  const core = { calls: 0, mem }
+  const core = { calls: 0, mem, verdict, registered: [] }
   on('tool.call', ($, e) => { core.calls++; return { result: `ran: ${e.command ?? e.tool}` } })
-  on('tool.check', () => ({ decision: verdict }))
+  on('tool.check', () => ({ decision: core.verdict }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
+  // What the mod's own start and notices call: unanswered, the host skips the whole start hook.
+  on('command.register', ($, e) => { core.registered.push(e.name); return { value: undefined } })
+  on('ui.invalidate', () => ({ value: undefined }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('ui.log', () => ({ value: undefined }))
   await $.session.start({ surface, isInteractive: true, cwd: '/w/repo' })
   return core
 }
+
+// The mod's last recorded decision, once its ordered write has landed.
+async function lastDecision(core) {
+  await new Promise((r) => setTimeout(r, 0))
+  return core.mem['session/S1'].decisions.at(-1)
+}
+
+test('the fixture answers everything session start asks for, so the mod is started, not skipped', async ($, on) => {
+  const core = await setup($, on)
+  expect(core.registered).toEqual(['agentctl'])
+  expect(core.mem['session/S1']).toBeDefined()
+})
 
 test('Signal 5: a forbidden call is refused with the rule named before core runs', async ($, on) => {
   const core = await setup($, on)
@@ -47,18 +66,34 @@ test('Signal 5: an observational read reaches core unchanged', async ($, on) => 
 })
 
 test('an unclassifiable call goes to the host, and the host\'s own deny still holds', async ($, on) => {
-  const core = await setup($, on, { verdict: 'deny' })
-  await $.tool.call({ tool: 'Bash', command: 'python3 -c "print(1)"' })
+  const core = await setup($, on, { verdict: 'allow' })
+  const call = { tool: 'Bash', command: 'python3 -c "print(1)"' }
+  // The mod neither refuses nor answers the call itself: it reaches core once, unchanged.
+  expect(JSON.stringify(await $.tool.call(call))).toMatch(/ran: python3 -c/)
   expect(core.calls).toBe(1)
-  expect((await $.tool.check({ tool: 'Bash', input: { command: 'python3 -c "print(1)"' } })).decision).toBe('deny')
+  expect((await lastDecision(core)).outcome).toBe('delegated')
+  // Under a host deny the mod still only delegates; the refusal is the host's, and it stands.
+  core.verdict = 'deny'
+  core.mem['session/S1'].decisions.length = 0
+  expect(JSON.stringify(await $.tool.call(call))).not.toMatch(/agentctl refused/)
+  expect((await lastDecision(core)).outcome).toBe('delegated')
+  expect((await $.tool.check({ tool: 'Bash', input: { command: call.command } })).decision).toBe('deny')
 })
 
 test('a script that pushes inside is delegated, never classified or approved by the mod', async ($, on) => {
-  const core = await setup($, on, { verdict: 'ask' })
-  await $.tool.call({ tool: 'Bash', command: '/bin/bash -p /tmp/push.sh' })
+  const core = await setup($, on, { verdict: 'allow' })
+  const call = { tool: 'Bash', command: '/bin/bash -p /tmp/push.sh' }
+  expect(JSON.stringify(await $.tool.call(call))).toMatch(/ran: \/bin\/bash -p \/tmp\/push\.sh/)
   expect(core.calls).toBe(1)
+  const d = await lastDecision(core)
+  expect(d.outcome).toBe('delegated')
+  expect(d.rule).toMatch(/unclassified|delegated to the host/)
   // Pass-through keeps the host's verdict: an ask stays an ask, never an allow.
-  expect((await $.tool.check({ tool: 'Bash', input: { command: '/bin/bash -p /tmp/push.sh' } })).decision).toBe('ask')
+  core.verdict = 'ask'
+  core.mem['session/S1'].decisions.length = 0
+  expect(JSON.stringify(await $.tool.call(call))).not.toMatch(/agentctl refused/)
+  expect((await lastDecision(core)).outcome).toBe('delegated')
+  expect((await $.tool.check({ tool: 'Bash', input: { command: call.command } })).decision).toBe('ask')
 })
 
 test('a direct push is refused even with no task bound', async ($, on) => {

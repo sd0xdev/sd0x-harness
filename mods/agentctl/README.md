@@ -1,6 +1,6 @@
 # agentctl — Agent Control Plane for one Claude Code session
 
-Tested with **Claude Code 2.1.288** (headless) and **2.1.289** (interactive, after the host auto-updated) (`claude plugin validate .`, `claude plugin test .`: 203 tests); 0.2.x re-verified live on 2.1.289 (§ Verified live, 0.2.x).
+Tested with **Claude Code 2.1.332**: `claude plugin validate .` (also `--strict`) and `claude plugin test .`, 204 tests; the same suite passes on **2.1.289**, the previous pin. Interactively on 2.1.332, only startup and `/agentctl status --details` of 0.3.1 were observed (2026-11-25); the other interactive paths are not verified there. Earlier live checks: 2.1.288 (headless) and 2.1.289 (interactive), 0.2.x on 2.1.289, first run on 2.1.289 and 2.1.292 (the *Verified live* sections).
 The mods API is marked changeable between releases; the type declarations the host writes into
 `.claude-plugin/types/` are the authority for the installed version. Run `claude plugin validate .`
 after every Claude Code upgrade.
@@ -9,8 +9,9 @@ Design: `docs/features/agent-control-plane-mod/` in this repository (requirement
 tech spec, request tickets). This directory is not part of the sd0x-dev-flow plugin: installing the
 plugin does not install the mod. To install it, run `/agentctl-setup` (it checks the host, installs
 `agentctl@sd0xdev-marketplace` after you approve, and builds your first task line; `/agentctl-setup --task`
-and the workflow skills draft a proposal for you to accept instead), or load it for one
-session with `claude --plugin-dir mods/agentctl`.
+and the workflow skills draft a proposal for you to accept instead), type
+`/plugin install agentctl --marketplace sd0xdev/sd0x-harness` (Claude Code 2.1.275 or later), or load it
+for one session with `claude --plugin-dir mods/agentctl`.
 
 ## First run
 

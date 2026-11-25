@@ -141,3 +141,8 @@ test('CI and the release compare the lock with a base', () => {
   assert.match(job, /BASE_REF: \$\{\{ github\.base_ref \}\}/, 'event data reaches the shell through env, not inline');
   assert.match(read('.github/workflows/release-agentctl.yml'), /check --base "\$LAST_TAG"/);
 });
+
+test('the CI pin and the mod README\'s "Tested with" name the same version', () => {
+  const pin = /CLAUDE_CODE_VERSION: (\d+\.\d+\.\d+)/.exec(read('.github/workflows/ci.yml'))[1];
+  assert.ok(read('mods/agentctl/README.md').includes(`Tested with **Claude Code ${pin}**`), `README does not name ${pin}`);
+});
