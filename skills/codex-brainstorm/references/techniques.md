@@ -137,10 +137,12 @@ ${codexRebuttal}
 - If yes, new position: [...]
 - If no, new attack: [...]
 
-## Equilibrium Check
+## Stopping Check
 
-Can I still raise new attacks? [Yes/No]
-Can you still raise new attacks? Please respond.
+Did I raise a new, un-rebutted objection this round? [Yes/No]
+Did you raise a new, un-rebutted objection this round? Please respond. An objection raised and
+answered within the round is not one. If the only
+thing left is a value neither of us has measured, name the measurement instead of arguing it.
 
 
 ## Attack Techniques
@@ -150,7 +152,7 @@ Can you still raise new attacks? Please respond.
 | Flaw attack        | "Your proposal fails in [scenario]"               | Find edge cases   |
 | Constraint attack  | "You ignored [constraint]"                        | Test completeness |
 | Assumption attack  | "You assume [X], but what if [Y]?"                | Undermine foundation |
-| Comparison attack  | "My proposal is superior in [dimension]"          | Direct comparison |
+| Comparison attack  | "My proposal is superior in [dimension]" — a win on one dimension is a trade-off, not dominance | Direct comparison |
 | Temporal attack    | "In 6 months under [scenario], what happens to yours?" | Long-term perspective |
 
 ## Defense Techniques

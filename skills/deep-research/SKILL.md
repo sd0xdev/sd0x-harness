@@ -289,7 +289,7 @@ Invoke `/codex-brainstorm` via Skill tool (composable — not reimplemented):
 ### Debate Conclusion (if triggered)
 - threadId: <from /codex-brainstorm>
 - Rounds: N
-- Equilibrium: <type>
+- Debate status: <Equilibrium reached — converged / agreed trade-off, or Diverged>
 - Key insight: <from debate>
 
 ### Residual Gaps & Next Steps

@@ -85,47 +85,74 @@ Anticipated proposals from Codex:
 - Claude: [Maintain/Update to Z]
 - Codex: [Maintain/Update to W]
 
-**Equilibrium Check**:
+**Stopping Check**:
 
-- Can Claude raise new attacks? [Yes/No]
-- Can Codex raise new attacks? [Yes/No]
+- Did Claude raise a new, un-rebutted objection this round? [Yes/No]
+- Did Codex raise a new, un-rebutted objection this round? [Yes/No]
+- Evidence gaps recorded this round: [option — criterion — measurement needed] / none
 ```
 
 ## Phase 5: Final Report
 
+The debate status and the option comparison are separate sections because they are separate
+results (`equilibrium.md`). This is the only final report: fill both whatever the status is, and
+when the status is `Diverged` add the sections in `equilibrium.md` § Handling Divergence. Do not label the outcome a Nash
+equilibrium, a mixed strategy or "optimal" — the stopping rule proves none of them.
+
 ```markdown
-# Nash Equilibrium Report: [Topic]
+# Brainstorm Report: [Topic]
 
 ## Executive Summary
 
 | Item              | Value                                  |
 | ----------------- | -------------------------------------- |
-| Equilibrium Type  | Pure Strategy / Conditional / Pareto / None |
-| Debate Rounds     | N                                      |
-| Final Proposal    | [X]                                    |
-| Confidence        | High (both agree) / Medium / Low       |
+| Debate Status     | Equilibrium reached — converged / Equilibrium reached — agreed trade-off / Diverged |
+| Stopped Because   | No new objections in round N / Max rounds reached (either can end `Diverged`) |
+| Debate Rounds     | N rounds                               |
+| Retained Options  | [X], [Y]                               |
+| Excluded Options  | [B] (dominated by [A])                 |
+| Evidence Gaps     | N — [short list] / none                |
+| Confidence        | Low (diverged — whatever else is true) / otherwise High (converged, no evidence gap) or Medium (agreed trade-off, or any evidence gap) |
 
-## Equilibrium Solution
+## Debate Status
 
-**Proposal: [X]**
+- **Where the positions ended**: [same proposal / same condition for choosing / agreed trade-off / still apart]
+- **Open objections**: [none / list]
 
-[Proposal description]
+## Option Comparison
 
-### Why This Is the Optimal Solution
+Criteria and direction: [criterion 1 — lower is better], [criterion 2 — higher is better]
 
-| Dimension            | Rating | Consensus |
-| -------------------- | ------ | --------- |
-| Technical Feasibility | G     | Y         |
-| Effort               | Y     | Y         |
-| Risk                 | G     | Y         |
-| Scalability          | G     | Y         |
+| Option | [Criterion 1] | [Criterion 2] | Status | Basis |
+| ------ | ------------- | ------------- | ------ | ----- |
+| [A]    | [value]       | [value]       | Retained | Not dominated |
+| [B]    | [value]       | [value]       | Excluded | Dominated by [A]: at least as good on every criterion, strictly better on [criterion 1] |
+| [C]    | [value]       | unknown       | Retained — evidence gap | [criterion 2] not measured |
+| [D]    | [value]       | [value]       | Excluded | Infeasible: breaks [hard constraint] |
+
+### Trade-off Between Retained Options
+
+[A] gives [amount, in the criterion's units] on [criterion 1]; [C] gives [amount] on [criterion 2].
+
+State an amount only where both values are known. Where one is an evidence gap, write the known
+side and make the other conditional: "[A] gives [amount] on [criterion 1]; whether [C] gives
+anything on [criterion 2] depends on [measurement]".
+
+### Evidence Gaps
+
+| Option | Unknown | Measurement That Would Close It | What It Could Change |
+| ------ | ------- | ------------------------------- | -------------------- |
+| [C]    | [criterion 2] | [how to measure]          | [C excluded / C dominates A / trade-off stands] |
+
+## Recommendation
+
+**Proposal: [X]** — [why, given the trade-off above; or "no single proposal: choose by [condition]"]
 
 ### Rejected Proposals
 
 | Proposal | Proposer | Rejection Reason | Rejected In |
 | -------- | -------- | ---------------- | ----------- |
-| [A]      | Claude   | [Fatal flaw]     | R2          |
-| [B]      | Codex    | [Fatal flaw]     | R3          |
+| [B]      | Codex    | Dominated by [A] / infeasible / withdrawn after [objection] | R3 |
 
 ## Debate Summary
 

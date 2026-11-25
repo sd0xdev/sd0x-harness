@@ -60,14 +60,14 @@
 
 - **Debate command**: /codex-brainstorm
 - **Debate threadId**: <threadId from Phase 3 session>
-- **Debate rounds**: <N rounds or "equilibrium at round N">
+- **Debate rounds**: <N rounds, and whether it stopped on no new objections or at max rounds>
 
-### Debate Conclusion (mandatory — references Phase 3 equilibrium)
+### Debate Conclusion (mandatory — references the Phase 3 debate status)
 
-- Equilibrium / consensus / divergence (cite specific rounds and arguments from Phase 3)
+- Where the positions ended: converged, agreed trade-off, or diverged (cite specific rounds and arguments from Phase 3)
 - Claude's position: ...
 - Codex's position: ...
-- Equilibrium state: Nash equilibrium / convergence / divergence
+- Debate status: Equilibrium reached — converged / Equilibrium reached — agreed trade-off / Diverged (a quiet round with the sides still apart is Diverged)
 
 ### Gap Analysis
 
@@ -98,7 +98,7 @@
 | Code locations | 2 | Yes | `file:line` format |
 | Debate command | 4 | **Mandatory** | Must be `/codex-brainstorm` (not raw MCP) |
 | Debate threadId | 4 | **Mandatory** | Thread ID from Phase 3 debate session; proves debate was executed |
-| Debate rounds | 4 | **Mandatory** | Number of rounds or equilibrium point |
+| Debate rounds | 4 | **Mandatory** | Number of rounds and why it stopped |
 | Debate Conclusion | 4 | **Mandatory** | Must reference Phase 3 debate results; cannot be blank or placeholder |
 | Verdict | 4 | Yes | OK / WARN / FAIL |
 | Priority column | 4 | Yes | P1 / P2 / P3 |

@@ -34,7 +34,7 @@ Adversarial review gate for plan-mode drafts: the plan is challenged by an indep
 | (none) | tier = `standard` — Codex alone, with the fix → re-review loop |
 | `--quick` | Single Codex pass, no loop |
 | `--dual` | Adds a secondary reviewer in parallel. **Off unless passed** — for a release or a security-sensitive plan, not routine planning |
-| `--deep` | Delegate to `/codex-brainstorm` (Nash equilibrium debate; attack/defense built-in) |
+| `--deep` | Delegate to `/codex-brainstorm` (adversarial debate; attack/defense built-in — at least 3 rounds, then stops when a round leaves no new, un-rebutted objection, 5 at most; the plan-revision budget of Step 4 is separate) |
 | `--skip-review` | Immediate bypass: emit `[PLAN_REVIEW_SKIPPED]`, present raw plan |
 | `--verbose` | Round-by-round trail (default: summary only) |
 
@@ -133,7 +133,7 @@ The plan draft already exists in the session transcript (it is in-context text),
 |------|----------|------|
 | quick | Codex exec ×1 | 1-pass |
 | **standard** (default) | Codex exec | fix → re-review (§ Resume) |
-| deep | `Skill("codex-brainstorm", ...)` | brainstorm termination (Nash attack/defense) |
+| deep | `Skill("codex-brainstorm", ...)` | brainstorm termination (from round 3, no new un-rebutted objection; or its 5-round limit) |
 
 - First Codex call: dispatch per `@skills/codex-code-review/references/codex-transport.md` § Start with `references/codex-prompt-plan.md` — the transport pins the sandbox and approval policy, so no call site chooses them. **Save the threadId.**
 - **`prompt.md` is written by heredoc here, not by the Write tool** — this skill runs before
@@ -164,6 +164,13 @@ Decision table applied to the conversation's own round count (never the code/doc
 | 1 | `current_round >= max_rounds` (default 5; `@rules/auto-loop-project.md ## Plan Review Max Rounds`) | `⚠️ Plan Needs Human` + residual findings (never silently pass) — the user arbitrates, so nothing further is owed |
 | 2 | No P0/P1 findings this round | `✅ Plan Ready` → trail summary → ExitPlanMode |
 | 3 | Findings remain | Revise plan → re-review (continue loop) |
+
+**Deep tier: grade the debate report before applying the table.** `/codex-brainstorm` returns a
+debate status and open objections, not P0/P1 labels. Assess each open objection and divergence point
+against the plan: one that would make the plan fail, or mislead whoever executes it, is a P0/P1
+finding. Graded findings then go through the table like any others — row 3 revises the plan and
+re-reviews, row 1 hands the residue to the user at the cap. A `Diverged` report with such an
+objection open is therefore never `✅ Plan Ready` on the ground that nothing was labelled P0/P1.
 
 Plateau/fingerprint detection is V2 (OQ-9); v1 relies on the hard cap only.
 
@@ -235,7 +242,7 @@ Input: /plan-review --quick
 Action: tier quick → redact → single Codex pass → verdict → ExitPlanMode
 
 Input: /plan-review --deep
-Action: tier deep → redact → Skill("codex-brainstorm", plan challenge) → equilibrium → verdict
+Action: tier deep → redact → Skill("codex-brainstorm", plan challenge) → debate status → verdict
 
 Input: user says "skip review, show me the plan"
 Action: [PLAN_REVIEW_SKIPPED] → raw plan → ExitPlanMode

@@ -62,7 +62,7 @@ sequenceDiagram
     R-->>C: Current state analysis
     Note over C: GATE — must proceed to Phase 3
     C->>B: Phase 3: Adversarial Debate
-    B-->>C: Equilibrium result + threadId
+    B-->>C: Debate status + threadId
     C->>C: Phase 4: Gap Report
 ```
 
@@ -71,7 +71,7 @@ sequenceDiagram
 | 1     | **Industry Research** — search best practices       | Best practices summary             | Yes           |
 | 2     | **Codebase Analysis** — analyze current impl        | Current state analysis             | Yes           |
 | GATE  | **GATE** — Phase 2 done, must proceed to Phase 3    | —                                  | Cannot skip   |
-| 3     | **Adversarial Debate** — invoke `/codex-brainstorm` | Equilibrium result (with threadId) | Yes, mandatory |
+| 3     | **Adversarial Debate** — invoke `/codex-brainstorm` | Debate status + retained options (with threadId) | Yes, mandatory |
 | 4     | **Gap Report** — gap analysis + recommendations     | Best Practices Report              | Yes           |
 
 ### Prohibited Behaviors
@@ -164,7 +164,7 @@ Invoke `/codex-brainstorm` via Skill tool (`Skill` is pre-approved in this skill
 
 - [ ] Phase 1 cites at least 3 independent sources
 - [ ] Phase 2 concerns include specific code locations (file:line)
-- [ ] Phase 3 debate has at least 3 rounds (or early equilibrium)
+- [ ] Phase 3 debate has at least 3 rounds
 - [ ] Phase 4 gap analysis table includes priority and recommended actions
 - [ ] Source URLs are real and valid (not fabricated)
 

@@ -208,3 +208,16 @@ test('plan-review SKILL.md still mandates generate-and-collision-check', () => {
   assert.match(content, /collision/i, 'the collision re-check must remain mandated');
   assert.match(content, /≥8 hex chars|>=8 hex chars/, 'the suffix length floor must remain stated');
 });
+
+// --- Deep tier: a debate report carries no P0/P1 labels, so it is graded before the gate ---
+
+test('plan-review deep tier → open objections are graded before Step 4; Diverged with a material one is never Plan Ready', () => {
+  const content = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../../skills/plan-review/SKILL.md'), 'utf8');
+  const flat = content.replace(/\s+/g, ' ');
+
+  assert.match(flat, /\*\*Deep tier: grade the debate report before applying the table\.\*\*/);
+  assert.match(flat, /Assess each open objection and divergence point against the plan: one that would make the plan fail, or mislead whoever executes it, is a P0\/P1 finding\./);
+  assert.match(flat, /Graded findings then go through the table like any others — row 3 revises the plan and re-reviews, row 1 hands the residue to the user at the cap\./);
+  assert.match(flat, /A `Diverged` report with such an objection open is therefore never `✅ Plan Ready` on the ground that nothing was labelled P0\/P1\./);
+  assert.match(content, /at least 3 rounds, then stops when a round leaves no new, un-rebutted objection, 5 at most/);
+});

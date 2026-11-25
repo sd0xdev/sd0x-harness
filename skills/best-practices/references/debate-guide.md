@@ -29,12 +29,13 @@ Let Claude and Codex judge independently, ensuring Codex is not biased by Claude
 | Condition | Description |
 |-----------|-------------|
 | Minimum rounds | 3 debate rounds |
-| Early exit | Nash equilibrium reached before 3 rounds |
+| Early exit | None — `/codex-brainstorm` first checks its stopping rule (no new objections) at the end of round 3 |
 | Max rounds | 5 rounds (from codex-brainstorm default) |
 
 ## Expected Artifact
 
-- Debate log with equilibrium status
+- Debate log with the debate status (`Equilibrium reached — converged` / `Equilibrium reached — agreed trade-off` / `Diverged`)
+- The retained options from the debate report's option comparison
 - `threadId` from the debate session (for Phase 4 reference)
 
 ## Gate
